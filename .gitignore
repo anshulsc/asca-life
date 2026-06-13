@@ -1,0 +1,8 @@
+# Ignore raw source folder containing plaintext codes
+src/
+
+# Local styling backup & system files
+style.css.bak
+.DS_Store
+build.js
+salt.txt
