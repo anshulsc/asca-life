@@ -3110,3 +3110,88 @@ canvas { width: 100%; height: 100%; }
   transform: translateY(1px) !important;
   box-shadow: 0 2px 6px rgba(255, 118, 0, 0.2) !important;
 }
+
+/* ── Premium settings list (iOS/Instagram/Strava style) ──── */
+.settings-list-card {
+  padding: 0 !important;
+  overflow: hidden;
+}
+.settings-list-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer; transition: all 0.2s var(--spring);
+  position: relative;
+}
+.settings-list-item:last-child {
+  border-bottom: none;
+}
+.settings-list-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.settings-list-item:active {
+  background: rgba(255, 255, 255, 0.05);
+}
+.settings-list-icon {
+  width: 38px; height: 38px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.settings-list-icon svg {
+  width: 20px; height: 20px;
+}
+.settings-list-content {
+  flex: 1; display: flex; flex-direction: column; gap: 2px;
+}
+.settings-list-title {
+  font-size: 0.88rem; font-weight: 700; color: #fff;
+}
+.settings-list-desc {
+  font-size: 0.72rem; color: var(--t-3); font-weight: 500;
+}
+.settings-list-chevron {
+  color: var(--t-4); display: flex; align-items: center;
+}
+.settings-list-chevron svg {
+  width: 18px; height: 18px; transition: transform 0.2s;
+}
+.settings-list-item:hover .settings-list-chevron svg {
+  transform: translateX(2px);
+  color: var(--t-3);
+}
+.settings-list-action-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--r-xs);
+  padding: 6px 12px; font-size: 0.72rem; font-weight: 700;
+  color: #fff; cursor: pointer; transition: all 0.2s;
+}
+.settings-list-action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* iOS Settings Grouping Styles */
+.settings-section-header {
+  font-size: 0.68rem; font-weight: 800;
+  color: var(--t-3); text-transform: uppercase;
+  letter-spacing: 0.08em; margin: 18px 0 6px 12px;
+}
+.settings-list-right-group {
+  display: flex; align-items: center; gap: 8px;
+}
+.settings-row-action-label {
+  font-size: 0.72rem; font-weight: 700;
+  color: rgba(255, 255, 255, 0.4);
+  transition: color 0.2s;
+}
+.settings-list-item:hover .settings-row-action-label {
+  color: #fff;
+}
+.settings-row-action-label.destructive-text {
+  color: rgba(255, 69, 58, 0.6);
+}
+.settings-list-item:hover .settings-row-action-label.destructive-text {
+  color: #FF453A;
+}
+

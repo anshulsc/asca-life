@@ -553,28 +553,33 @@
         <div id="followersList" style="display:none"></div>
       </div>
 
-      <!-- Account Settings & Data Management (iOS/Instagram/Strava list style) -->
-      <div class="label">Settings & Tools</div>
-      <div class="card glass-card settings-list-card">
-        
+      <!-- SECTION 1: ACCOUNT CONNECTION -->
+      <div class="settings-section-header">Account Connection</div>
+      <div class="card glass-card settings-list-card" style="margin-bottom: 16px;">
         <!-- Account Status Row -->
         <div class="settings-list-item">
-          <div class="settings-list-icon" style="background: rgba(10, 132, 255, 0.15); color: #0A84FF;">
+          <div class="settings-list-icon" style="background: linear-gradient(135deg, #0A84FF, #30A2FF); color: #fff;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
               <circle cx="12" cy="7" r="4"/>
             </svg>
           </div>
           <div class="settings-list-content">
-            <span class="settings-list-title">Firebase Account</span>
+            <span class="settings-list-title">Firebase Sync Account</span>
             <span class="settings-list-desc" id="fbAccount">Not signed in</span>
           </div>
-          <button class="settings-list-action-btn" id="bSignOut">Sign Out</button>
+          <div class="settings-list-right-group">
+            <button class="settings-list-action-btn" id="bSignOut">Sign Out</button>
+          </div>
         </div>
+      </div>
 
+      <!-- SECTION 2: CLOUD SYNCHRONIZATION -->
+      <div class="settings-section-header">Cloud Synchronization</div>
+      <div class="card glass-card settings-list-card" style="margin-bottom: 16px;">
         <!-- Cloud Backup -->
         <div class="settings-list-item" id="bFbBackup">
-          <div class="settings-list-icon" style="background: rgba(48, 209, 88, 0.15); color: #30D158;">
+          <div class="settings-list-icon" style="background: linear-gradient(135deg, #30D158, #58E57C); color: #fff;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="17 8 12 3 7 8"/>
@@ -585,16 +590,19 @@
             <span class="settings-list-title">Cloud Backup</span>
             <span class="settings-list-desc">Force save latest workouts to Firebase</span>
           </div>
-          <div class="settings-list-chevron">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
+          <div class="settings-list-right-group">
+            <span class="settings-row-action-label">Back Up</span>
+            <div class="settings-list-chevron">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </div>
           </div>
         </div>
 
         <!-- Cloud Restore -->
         <div class="settings-list-item" id="bFbRestore">
-          <div class="settings-list-icon" style="background: rgba(100, 210, 255, 0.15); color: #64D2FF;">
+          <div class="settings-list-icon" style="background: linear-gradient(135deg, #64D2FF, #9AE4FF); color: #fff;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="7 10 12 15 17 10"/>
@@ -605,16 +613,23 @@
             <span class="settings-list-title">Cloud Restore</span>
             <span class="settings-list-desc">Restore or merge data from Firebase backup</span>
           </div>
-          <div class="settings-list-chevron">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
+          <div class="settings-list-right-group">
+            <span class="settings-row-action-label">Restore</span>
+            <div class="settings-list-chevron">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </div>
           </div>
         </div>
+      </div>
 
+      <!-- SECTION 3: LOCAL STORAGE TOOLS -->
+      <div class="settings-section-header">Local Storage Tools</div>
+      <div class="card glass-card settings-list-card" style="margin-bottom: 16px;">
         <!-- Export JSON file -->
         <div class="settings-list-item" id="bExp">
-          <div class="settings-list-icon" style="background: rgba(191, 90, 242, 0.15); color: #BF5AF2;">
+          <div class="settings-list-icon" style="background: linear-gradient(135deg, #BF5AF2, #D697FF); color: #fff;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="17 8 12 3 7 8"/>
@@ -625,16 +640,19 @@
             <span class="settings-list-title">Export JSON</span>
             <span class="settings-list-desc">Backup session history to local file</span>
           </div>
-          <div class="settings-list-chevron">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
+          <div class="settings-list-right-group">
+            <span class="settings-row-action-label">Export</span>
+            <div class="settings-list-chevron">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </div>
           </div>
         </div>
 
         <!-- Import JSON file -->
         <div class="settings-list-item" id="bImp">
-          <div class="settings-list-icon" style="background: rgba(255, 159, 10, 0.15); color: #FF9F0A;">
+          <div class="settings-list-icon" style="background: linear-gradient(135deg, #FF9F0A, #FFBE5C); color: #fff;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="7 10 12 15 17 10"/>
@@ -645,17 +663,20 @@
             <span class="settings-list-title">Import JSON</span>
             <span class="settings-list-desc">Load session history from local file</span>
           </div>
-          <div class="settings-list-chevron">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
+          <div class="settings-list-right-group">
+            <span class="settings-row-action-label">Import</span>
+            <div class="settings-list-chevron">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </div>
           </div>
           <input type="file" id="fIn" accept=".json" style="display:none">
         </div>
 
         <!-- Reset Database -->
         <div class="settings-list-item" id="bRst">
-          <div class="settings-list-icon" style="background: rgba(255, 69, 58, 0.15); color: #FF453A;">
+          <div class="settings-list-icon" style="background: linear-gradient(135deg, #FF453A, #FF6961); color: #fff;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="3 6 5 6 21 6"/>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -667,36 +688,39 @@
             <span class="settings-list-title destructive-text">Reset Local Data</span>
             <span class="settings-list-desc">Wipe local device memory entirely</span>
           </div>
-          <div class="settings-list-chevron">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
-          </div>
-        </div>
-
-        <!-- Firebase Guide Inline -->
-        <div style="padding: 14px 20px 20px 20px; border-top: 1px solid rgba(255,255,255,0.05);">
-          <div class="connection-guide">
-            <div class="guide-toggle" style="font-size:0.76rem">
-              <span>One-Time Backend Setup (maintainer only)</span>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="chevron-svg">
-                <polyline points="6 9 12 15 18 9"/>
+          <div class="settings-list-right-group">
+            <span class="settings-row-action-label destructive-text">Reset</span>
+            <div class="settings-list-chevron" style="color: #FF453A;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
               </svg>
             </div>
-            <div class="guide-content">
-              <ol>
-                <li>Go to <strong>console.firebase.google.com</strong> and create a project (any name, Analytics off).</li>
-                <li>Open <strong>Build &gt; Authentication &gt; Get started</strong> and enable <strong>Email/Password</strong> sign-in method.</li>
-                <li>Open <strong>Build &gt; Firestore Database &gt; Create database</strong>, choose <strong>Production mode</strong> and region.</li>
-                <li>In the <strong>Rules</strong> tab, paste rules (button below) and click <strong>Publish</strong>.</li>
-                <li>Open <strong>Project settings</strong> (gear icon): copy <strong>Project ID</strong> and Web App <strong>apiKey</strong>.</li>
-                <li>Paste both into <code>src/firebase-sync.js</code>, run <code>node build.js</code>, and push.</li>
-              </ol>
-              <button class="btn btn-secondary btn-sm btn-full" id="copyFbRules" style="margin-top: 10px;">Copy Firestore Rules</button>
-            </div>
           </div>
         </div>
+      </div>
 
+      <!-- SECTION 4: DEVELOPER CONSOLE -->
+      <div class="settings-section-header">Developer Console</div>
+      <div class="card glass-card settings-list-card" style="margin-bottom: 24px;">
+        <div class="connection-guide" style="padding: 14px 20px 20px 20px;">
+          <div class="guide-toggle" style="font-size:0.76rem">
+            <span>One-Time Backend Setup (maintainer only)</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="chevron-svg">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+          <div class="guide-content">
+            <ol>
+              <li>Go to <strong>console.firebase.google.com</strong> and create a project (any name, Analytics off).</li>
+              <li>Open <strong>Build &gt; Authentication &gt; Get started</strong> and enable <strong>Email/Password</strong> sign-in method.</li>
+              <li>Open <strong>Build &gt; Firestore Database &gt; Create database</strong>, choose <strong>Production mode</strong> and region.</li>
+              <li>In the <strong>Rules</strong> tab, paste rules (button below) and click <strong>Publish</strong>.</li>
+              <li>Open <strong>Project settings</strong> (gear icon): copy <strong>Project ID</strong> and Web App <strong>apiKey</strong>.</li>
+              <li>Paste both into <code>src/firebase-sync.js</code>, run <code>node build.js</code>, and push.</li>
+            </ol>
+            <button class="btn btn-secondary btn-sm btn-full" id="copyFbRules" style="margin-top: 10px;">Copy Firestore Rules</button>
+          </div>
+        </div>
       </div>
     </section>
 
