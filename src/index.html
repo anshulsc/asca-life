@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <meta name="description" content="Asca Gym — Elite Liquid Glass Tracker">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Asca Gym</title>
+  <link rel="stylesheet" href="style.css?v=2.0">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230A84FF' stroke-width='2'><path d='M6 3h12l4 6-10 13L2 9z'/></svg>">
+</head>
+<body>
+
+<!-- Lock Screen Overlay -->
+<div class="lock-screen" id="lockScreen">
+  <div class="lock-card card glass-card">
+    <div class="lock-header">
+      <svg class="brand-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 3h12l4 6-10 13L2 9z"/>
+      </svg>
+      <div class="lock-title">Asca Gym</div>
+      <div class="lock-subtitle" id="lockSubtitle">Sign in to your account</div>
+    </div>
+    
+    <!-- Lock Screen Sneak Peek Heatmap -->
+    <div class="lock-heatmap-preview">
+      <div class="lock-heatmap-header">
+        <span>Workout Consistency</span>
+        <span class="lock-heatmap-legend">
+          <span class="legend-dot lvl-1"></span>
+          <span class="legend-dot lvl-2"></span>
+          <span class="legend-dot lvl-3"></span>
+        </span>
+      </div>
+      <div class="lock-heatmap-body">
+        <div class="lock-heatmap-days-labels">
+          <span>S</span>
+          <span>M</span>
+          <span>T</span>
+          <span>W</span>
+          <span>T</span>
+          <span>F</span>
+          <span>S</span>
+        </div>
+        <div class="lock-heatmap-main">
+          <div class="lock-heatmap-months" id="lockHeatmapMonths">
+            <!-- PRE_RENDERED_HEATMAP_MONTHS -->
+          </div>
+          <div class="lock-heatmap-grid" id="lockHeatmapGrid">
+            <!-- PRE_RENDERED_HEATMAP_DOTS -->
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Login Form -->
+    <div class="lock-setup-form" id="loginForm" style="display: flex;">
+      <div class="setup-icon-wrapper">
+        <svg class="setup-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+        </svg>
+      </div>
+      <div class="input-group" style="margin-bottom: 4px; width: 100%;">
+        <input type="text" class="lock-input" id="loginUser" placeholder="Username" autocomplete="username" autocapitalize="off" autocorrect="off" style="text-align: center;">
+      </div>
+      <div class="input-group" style="margin-bottom: 4px; width: 100%;">
+        <input type="password" class="lock-input" id="loginPassword" placeholder="Password" autocomplete="current-password" style="text-align: center;">
+      </div>
+      <p class="lock-setup-desc" id="loginError" style="display: none; color: #FF453A;"></p>
+      <button class="lock-btn" id="btnLogin" style="margin-top: 8px;">Sign In</button>
+    </div>
+
+    <div class="lock-reset-link" id="loginModeToggle">
+      New here? Create an account
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-wrap" id="tw"></div>
+
+<!-- Modal Dialog -->
+<div class="modal-bg" id="mBg">
+  <div class="modal card">
+    <div class="modal-icon" id="mI">
+      <svg class="icon-warning" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="var(--c-orange)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+    </div>
+    <div class="modal-title" id="mT">Confirm Action</div>
+    <div class="modal-msg" id="mM">Are you sure you want to proceed?</div>
+    <div class="modal-acts">
+      <button class="btn btn-secondary btn-full" id="mC">Cancel</button>
+      <button class="btn btn-danger btn-full" id="mO">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Body Weight Input Modal -->
+<div class="modal-bg" id="bwBg">
+  <div class="modal card">
+    <div class="modal-title">Log Body Weight</div>
+    <div class="modal-msg">Enter your current weight in kg</div>
+    <div class="input-group" style="margin-bottom:16px">
+      <input type="number" class="input-field" id="bwInput" placeholder="e.g. 75" step="0.1" inputmode="decimal" style="text-align:center;font-size:1.4rem;font-weight:800">
+    </div>
+    <div class="modal-acts">
+      <button class="btn btn-secondary btn-full" id="bwCancel">Cancel</button>
+      <button class="btn btn-primary btn-full" id="bwSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Exercise Library Modal -->
+<div class="modal-bg" id="libBg">
+  <div class="modal card lib-card">
+    <div class="lib-header">
+      <h3 class="lib-title">Exercise Library</h3>
+      <button class="btn-close" id="libCl" aria-label="Close library">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="lib-tabs-container" id="libTabs"></div>
+    <div class="lib-body" id="libB"></div>
+  </div>
+</div>
+
+<!-- Mobile Phone Container -->
+<div class="phone-frame">
+  
+  <!-- Animated Gradient Mesh Background -->
+  <div class="gradient-mesh">
+    <div class="mesh-blob blob-1"></div>
+    <div class="mesh-blob blob-2"></div>
+    <div class="mesh-blob blob-3"></div>
+    <div class="mesh-blob blob-4"></div>
+  </div>
+  
+  <!-- Fixed Header Bar -->
+  <header class="app-header">
+    <div class="brand">
+      <svg class="brand-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 3h12l4 6-10 13L2 9z"/>
+      </svg>
+      <span class="brand-text">Asca <span class="brand-serif">Gym</span></span>
+    </div>
+    
+    <div class="header-actions">
+      <div class="status-badge off" id="dConn" title="Cloud sync status">
+        <svg class="icon-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17.5 19A3.5 3.5 0 0 0 21 15.5c0-2.79-2.54-4.5-5-4.5-.42 0-.83.04-1.24.12A7 7 0 0 0 2 11.5c0 3.87 3.13 7 7 7h8.5z"/>
+        </svg>
+        <span class="status-dot"></span>
+        <span class="status-text" id="dConnT">Offline</span>
+      </div>
+      <button class="btn-lib-icon" id="btnExLib" title="View Exercise Library">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+          <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5v-15z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Scrollable Views Area -->
+  <main class="views-container">
+
+    <!-- ═══ LOG SESSION VIEW ═══ -->
+    <section class="view on" id="vLog">
+      <div class="view-header">
+        <h2 class="view-title">Workouts</h2>
+        <p class="view-subtitle">Track your daily progress</p>
+      </div>
+
+      <!-- Body Weight Widget -->
+      <div class="card glass-card volume-widget bw-widget" id="bwWidget" style="cursor:pointer">
+        <div class="vol-widget-left">
+          <span class="vol-widget-label">Body Weight</span>
+          <span class="vol-widget-period" id="bwTimestamp">Tap to log</span>
+        </div>
+        <div class="vol-widget-right">
+          <span class="vol-widget-value" id="bwDisplay">—</span>
+          <span class="vol-widget-unit">kg</span>
+        </div>
+      </div>
+
+      <!-- Workout Heatmap Calendar -->
+      <div class="card glass-card heatmap-cal-card">
+        <div class="heatmap-cal-header">
+          <span class="heatmap-cal-title">Activity</span>
+          <div class="heatmap-legend">
+            <span>Less</span>
+            <div class="heatmap-dot lvl-0"></div>
+            <div class="heatmap-dot lvl-1"></div>
+            <div class="heatmap-dot lvl-2"></div>
+            <div class="heatmap-dot lvl-3"></div>
+            <span>More</span>
+          </div>
+        </div>
+        
+        <div class="heatmap-container">
+          <div class="heatmap-days-labels">
+            <span>Sun</span>
+            <span>Mon</span>
+            <span>Tue</span>
+            <span>Wed</span>
+            <span>Thu</span>
+            <span>Fri</span>
+            <span>Sat</span>
+          </div>
+          <div class="heatmap-main">
+            <div class="heatmap-cal-months" id="heatmapMonths"></div>
+            <div class="heatmap-cal-grid" id="heatmapCalGrid"></div>
+          </div>
+        </div>
+        <div class="heatmap-day-details" id="heatmapDayDetails"></div>
+      </div>
+
+      <!-- Volume Lifted Widget -->
+      <div class="card glass-card volume-widget">
+        <div class="vol-widget-left">
+          <span class="vol-widget-label">Volume lifted</span>
+          <span class="vol-widget-period">Last 7 days</span>
+        </div>
+        <div class="vol-widget-right">
+          <span class="vol-widget-value" id="volWidgetVal">0</span>
+          <span class="vol-widget-unit">kg</span>
+        </div>
+      </div>
+
+      <!-- Quick Session Setup -->
+      <div class="card glass-card setup-card">
+        <div class="form-row">
+          <div class="input-group">
+            <label class="input-label" for="wDate">Date</label>
+            <input type="date" class="input-field" id="wDate">
+          </div>
+          <div class="input-group">
+            <label class="input-label" for="wType">Split Focus</label>
+            <select class="input-field" id="wType">
+              <option value="">Choose Split...</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Setup Split Heatmap -->
+        <div id="setupHeatmap" class="setup-heatmap-wrap" style="display:none"></div>
+        
+        <div class="input-group search-group">
+          <label class="input-label" for="exS">Add Exercise</label>
+          <div class="search-wrap">
+            <span class="search-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+            </span>
+            <input type="text" class="input-field" id="exS" placeholder="Search exercises..." autocomplete="off">
+            <div class="dropdown" id="dd"></div>
+          </div>
+        </div>
+
+        <!-- Active Set Editor -->
+        <div class="editor card glass-card" id="se">
+          <div class="editor-header">
+            <div>
+              <h3 class="editor-title" id="seN">Exercise Name</h3>
+              <div id="editorHeatmap" class="editor-heatmap-wrap"></div>
+            </div>
+            <button class="btn-close" id="seCl" aria-label="Close set editor">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+          
+          <!-- Quick Rest Timer Presets in Editor -->
+          <div class="editor-timer-row">
+            <span class="editor-timer-label">Rest:</span>
+            <button class="btn-timer-chip" data-sec="60">60s</button>
+            <button class="btn-timer-chip" data-sec="90">90s</button>
+            <button class="btn-timer-chip" data-sec="120">2m</button>
+            <button class="btn-timer-chip" data-sec="180">3m</button>
+          </div>
+          
+          <div id="seG" class="sets-grid-container"></div>
+          
+          <button class="btn btn-secondary add-set-btn" id="addS">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Add Set
+          </button>
+          
+          <div class="editor-actions">
+            <button class="btn btn-primary btn-full" id="svEx">Save Exercise</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Logged Exercises List -->
+      <div class="logged-section">
+        <div class="label">Logged Exercises</div>
+        <div class="logged-list" id="logd"></div>
+      </div>
+
+      <!-- Footer Session Finish Actions -->
+      <div class="action-row" id="acts" style="display:none">
+        <button class="btn btn-danger" id="disc">Discard</button>
+        <button class="btn btn-primary" id="fin">Finish & Sync</button>
+      </div>
+    </section>
+
+    <!-- ═══ TIMELINE HISTORY VIEW ═══ -->
+    <section class="view" id="vHist">
+      <div class="view-header">
+        <h2 class="view-title">History</h2>
+        <p class="view-subtitle">Your workout timeline</p>
+      </div>
+
+      <!-- Category Filter Tabs -->
+      <div class="filter-bar">
+        <button class="filter-chip on" data-f="all" id="fhAll">All</button>
+        <button class="filter-chip" data-f="Pull">Pull</button>
+        <button class="filter-chip" data-f="Push">Push</button>
+        <button class="filter-chip" data-f="Legs">Legs</button>
+        <button class="filter-chip" data-f="Shoulder">Shoulders</button>
+      </div>
+
+      <!-- History Feed -->
+      <div class="timeline" id="hList"></div>
+    </section>
+
+    <!-- ═══ ANALYTICS DASHBOARD VIEW ═══ -->
+    <section class="view" id="vAna">
+      <div class="view-header">
+        <h2 class="view-title">Insights</h2>
+        <p class="view-subtitle">Metrics and progressive overload</p>
+      </div>
+
+      <!-- Weekly Progress Ring + Stats Grid -->
+      <div class="insights-top-row">
+        <div class="card glass-card progress-ring-card">
+          <div class="progress-ring-wrap" id="weeklyRing">
+            <svg class="progress-ring-svg" viewBox="0 0 120 120">
+              <circle class="ring-bg" cx="60" cy="60" r="50"/>
+              <circle class="ring-fill" id="ringFill" cx="60" cy="60" r="50" stroke-dasharray="314.16 314.16" stroke-dashoffset="314.16"/>
+            </svg>
+            <div class="ring-center">
+              <span class="ring-value" id="ringVal">0</span>
+              <span class="ring-label">/ 5</span>
+            </div>
+          </div>
+          <div class="ring-meta">
+            <span class="ring-title">This Week</span>
+            <span class="ring-sub">Workouts</span>
+          </div>
+        </div>
+        <div class="stats-mini-grid" id="sgC"></div>
+      </div>
+
+
+      <!-- Muscle Target Heatmap Card -->
+      <div class="label">Muscle Activation Map</div>
+      <div class="card glass-card heatmap-card">
+        <div class="heatmap-header">
+          <div class="heatmap-title" id="hmPeriodTitle">Recent Target Areas</div>
+          <div class="heatmap-legend">
+            <span class="hl-item"><span class="hl-dot lvl-0"></span>Idle</span>
+            <span class="hl-item"><span class="hl-dot lvl-1"></span>Low</span>
+            <span class="hl-item"><span class="hl-dot lvl-2"></span>Med</span>
+            <span class="hl-item"><span class="hl-dot lvl-3"></span>High</span>
+          </div>
+        </div>
+        <div class="heatmap-body" id="insightsHeatmap"></div>
+      </div>
+
+      <!-- Muscle Group Volume Progress Card -->
+      <div class="label">Muscle Group Volume Progress</div>
+      <div class="card glass-card volume-insight-card">
+        <div class="vol-insight-header">
+          <div class="toggle-segmented" id="volPeriodTog">
+            <button type="button" class="segment-btn active" data-period="7">7 Days</button>
+            <button type="button" class="segment-btn" data-period="30">30 Days</button>
+          </div>
+          <div class="vol-legend">
+            <span class="vol-legend-item"><span class="legend-dot current"></span>Current</span>
+            <span class="vol-legend-item"><span class="legend-dot previous"></span>Previous</span>
+          </div>
+        </div>
+        <div class="vol-insight-list" id="volInsightList"></div>
+      </div>
+      
+      <!-- Personal Records -->
+      <div class="pr-section">
+        <div class="label">Personal Records</div>
+        <div class="pr-grid" id="prS"></div>
+      </div>
+
+      <!-- Custom Chart Card -->
+      <div class="label">Progressive Overload Chart</div>
+      <div class="card glass-card chart-card">
+        <div class="chart-header">
+          <div class="chart-selectors">
+            <select class="input-field select-chart-ex" id="cEx">
+              <option value="">Select Exercise</option>
+            </select>
+            <select class="input-field select-chart-metric" id="cM">
+              <option value="weightReps">Weight/Level & Reps</option>
+              <option value="volume">Total Volume</option>
+            </select>
+          </div>
+          <div class="chart-val-container">
+            <span class="chart-val" id="cV">—</span>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="cc"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ SOCIAL / FRIENDS VIEW ═══ -->
+    <section class="view" id="vSoc">
+      <div class="view-header">
+        <h2 class="view-title">Social</h2>
+        <p class="view-subtitle">Leaderboard & activity feed</p>
+      </div>
+
+      <!-- Social: Leaderboard + Activity + Comparison -->
+      <div class="label" id="friendLabel" style="display:none">Leaderboard</div>
+      <div class="card glass-card friend-card" id="friendCard" style="display:none">
+        <div class="friend-header">
+          <div class="friend-title-group">
+            <span class="friend-name" id="friendNameEl">Leaderboard</span>
+            <span class="friend-last-sync" id="friendLastSync">Not synced yet</span>
+          </div>
+          <div class="friend-header-actions">
+            <button class="btn btn-secondary btn-sm" id="btnFriendSync">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;margin-right:5px">
+                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+              </svg>
+              Sync
+            </button>
+          </div>
+        </div>
+        <!-- Metric Tabs -->
+        <div class="lb-metric-tabs" id="lbMetricTabs">
+          <button class="lb-metric-tab on" data-metric="vol7">Volume</button>
+          <button class="lb-metric-tab" data-metric="week">Workouts</button>
+          <button class="lb-metric-tab" data-metric="sets7">Sets</button>
+          <button class="lb-metric-tab" data-metric="consistency">Streak</button>
+        </div>
+        <!-- Timeframe Tabs -->
+        <div class="lb-timeframe-tabs" id="lbTimeframeTabs">
+          <button class="lb-timeframe-tab on" data-timeframe="week">Weekly</button>
+          <button class="lb-timeframe-tab" data-timeframe="month">Monthly</button>
+          <button class="lb-timeframe-tab" data-timeframe="overall">Overall</button>
+        </div>
+        <!-- Podium -->
+        <div class="lb-podium" id="lbPodium"></div>
+        <!-- Full Leaderboard -->
+        <div class="friend-compare" id="friendCompare"></div>
+      </div>
+
+      <!-- Gym Activity Heatmaps (GitHub-style) -->
+      <div class="label" id="activityLabel" style="display:none">Activity</div>
+      <div class="card glass-card" id="activityCard" style="display:none">
+        <div id="gymActivityGrids"></div>
+      </div>
+
+      <!-- Head-to-Head Comparison -->
+      <div class="label" id="h2hLabel" style="display:none">Compare</div>
+      <div class="card glass-card" id="h2hCard" style="display:none">
+        <div class="h2h-picker" id="h2hPicker"></div>
+        <div class="h2h-body" id="h2hBody"></div>
+      </div>
+
+      <!-- Activity Feed -->
+      <div class="label" id="feedLabel" style="display:none">Activity Feed</div>
+      <div class="card glass-card" id="feedCard" style="display:none">
+        <div class="friend-recent" id="friendRecent"></div>
+      </div>
+    </section>
+
+    <!-- ═══ MY ACCOUNT VIEW ═══ -->
+    <section class="view" id="vSet">
+
+      <!-- Athlete Hero -->
+      <div class="card glass-card profile-hero">
+        <div class="profile-glow"></div>
+        <span class="status-badge off profile-badge" id="fbStatus" style="cursor:default">
+          <span class="status-dot"></span>
+          <span class="status-text" id="fbStatusT">Offline</span>
+        </span>
+        <div class="profile-avatar-ring">
+          <div class="profile-avatar" id="profAvatar">?</div>
+        </div>
+        <div class="profile-name" id="profName">Athlete</div>
+        <div class="profile-username" id="profUser">@—</div>
+
+        <div class="profile-stats">
+          <div class="profile-stat"><div class="profile-stat-val" id="profWorkouts">0</div><div class="profile-stat-label">Workouts</div></div>
+          <div class="profile-stat"><div class="profile-stat-val" id="profVolume">0</div><div class="profile-stat-label">Volume</div></div>
+          <div class="profile-stat"><div class="profile-stat-val" id="profWeek">0</div><div class="profile-stat-label">This Week</div></div>
+          <div class="profile-stat"><div class="profile-stat-val" id="profFollowers">0</div><div class="profile-stat-label">Followers</div></div>
+          <div class="profile-stat"><div class="profile-stat-val" id="profFollowing">0</div><div class="profile-stat-label">Following</div></div>
+        </div>
+
+        <button class="profile-edit-toggle" id="bEditProfile">Edit profile</button>
+        <div class="profile-edit" id="profileEdit">
+          <div class="form-row">
+            <div class="input-group">
+              <label class="input-label" for="fbMyId">Username</label>
+              <input type="text" class="input-field" id="fbMyId" placeholder="e.g. anshul" autocapitalize="off" autocorrect="off">
+            </div>
+            <div class="input-group">
+              <label class="input-label" for="fbDisplayName">Display name</label>
+              <input type="text" class="input-field" id="fbDisplayName" placeholder="Shown to followers">
+            </div>
+          </div>
+          <div class="input-group">
+            <label class="input-label" for="fbGithub">GitHub username <span style="font-weight:400;color:var(--t-3)">(optional)</span></label>
+            <input type="text" class="input-field" id="fbGithub" placeholder="e.g. anshulsc" autocapitalize="off" autocorrect="off">
+          </div>
+          <button class="btn btn-primary btn-full" id="bFbSave">Save profile</button>
+        </div>
+      </div>
+
+      <!-- Find Friends -->
+      <div class="label">Find Friends</div>
+      <div class="card glass-card settings-group">
+        <div class="input-group search-input-wrap">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input type="text" class="input-field search-input" id="fbSearch" placeholder="Search athletes…" autocapitalize="off" autocorrect="off">
+        </div>
+        <div id="searchResults"></div>
+
+        <div class="seg-tabs" id="followTabs">
+          <button class="seg-tab on" data-tab="following">Following <span id="followCount" class="seg-count"></span></button>
+          <button class="seg-tab" data-tab="followers">Followers <span id="followerCount" class="seg-count"></span></button>
+        </div>
+        <div id="followList"></div>
+        <div id="followersList" style="display:none"></div>
+      </div>
+
+      <!-- Account -->
+      <div class="label">Account</div>
+      <div class="card glass-card settings-group">
+        <div class="settings-row">
+          <div class="settings-row-info">
+            <div class="settings-row-name">Signed in</div>
+            <div class="settings-row-desc" id="fbAccount">Not signed in</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="bSignOut">Sign out</button>
+        </div>
+
+        <div class="settings-actions" style="margin-top:12px">
+          <button class="btn btn-secondary btn-full" id="bFbBackup">Back up now</button>
+          <button class="btn btn-secondary btn-full" id="bFbRestore">Restore from cloud</button>
+        </div>
+
+        <!-- Firebase Setup Guide Accordion (one-time, for whoever maintains the build) -->
+        <div class="connection-guide">
+          <div class="guide-toggle">
+            <span>One-Time Backend Setup (maintainer only)</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="chevron-svg">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+          <div class="guide-content">
+            <ol>
+              <li>Go to <strong>console.firebase.google.com</strong> and create a project (any name, Analytics off).</li>
+              <li>Open <strong>Build &gt; Authentication &gt; Get started</strong> and enable the <strong>Email/Password</strong> sign-in method.</li>
+              <li>Open <strong>Build &gt; Firestore Database &gt; Create database</strong>, choose <strong>Production mode</strong> and the region closest to you.</li>
+              <li>In the <strong>Rules</strong> tab, replace the contents with our rules (button below) and click <strong>Publish</strong>.</li>
+              <li>Open <strong>Project settings</strong> (gear icon): copy the <strong>Project ID</strong>, then under <em>Your apps</em> add a <strong>Web app</strong> and copy its <strong>apiKey</strong>.</li>
+              <li>Paste both into <code>FIREBASE_PROJECT_ID</code> / <code>FIREBASE_API_KEY</code> at the top of <code>src/firebase-sync.js</code>, run <code>node build.js</code>, and push. Everyone using the site now shares this backend.</li>
+              <li>Each user creates an account on the login screen, sets their profile, and follows others via <strong>Find Friends</strong>.</li>
+              <li>Optional hardening: once both accounts exist, disable new sign-ups in <strong>Authentication &gt; Settings &gt; User actions</strong>.</li>
+            </ol>
+            <button class="btn btn-secondary btn-sm btn-full" id="copyFbRules">Copy Firestore Rules</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Data Backup & Reset Group -->
+      <div class="card glass-card settings-group">
+        <h3 class="settings-title">Storage Management</h3>
+        
+        <div class="settings-row">
+          <div class="settings-row-info">
+            <div class="settings-row-name">Export Workouts</div>
+            <div class="settings-row-desc">Backup data as a JSON file</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="bExp">Export</button>
+        </div>
+        
+        <div class="settings-row">
+          <div class="settings-row-info">
+            <div class="settings-row-name">Import Workouts</div>
+            <div class="settings-row-desc">Restore database from backup</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="bImp">Import</button>
+          <input type="file" id="fIn" accept=".json" style="display:none">
+        </div>
+        
+        <div class="settings-row warning-row">
+          <div class="settings-row-info">
+            <div class="settings-row-name destructive-text">Reset Local Data</div>
+            <div class="settings-row-desc">Permanently wipe all session histories</div>
+          </div>
+          <button class="btn btn-danger btn-sm" id="bRst">Reset</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Global Rest Timer Bar -->
+  <div class="global-timer-bar hidden" id="gtBar">
+    <div class="timer-content">
+      <div class="timer-left">
+        <div class="timer-ring-wrap">
+          <svg class="timer-svg" viewBox="0 0 36 36">
+            <circle class="timer-svg-bg" cx="18" cy="18" r="15.9155"></circle>
+            <circle class="timer-svg-fill" id="gtFill" cx="18" cy="18" r="15.9155" stroke-dasharray="100 100" stroke-dashoffset="0"></circle>
+          </svg>
+          <span class="timer-text" id="gtTime">00:00</span>
+        </div>
+        <div class="timer-info">
+          <span class="timer-title">Resting</span>
+          <span class="timer-desc" id="gtDesc">Tap preset to start</span>
+        </div>
+      </div>
+      <div class="timer-presets">
+        <button class="btn-timer-chip" data-sec="60">60s</button>
+        <button class="btn-timer-chip" data-sec="90">90s</button>
+        <button class="btn-timer-chip" data-sec="120">2m</button>
+        <button class="btn-timer-chip" data-sec="180">3m</button>
+      </div>
+      <div class="timer-controls">
+        <button class="btn-timer-action" id="gtToggle" aria-label="Play or Pause rest timer">
+          <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 5v14l11-7z"/></svg>
+          <svg class="pause-icon" viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        </button>
+        <button class="btn-timer-action text-danger" id="gtReset" aria-label="Reset rest timer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+        </button>
+        <button class="btn-timer-action" id="gtClose" aria-label="Close rest timer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Navigation Tab Bar -->
+  <nav class="bottom-bar" id="bot-nav">
+    <div class="nav-lens" id="navLens"></div>
+    <button class="bot-btn on" data-v="Log">
+      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 20h9"/>
+        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+      </svg>
+      <span>Log</span>
+    </button>
+    <button class="bot-btn" data-v="Hist">
+      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+      </svg>
+      <span>History</span>
+    </button>
+    <button class="bot-btn" data-v="Ana">
+      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 3v18h18"/>
+        <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/>
+      </svg>
+      <span>Insights</span>
+    </button>
+    <button class="bot-btn" data-v="Soc">
+      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+      <span>Social</span>
+    </button>
+    <button class="bot-btn" data-v="Set">
+      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+        <circle cx="12" cy="7" r="4"/>
+      </svg>
+      <span>Account</span>
+    </button>
+  </nav>
+
+  <!-- Mini Profile Bottom Sheet -->
+  <div class="mini-profile-bg" id="miniProfileBg">
+    <div class="mini-profile-sheet" id="miniProfileSheet">
+      <div class="mini-profile-handle"></div>
+      <div class="mini-profile-content" id="miniProfileContent"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Application Javascript files -->
+<script src="data.js?v=2.0"></script>
+<script src="firebase-sync.js?v=1.0"></script>
+<script src="app.js?v=2.0"></script>
+</body>
+</html>
