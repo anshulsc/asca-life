@@ -1131,7 +1131,7 @@ function renderH2HPicker(allRows){
 
 function renderH2HBody(a,b){
   const body=document.getElementById('h2hBody');if(!body)return;
-  const dims=[{label:'Volume',aVal:a.stats.vol7,bVal:b.stats.vol7,unit:'kg'},{label:'Workouts',aVal:a.stats.week,bVal:b.stats.week,unit:''},{label:'Sets',aVal:a.stats.sets7,bVal:b.stats.sets7,unit:''},{label:'Heaviest',aVal:a.stats.heaviest,bVal:b.stats.heaviest,unit:'kg'},{label:'Streak',aVal:a.stats.streak,bVal:b.stats.streak,unit:'days'}];
+  const dims=[{label:'Volume',aVal:a.stats.volume,bVal:b.stats.volume,unit:'kg'},{label:'Workouts',aVal:a.stats.workouts,bVal:b.stats.workouts,unit:''},{label:'Sets',aVal:a.stats.sets,bVal:b.stats.sets,unit:''},{label:'Heaviest',aVal:a.stats.heaviest,bVal:b.stats.heaviest,unit:'kg'},{label:'Streak',aVal:a.stats.streak,bVal:b.stats.streak,unit:'days'}];
   const cx=110,cy=110,r=80,n=dims.length;
   const angles=dims.map((_,i)=>(Math.PI*2*i/n)-Math.PI/2);
   const grid=[0.25,0.5,0.75,1].map(s=>`<polygon points="${angles.map(a=>`${cx+Math.cos(a)*r*s},${cy+Math.sin(a)*r*s}`).join(' ')}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>`).join('');
