@@ -769,8 +769,15 @@ function fbCfg(){return (typeof FirebaseSync!=='undefined')?FirebaseSync.getConf
 
 async function buildFullProgressCode(){
   const cfg=fbCfg();
-  // following rides along so friends can show "Follows you" mutuals
-  const json=JSON.stringify({v:2,ts:Date.now(),name:cfg.displayName||cfg.userId||'',following:(cfg.following||[]).map(f=>f.id),workouts:W});
+  const json=JSON.stringify({
+    v:2,
+    ts:Date.now(),
+    name:cfg.displayName||cfg.userId||'',
+    avatar:cfg.avatar||'',
+    github:cfg.github||'',
+    following:(cfg.following||[]).map(f=>f.id),
+    workouts:W
+  });
   try{
     if(typeof CompressionStream!=='undefined')return 'ASCAGYM2.'+await gzipB64(json);
   }catch(_){}
@@ -855,7 +862,14 @@ async function fbPullFollowing(interactive=true){
     const doc=await FirebaseSync.readDoc(f.id);
     if(!doc||!doc.blob)throw new Error('no data for @'+f.id);
     const p=await decodeProgressCode(doc.blob);
-    saveFriendEntry(f.id,{ts:doc.ts||p.ts||Date.now(),name:f.name||p.name||f.id,following:Array.isArray(p.following)?p.following:[],workouts:p.workouts});
+    saveFriendEntry(f.id,{
+      ts:doc.ts||p.ts||Date.now(),
+      name:f.name||p.name||f.id,
+      avatar:p.avatar||'',
+      github:p.github||'',
+      following:Array.isArray(p.following)?p.following:[],
+      workouts:p.workouts
+    });
   }));
   const ok=results.filter(r=>r.status==='fulfilled').length;
   results.forEach((r,i)=>{if(r.status==='rejected')console.warn('[Sync]',cfg.following[i]?.id,r.reason?.message||r.reason);});
@@ -967,9 +981,29 @@ function renderProfile(){
   const cfg=fbCfg();
   const username=cfg.userId||(cfg.user&&cfg.user.username)||'';
   const name=cfg.displayName||username||'Athlete';
-  avatar.textContent=(name.trim()[0]||'?');
+  
+  if(cfg.avatar){
+    avatar.innerHTML=`<img src="${cfg.avatar}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+    avatar.style.background='none';
+  }else{
+    avatar.textContent=(name.trim()[0]||'?');
+    avatar.style.background='#17130f';
+  }
+
   document.getElementById('profName').textContent=name;
   document.getElementById('profUser').textContent=username?'@'+username:'@—';
+  
+  const githubLink=document.getElementById('profGithubLink');
+  if(githubLink){
+    if(cfg.github){
+      githubLink.href=`https://github.com/${cfg.github}`;
+      githubLink.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:middle;margin-right:4px;"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>${cfg.github}`;
+      githubLink.style.display='inline-flex';
+    }else{
+      githubLink.style.display='none';
+    }
+  }
+
   const sessions=W.filter(w=>w&&w.dayType!=='Rest Day');
   let vol=0;
   sessions.forEach(w=>(w.exercises||[]).forEach(e=>e.sets.forEach(s=>{const wv=getSetWeightVal(s);if(wv&&s.reps)vol+=wv*s.reps;})));
@@ -2119,10 +2153,62 @@ function bindSettings(){
 
     const bEditProfile=document.getElementById('bEditProfile');
     const profileEdit=document.getElementById('profileEdit');
-    if(bEditProfile&&profileEdit)bEditProfile.addEventListener('click',()=>{
-      const open=profileEdit.classList.toggle('open');
-      bEditProfile.textContent=open?'Close':'Edit profile';
-    });
+    const fbGithub=document.getElementById('fbGithub');
+    const fAvatarUpload=document.getElementById('fAvatarUpload');
+    const profAvatar=document.getElementById('profAvatar');
+    let tempAvatarData=null;
+
+    if(bEditProfile&&profileEdit){
+      bEditProfile.addEventListener('click',()=>{
+        const open=profileEdit.classList.toggle('open');
+        const hero=document.querySelector('.profile-hero');
+        if(hero)hero.classList.toggle('editing',open);
+        bEditProfile.textContent=open?'Close':'Edit profile';
+        if(!open){
+          tempAvatarData=null; // clear unsaved
+          renderProfile();
+        }
+      });
+    }
+
+    if(profAvatar&&fAvatarUpload){
+      profAvatar.addEventListener('click',()=>{
+        const hero=document.querySelector('.profile-hero');
+        if(hero&&hero.classList.contains('editing')){
+          fAvatarUpload.click();
+        }
+      });
+    }
+
+    if(fAvatarUpload){
+      fAvatarUpload.addEventListener('change',e=>{
+        const file=e.target.files[0];
+        if(!file)return;
+        const reader=new FileReader();
+        reader.onload=event=>{
+          const img=new Image();
+          img.onload=()=>{
+            const canvas=document.createElement('canvas');
+            canvas.width=120;
+            canvas.height=120;
+            const ctx=canvas.getContext('2d');
+            const minDim=Math.min(img.width,img.height);
+            const sx=(img.width-minDim)/2;
+            const sy=(img.height-minDim)/2;
+            ctx.drawImage(img,sx,sy,minDim,minDim,0,0,120,120);
+            tempAvatarData=canvas.toDataURL('image/jpeg',0.7);
+            if(profAvatar){
+              profAvatar.innerHTML=`<img src="${tempAvatarData}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+              profAvatar.style.background='none';
+            }
+          };
+          img.src=event.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    if(fbGithub)fbGithub.value=cfg.github||'';
 
     const acctEl=document.getElementById('fbAccount');
     if(acctEl)acctEl.textContent=cfg.user?`Signed in as ${cfg.user.username}`:'Not signed in';
@@ -2135,13 +2221,21 @@ function bindSettings(){
     });
 
     bFbSave.addEventListener('click',async()=>{
-      const cfg=FirebaseSync.updateConfig({
+      const updateObj={
         userId:fbMyId.value.trim().toLowerCase(),
-        displayName:fbDisplayName?fbDisplayName.value.trim():''
-      });
+        displayName:fbDisplayName?fbDisplayName.value.trim():'',
+        github:fbGithub?fbGithub.value.trim():''
+      };
+      if(tempAvatarData!==null){
+        updateObj.avatar=tempAvatarData;
+        tempAvatarData=null;
+      }
+      const cfg=FirebaseSync.updateConfig(updateObj);
       setFbStatus(cfg.connected);
       renderProfile();
       if(profileEdit)profileEdit.classList.remove('open');
+      const hero=document.querySelector('.profile-hero');
+      if(hero)hero.classList.remove('editing');
       if(bEditProfile)bEditProfile.textContent='Edit profile';
       if(!cfg.backendReady){toast('This build has no Firebase backend baked in yet — see the setup guide','error');return;}
       if(!cfg.user){toast('Sign in first (reload the page)','error');return;}
@@ -2190,8 +2284,13 @@ function bindSettings(){
         :isFollowing(u.id)
           ?`<button class="btn btn-secondary btn-sm" data-unfollow="${esc(u.id)}">Following</button>`
           :`<button class="btn btn-primary btn-sm" data-follow="${esc(u.id)}" data-fname="${esc(u.name||'')}">Follow</button>`;
+      
+      const av=me?cfg.avatar:(cached?cached.avatar:'');
+      const avatarHtml=av?`<img src="${av}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:initialOf(u.name||u.id);
+      const avatarBg=av?'none':avatarGrad(u.id);
+
       return `<div class="user-row">
-        <div class="user-row-avatar" style="background:${avatarGrad(u.id)}">${initialOf(u.name||u.id)}</div>
+        <div class="user-row-avatar" style="background:${avatarBg}">${avatarHtml}</div>
         <div class="user-row-info">
           <div class="user-row-name">${label}${mutual}</div>
           <div class="user-row-sub">${sub}</div>
