@@ -553,74 +553,150 @@
         <div id="followersList" style="display:none"></div>
       </div>
 
-      <!-- Account -->
-      <div class="label">Account</div>
-      <div class="card glass-card settings-group">
-        <div class="settings-row">
-          <div class="settings-row-info">
-            <div class="settings-row-name">Signed in</div>
-            <div class="settings-row-desc" id="fbAccount">Not signed in</div>
-          </div>
-          <button class="btn btn-secondary btn-sm" id="bSignOut">Sign out</button>
-        </div>
-
-        <div class="settings-actions" style="margin-top:12px">
-          <button class="btn btn-secondary btn-full" id="bFbBackup">Back up now</button>
-          <button class="btn btn-secondary btn-full" id="bFbRestore">Restore from cloud</button>
-        </div>
-
-        <!-- Firebase Setup Guide Accordion (one-time, for whoever maintains the build) -->
-        <div class="connection-guide">
-          <div class="guide-toggle">
-            <span>One-Time Backend Setup (maintainer only)</span>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="chevron-svg">
-              <polyline points="6 9 12 15 18 9"/>
+      <!-- Account Settings & Data Management (iOS/Instagram/Strava list style) -->
+      <div class="label">Settings & Tools</div>
+      <div class="card glass-card settings-list-card">
+        
+        <!-- Account Status Row -->
+        <div class="settings-list-item">
+          <div class="settings-list-icon" style="background: rgba(10, 132, 255, 0.15); color: #0A84FF;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
             </svg>
           </div>
-          <div class="guide-content">
-            <ol>
-              <li>Go to <strong>console.firebase.google.com</strong> and create a project (any name, Analytics off).</li>
-              <li>Open <strong>Build &gt; Authentication &gt; Get started</strong> and enable the <strong>Email/Password</strong> sign-in method.</li>
-              <li>Open <strong>Build &gt; Firestore Database &gt; Create database</strong>, choose <strong>Production mode</strong> and the region closest to you.</li>
-              <li>In the <strong>Rules</strong> tab, replace the contents with our rules (button below) and click <strong>Publish</strong>.</li>
-              <li>Open <strong>Project settings</strong> (gear icon): copy the <strong>Project ID</strong>, then under <em>Your apps</em> add a <strong>Web app</strong> and copy its <strong>apiKey</strong>.</li>
-              <li>Paste both into <code>FIREBASE_PROJECT_ID</code> / <code>FIREBASE_API_KEY</code> at the top of <code>src/firebase-sync.js</code>, run <code>node build.js</code>, and push. Everyone using the site now shares this backend.</li>
-              <li>Each user creates an account on the login screen, sets their profile, and follows others via <strong>Find Friends</strong>.</li>
-              <li>Optional hardening: once both accounts exist, disable new sign-ups in <strong>Authentication &gt; Settings &gt; User actions</strong>.</li>
-            </ol>
-            <button class="btn btn-secondary btn-sm btn-full" id="copyFbRules">Copy Firestore Rules</button>
+          <div class="settings-list-content">
+            <span class="settings-list-title">Firebase Account</span>
+            <span class="settings-list-desc" id="fbAccount">Not signed in</span>
           </div>
+          <button class="settings-list-action-btn" id="bSignOut">Sign Out</button>
         </div>
-      </div>
 
-      <!-- Data Backup & Reset Group -->
-      <div class="card glass-card settings-group">
-        <h3 class="settings-title">Storage Management</h3>
-        
-        <div class="settings-row">
-          <div class="settings-row-info">
-            <div class="settings-row-name">Export Workouts</div>
-            <div class="settings-row-desc">Backup data as a JSON file</div>
+        <!-- Cloud Backup -->
+        <div class="settings-list-item" id="bFbBackup">
+          <div class="settings-list-icon" style="background: rgba(48, 209, 88, 0.15); color: #30D158;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
           </div>
-          <button class="btn btn-secondary btn-sm" id="bExp">Export</button>
+          <div class="settings-list-content">
+            <span class="settings-list-title">Cloud Backup</span>
+            <span class="settings-list-desc">Force save latest workouts to Firebase</span>
+          </div>
+          <div class="settings-list-chevron">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </div>
         </div>
-        
-        <div class="settings-row">
-          <div class="settings-row-info">
-            <div class="settings-row-name">Import Workouts</div>
-            <div class="settings-row-desc">Restore database from backup</div>
+
+        <!-- Cloud Restore -->
+        <div class="settings-list-item" id="bFbRestore">
+          <div class="settings-list-icon" style="background: rgba(100, 210, 255, 0.15); color: #64D2FF;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
           </div>
-          <button class="btn btn-secondary btn-sm" id="bImp">Import</button>
+          <div class="settings-list-content">
+            <span class="settings-list-title">Cloud Restore</span>
+            <span class="settings-list-desc">Restore or merge data from Firebase backup</span>
+          </div>
+          <div class="settings-list-chevron">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Export JSON file -->
+        <div class="settings-list-item" id="bExp">
+          <div class="settings-list-icon" style="background: rgba(191, 90, 242, 0.15); color: #BF5AF2;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <div class="settings-list-content">
+            <span class="settings-list-title">Export JSON</span>
+            <span class="settings-list-desc">Backup session history to local file</span>
+          </div>
+          <div class="settings-list-chevron">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Import JSON file -->
+        <div class="settings-list-item" id="bImp">
+          <div class="settings-list-icon" style="background: rgba(255, 159, 10, 0.15); color: #FF9F0A;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </div>
+          <div class="settings-list-content">
+            <span class="settings-list-title">Import JSON</span>
+            <span class="settings-list-desc">Load session history from local file</span>
+          </div>
+          <div class="settings-list-chevron">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </div>
           <input type="file" id="fIn" accept=".json" style="display:none">
         </div>
-        
-        <div class="settings-row warning-row">
-          <div class="settings-row-info">
-            <div class="settings-row-name destructive-text">Reset Local Data</div>
-            <div class="settings-row-desc">Permanently wipe all session histories</div>
+
+        <!-- Reset Database -->
+        <div class="settings-list-item" id="bRst">
+          <div class="settings-list-icon" style="background: rgba(255, 69, 58, 0.15); color: #FF453A;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              <line x1="10" y1="11" x2="10" y2="17"/>
+              <line x1="14" y1="11" x2="14" y2="17"/>
+            </svg>
           </div>
-          <button class="btn btn-danger btn-sm" id="bRst">Reset</button>
+          <div class="settings-list-content">
+            <span class="settings-list-title destructive-text">Reset Local Data</span>
+            <span class="settings-list-desc">Wipe local device memory entirely</span>
+          </div>
+          <div class="settings-list-chevron">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </div>
         </div>
+
+        <!-- Firebase Guide Inline -->
+        <div style="padding: 14px 20px 20px 20px; border-top: 1px solid rgba(255,255,255,0.05);">
+          <div class="connection-guide">
+            <div class="guide-toggle" style="font-size:0.76rem">
+              <span>One-Time Backend Setup (maintainer only)</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="chevron-svg">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </div>
+            <div class="guide-content">
+              <ol>
+                <li>Go to <strong>console.firebase.google.com</strong> and create a project (any name, Analytics off).</li>
+                <li>Open <strong>Build &gt; Authentication &gt; Get started</strong> and enable <strong>Email/Password</strong> sign-in method.</li>
+                <li>Open <strong>Build &gt; Firestore Database &gt; Create database</strong>, choose <strong>Production mode</strong> and region.</li>
+                <li>In the <strong>Rules</strong> tab, paste rules (button below) and click <strong>Publish</strong>.</li>
+                <li>Open <strong>Project settings</strong> (gear icon): copy <strong>Project ID</strong> and Web App <strong>apiKey</strong>.</li>
+                <li>Paste both into <code>src/firebase-sync.js</code>, run <code>node build.js</code>, and push.</li>
+              </ol>
+              <button class="btn btn-secondary btn-sm btn-full" id="copyFbRules" style="margin-top: 10px;">Copy Firestore Rules</button>
+            </div>
+          </div>
+        </div>
+
       </div>
     </section>
 
