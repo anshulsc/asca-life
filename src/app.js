@@ -381,6 +381,12 @@ function lib(){
 function positionNavLens(activeBtn, animate = true) {
   const lens = document.getElementById('navLens');
   if (!lens) return;
+  // Desktop uses a vertical sidebar with a CSS active-pill instead of the
+  // horizontal liquid lens — hide it and bail so it can't mis-position.
+  if (window.matchMedia && window.matchMedia('(min-width: 1024px)').matches) {
+    lens.style.display = 'none';
+    return;
+  }
   if (!activeBtn) {
     lens.style.display = 'none';
     return;
@@ -1497,9 +1503,29 @@ function renderH2HBody(a,b){
     <div class="h2h-radar-wrap">${radar}</div><div class="h2h-stats-grid">${statRows}</div>`;
 }
 
+// Did this athlete log a non-rest workout within the last `hrs` hours?
+// Drives the Instagram-style "story ring" on their avatar.
+function trainedRecently(workouts,hrs){
+  const cut=Date.now()-(hrs||48)*3600000;
+  return (workouts||[]).some(w=>{
+    if(!w||w.dayType==='Rest Day'||!Array.isArray(w.exercises)||!w.exercises.length)return false;
+    const d=new Date(w.date+'T12:00:00');return !isNaN(d)&&d.getTime()>=cut;
+  });
+}
+// All-time heaviest set per exercise, for PR badges in the feed.
+function exerciseMaxes(workouts){
+  const m={};
+  (workouts||[]).forEach(w=>(w.exercises||[]).forEach(e=>(e.sets||[]).forEach(s=>{
+    const wv=getSetWeightVal(s);if(wv>(m[e.name]||0))m[e.name]=wv;
+  })));
+  return m;
+}
+
 function renderActivityFeed(allRows){
   const feedLabel=document.getElementById('feedLabel');const feedCard=document.getElementById('feedCard');const recent=document.getElementById('friendRecent');
   if(!feedLabel||!feedCard||!recent)return;
+  const woById={},maxById={};
+  allRows.forEach(r=>{woById[r.id]=r.workouts||[];maxById[r.id]=exerciseMaxes(r.workouts);});
   const feed=[];
   allRows.forEach(r=>{(r.workouts||[]).filter(w=>w&&w.dayType!=='Rest Day'&&Array.isArray(w.exercises)&&w.exercises.length).slice(0,6).forEach(w=>feed.push({id:r.id,name:r.name,w}));});
   feed.sort((a,b)=>b.w.date.localeCompare(a.w.date));
@@ -1508,11 +1534,115 @@ function renderActivityFeed(allRows){
   recent.innerHTML=feed.slice(0,12).map(({id,name,w})=>{
     const sets=w.exercises.reduce((s,e)=>s+e.sets.length,0);
     const vol=w.exercises.reduce((s,e)=>s+e.sets.reduce((ss,x)=>ss+((getSetWeightVal(x))*(x.reps||0)),0),0);
-    let top=null;w.exercises.forEach(e=>e.sets.forEach(s=>{const wv=getSetWeightVal(s);if(wv&&(!top||wv>top.w))top={name:e.name,w:wv};}));
     const dtc=dayTypeColor(w.dayType);
-    return `<div class="feed-item" data-uid="${esc(id)}" style="--dt:${dtc};--dt-bg:${dtc}22;--dt-bd:${dtc}44"><div class="feed-head"><div class="feed-avatar" style="background:${avatarBgOf(id)}">${avatarHtmlOf(id,name)}</div><div class="feed-who"><span class="feed-name">${esc(name)}</span><span class="feed-when">${dayAgo(w.date)}</span></div><span class="feed-type">${esc(w.dayType||'Workout')}</span><div class="feed-vol">${fmtStatNum(vol)}<span>kg</span></div></div><div class="feed-chips"><span class="feed-chip">${w.exercises.length} exercise${w.exercises.length===1?'':'s'}</span><span class="feed-chip">${sets} sets</span>${top?`<span class="feed-chip feed-chip-top">${esc(top.name)} ${top.w} kg</span>`:''}</div></div>`;
+    const maxes=maxById[id]||{};
+    let prName='';w.exercises.forEach(e=>e.sets.forEach(s=>{const wv=getSetWeightVal(s);if(wv&&maxes[e.name]&&wv>=maxes[e.name]&&!prName)prName=e.name;}));
+    const story=trainedRecently(woById[id])?' has-story':'';
+    const route=w.exercises.map(e=>e.name).slice(0,3).join(' · ');
+    const detail=w.exercises.map(e=>{
+      const setsH=(e.sets||[]).map((s,i)=>`<div class="fd-set"><span class="fd-set-idx">${i+1}</span><span class="fd-set-wr">${formatWeightVal(s)} × ${s.reps!=null&&s.reps!==''?s.reps:'—'}</span>${s.notes?`<span class="fd-set-note">${esc(s.notes)}</span>`:''}</div>`).join('');
+      return `<div class="fd-ex"><div class="fd-ex-head"><span class="fd-ex-name">${esc(e.name)}</span><span class="fd-ex-sets">${(e.sets||[]).length} set${(e.sets||[]).length===1?'':'s'}</span></div><div class="fd-sets">${setsH}</div></div>`;
+    }).join('');
+    return `<article class="feed-card" data-uid="${esc(id)}" style="--dt:${dtc};--dt-bg:${dtc}22">
+      <div class="feed-card-bar"></div>
+      <div class="feed-card-main">
+        <div class="feed-card-head">
+          <div class="avatar-ring${story}"><div class="feed-avatar" style="background:${avatarBgOf(id)}">${avatarHtmlOf(id,name)}</div></div>
+          <div class="feed-who"><span class="feed-name">${esc(name)}</span><span class="feed-when">@${esc(id)} · ${dayAgo(w.date)}</span></div>
+          <span class="feed-type" style="background:${dtc}22;color:${dtc}">${esc(w.dayType||'Workout')}</span>
+        </div>
+        <div class="feed-stats">
+          <div class="feed-stat"><b>${fmtStatNum(vol)}</b><span>kg volume</span></div>
+          <div class="feed-stat"><b>${sets}</b><span>sets</span></div>
+          <div class="feed-stat"><b>${w.exercises.length}</b><span>exercise${w.exercises.length===1?'':'s'}</span></div>
+          ${prName?`<div class="feed-stat feed-stat-pr"><b>🏆 PR</b><span>${esc(prName)}</span></div>`:''}
+        </div>
+        ${route?`<div class="feed-route"><span class="feed-route-dot" style="background:${dtc}"></span>${esc(route)}${w.exercises.length>3?` +${w.exercises.length-3}`:''}</div>`:''}
+        <div class="feed-detail" style="display:none">${detail}</div>
+        <div class="feed-actions">
+          <button class="feed-act feed-kudo" data-owner="${esc(id)}" data-date="${esc(w.date)}" aria-label="Give kudos">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            <span class="feed-act-count kudo-count">·</span>
+          </button>
+          <button class="feed-act feed-comment" data-owner="${esc(id)}" data-date="${esc(w.date)}" aria-label="Comments">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            <span class="feed-act-count comment-count">·</span>
+          </button>
+          <button class="feed-act feed-expand" aria-expanded="false">Workout<svg class="fd-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+          <button class="feed-act feed-openprofile" data-uid="${esc(id)}">Profile</button>
+        </div>
+        <div class="feed-comments" data-owner="${esc(id)}" data-date="${esc(w.date)}" style="display:none"></div>
+      </div>
+    </article>`;
   }).join('');
-  recent.querySelectorAll('.feed-item').forEach(el=>el.addEventListener('click',()=>showMiniProfile(el.dataset.uid)));
+  recent.querySelectorAll('.feed-card-head').forEach(el=>el.addEventListener('click',()=>{const c=el.closest('.feed-card');if(c)showMiniProfile(c.dataset.uid);}));
+  recent.querySelectorAll('.feed-openprofile').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();showMiniProfile(el.dataset.uid);}));
+  recent.querySelectorAll('.feed-kudo').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();handleKudo(el);}));
+  recent.querySelectorAll('.feed-comment').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();toggleComments(el);}));
+  recent.querySelectorAll('.feed-expand').forEach(el=>el.addEventListener('click',e=>{
+    e.stopPropagation();
+    const card=el.closest('.feed-card');const d=card&&card.querySelector('.feed-detail');if(!d)return;
+    const open=d.style.display==='none';d.style.display=open?'block':'none';
+    el.classList.toggle('on',open);el.setAttribute('aria-expanded',open?'true':'false');
+  }));
+  hydrateFeedSocial(recent);
+}
+
+/* ── Feed social: kudos + comments (RTDB kudos/ + comments/ nodes) ──
+   Reads are best-effort; if the extended DB rules aren't published yet
+   these no-op and the counts stay a dim dot. */
+function socialReady(){return typeof FirebaseSync!=='undefined'&&FirebaseSync.isConnected&&FirebaseSync.isConnected();}
+function hydrateFeedSocial(container){
+  if(!socialReady())return;
+  container.querySelectorAll('.feed-kudo').forEach(async btn=>{
+    try{const k=await FirebaseSync.readKudos(btn.dataset.owner,btn.dataset.date);
+      const c=btn.querySelector('.kudo-count');if(c)c.textContent=k.count;
+      btn.classList.toggle('on',!!k.mine);
+    }catch(_){}
+  });
+  container.querySelectorAll('.feed-comment').forEach(async btn=>{
+    try{const list=await FirebaseSync.readComments(btn.dataset.owner,btn.dataset.date);
+      const c=btn.querySelector('.comment-count');if(c)c.textContent=list.length;
+    }catch(_){}
+  });
+}
+async function handleKudo(btn){
+  if(!socialReady()){toast('Sign in to give kudos','error');return;}
+  const countEl=btn.querySelector('.kudo-count');
+  const was=btn.classList.contains('on');
+  const cur=parseInt(countEl.textContent)||0;
+  btn.classList.toggle('on',!was);
+  countEl.textContent=Math.max(0,cur+(was?-1:1));
+  btn.classList.add('pop');setTimeout(()=>btn.classList.remove('pop'),300);
+  try{const now=await FirebaseSync.toggleKudos(btn.dataset.owner,btn.dataset.date);btn.classList.toggle('on',now);}
+  catch(e){btn.classList.toggle('on',was);countEl.textContent=cur;toast('Kudos need the updated database rules','error');}
+}
+async function toggleComments(btn){
+  const card=btn.closest('.feed-card');const panel=card&&card.querySelector('.feed-comments');
+  if(!panel)return;
+  if(panel.style.display!=='none'){panel.style.display='none';return;}
+  panel.style.display='block';
+  panel.innerHTML='<div class="cmt-empty">Loading…</div>';
+  let list=[];try{list=await FirebaseSync.readComments(btn.dataset.owner,btn.dataset.date);}catch(_){}
+  renderCommentPanel(panel,btn.dataset.owner,btn.dataset.date,list,btn);
+}
+function renderCommentPanel(panel,owner,date,list,btn){
+  const items=list.length
+    ?list.map(c=>`<div class="cmt"><span class="cmt-name">${esc(c.name||'athlete')}</span><span class="cmt-text">${esc(c.text)}</span></div>`).join('')
+    :'<div class="cmt-empty">No comments yet — be the first.</div>';
+  panel.innerHTML=`<div class="cmt-list">${items}</div><div class="cmt-compose"><input class="cmt-input" type="text" maxlength="300" placeholder="Add a comment…"><button class="cmt-send">Post</button></div>`;
+  const input=panel.querySelector('.cmt-input');const send=panel.querySelector('.cmt-send');
+  const submit=async()=>{
+    const t=input.value.trim();if(!t)return;
+    if(!socialReady()){toast('Sign in to comment','error');return;}
+    send.disabled=true;
+    try{const c=await FirebaseSync.addComment(owner,date,t);list.push(c);renderCommentPanel(panel,owner,date,list,btn);
+      if(btn){const cc=btn.querySelector('.comment-count');if(cc)cc.textContent=(parseInt(cc.textContent)||0)+1;}
+    }catch(e){toast('Comments need the updated database rules','error');send.disabled=false;}
+  };
+  send.addEventListener('click',submit);
+  input.addEventListener('keydown',e=>{if(e.key==='Enter')submit();});
+  input.focus();
 }
 
 function showMiniProfile(userId){
@@ -1532,9 +1662,12 @@ function showMiniProfile(userId){
   const theirFollowing=isMe?cfg.following.map(f=>f.id):(friendData&&Array.isArray(friendData.following)?friendData.following:(dirEntry?dirEntry.following:[]));
   const theirFollowers=isMe?getFollowers().length:getDirectoryCache().filter(u=>u.id!==userId&&Array.isArray(u.following)&&u.following.includes(userId)).length;
   const mpScore=ascaScore(periodStatsExtended(workouts,'week').volume,isMe?myBW():((friendData&&friendData.bw)||(dirEntry&&dirEntry.bw)||0));
-  content.innerHTML=`<div class="mini-profile-hero"><div class="mini-profile-avatar" style="background:${avatarBgOf(userId)}">${avatarHtmlOf(userId,name)}</div><div class="mini-profile-name">${esc(name)}${isMe?' <span class="lb-you">You</span>':''}</div><div class="mini-profile-user">@${esc(userId)}</div>${bio?`<div class="mini-profile-bio">${esc(bio)}</div>`:''}<div class="mini-profile-follows"><span><b>${(theirFollowing||[]).length}</b> Following</span><span><b>${theirFollowers}</b> Followers</span></div>${followsMe?'<div class="mini-profile-mutual"><span class="mutual-chip">Follows you</span></div>':''}</div>
+  const mpStory=trainedRecently(workouts)?' has-story':'';
+  const mpTiles=sessions.slice(0,6).map(w=>{const dtc=dayTypeColor(w.dayType);const v=(w.exercises||[]).reduce((s,e)=>s+e.sets.reduce((ss,x)=>ss+(getSetWeightVal(x)*(x.reps||0)),0),0);return `<div class="mp-tile" style="--dt:${dtc}"><span class="mp-tile-type">${esc(w.dayType||'Workout')}</span><span class="mp-tile-vol">${fmtStatNum(v)}<em>kg</em></span><span class="mp-tile-date">${dayAgo(w.date)}</span></div>`;}).join('');
+  content.innerHTML=`<div class="mini-profile-hero"><div class="avatar-ring mp-avatar-ring${mpStory}"><div class="mini-profile-avatar" style="background:${avatarBgOf(userId)}">${avatarHtmlOf(userId,name)}</div></div><div class="mini-profile-name">${esc(name)}${isMe?' <span class="lb-you">You</span>':''}</div><div class="mini-profile-user">@${esc(userId)}</div>${bio?`<div class="mini-profile-bio">${esc(bio)}</div>`:''}<div class="mini-profile-follows"><span><b>${(theirFollowing||[]).length}</b> Following</span><span><b>${theirFollowers}</b> Followers</span></div>${followsMe?'<div class="mini-profile-mutual"><span class="mutual-chip">Follows you</span></div>':''}</div>
     <div class="mini-profile-stats"><div class="mini-profile-stat"><div class="mini-profile-stat-val mini-profile-score">${mpScore}</div><div class="mini-profile-stat-label">Score</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${sessions.length}</div><div class="mini-profile-stat-label">Workouts</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${fmtStatNum(vol)}</div><div class="mini-profile-stat-label">Volume (kg)</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${stats.streak}</div><div class="mini-profile-stat-label">Streak 🔥</div></div></div>
     ${!isMe?`<div class="mini-profile-actions">${iAmFollowing?`<button class="btn btn-secondary btn-full" id="mpUnfollow">Following</button>`:`<button class="btn btn-primary btn-full" id="mpFollow">Follow</button>`}</div>`:''}
+    ${mpTiles?`<div class="mini-profile-tiles-wrap"><div class="mini-profile-heatmap-title">Recent sessions</div><div class="mini-profile-tiles">${mpTiles}</div></div>`:''}
     <div class="mini-profile-heatmap"><div class="mini-profile-heatmap-title">Activity — Last 16 Weeks</div>${gymHeatmapHtml(userId,name,workouts,mpScore)}</div>`;
   const followBtn=document.getElementById('mpFollow');const unfollowBtn=document.getElementById('mpUnfollow');
   if(followBtn)followBtn.addEventListener('click',()=>{const c=FirebaseSync.getConfig();if(!c.following.some(f=>f.id===userId)){FirebaseSync.updateConfig({following:[...c.following,{id:userId,name:name}]});toast('Following @'+userId,'success');closeMiniProfile();renderFriendsCard();fbPush(false);startRealtimeSync();fbPullFollowing(false);}});
@@ -2803,7 +2936,7 @@ function bindSettings(){
   const copyRulesBtn=document.getElementById('copyFbRules');
   if(copyRulesBtn){
     copyRulesBtn.addEventListener('click',()=>{
-      const rules=`{\n  "rules": {\n    "gym": {\n      "$userId": {\n        ".read": "auth != null",\n        ".write": "auth != null && (data.exists() ? data.child('uid').val() === auth.uid : newData.child('uid').val() === auth.uid)"\n      }\n    },\n    "directory": {\n      ".read": "auth != null",\n      "$userId": {\n        ".write": "auth != null && root.child('gym').child($userId).child('uid').val() === auth.uid"\n      }\n    }\n  }\n}`;
+      const rules=`{\n  "rules": {\n    "gym": {\n      "$userId": {\n        ".read": "auth != null",\n        ".write": "auth != null && (data.exists() ? data.child('uid').val() === auth.uid : newData.child('uid').val() === auth.uid)"\n      }\n    },\n    "directory": {\n      ".read": "auth != null",\n      "$userId": {\n        ".write": "auth != null && root.child('gym').child($userId).child('uid').val() === auth.uid"\n      }\n    },\n    "kudos": {\n      ".read": "auth != null",\n      "$ownerId": {\n        "$date": {\n          "$likerUid": {\n            ".write": "auth != null && auth.uid === $likerUid"\n          }\n        }\n      }\n    },\n    "comments": {\n      ".read": "auth != null",\n      "$ownerId": {\n        "$date": {\n          "$commentId": {\n            ".write": "auth != null && (!data.exists() ? newData.child('uid').val() === auth.uid : data.child('uid').val() === auth.uid)",\n            ".validate": "newData.hasChildren(['uid','text','ts'])"\n          }\n        }\n      }\n    }\n  }\n}`;
       navigator.clipboard.writeText(rules).then(()=>{toast('Database Rules copied!','success');}).catch(()=>{toast('Failed to copy','error');});
     });
   }

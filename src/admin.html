@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Asca Gym — Admin Console">
+  <meta name="theme-color" content="#000000">
+  <title>Asca Gym · Admin</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FF7600' stroke-width='2'><path d='M6 3h12l4 6-10 13L2 9z'/></svg>">
+  <style>
+    /* ── Admin console layout (reuses the app's glass design tokens) ── */
+    html, body { height: auto; min-height: 100dvh; overflow: auto; display: block; }
+    body { background: radial-gradient(ellipse at 50% -10%, #0a0812 0%, #010103 60%); color: var(--t-1); }
+
+    .admin-shell { max-width: 1240px; margin: 0 auto; padding: calc(24px + var(--sat)) 20px 60px; }
+
+    /* Sign-in gate */
+    .admin-gate { min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .admin-gate .lock-card { width: 100%; max-width: 380px; }
+    .admin-gate-badge {
+      display: inline-flex; align-items: center; gap: 6px; margin: 0 auto 14px;
+      padding: 5px 12px; border-radius: var(--r-full);
+      background: var(--accent-bg); border: 1px solid var(--border-glow);
+      font-size: 0.66rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent);
+    }
+
+    /* Header */
+    .admin-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 26px; flex-wrap: wrap; }
+    .admin-head-brand { display: flex; align-items: center; gap: 12px; }
+    .admin-head-brand svg { width: 26px; height: 26px; color: var(--accent); filter: drop-shadow(0 0 8px rgba(255,118,0,0.5)); }
+    .admin-head-title { font-family: var(--ff-title); font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+    .admin-head-title em { font-family: var(--ff-serif); font-style: italic; font-weight: 400; color: var(--t-2); }
+    .admin-head-right { display: flex; align-items: center; gap: 10px; }
+    .admin-whoami { font-size: 0.78rem; font-weight: 700; color: var(--t-2); }
+    .admin-whoami b { color: var(--accent); }
+
+    /* Overview stat cards */
+    .admin-overview { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 26px; }
+    .admin-stat { padding: 18px 20px; }
+    .admin-stat-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--t-3); }
+    .admin-stat-val { font-family: var(--ff-title); font-size: 2rem; font-weight: 800; margin-top: 6px; letter-spacing: -0.02em; }
+    .admin-stat-sub { font-size: 0.72rem; font-weight: 600; color: var(--t-3); margin-top: 2px; }
+
+    .admin-section-title { font-family: var(--ff-title); font-size: 1.05rem; font-weight: 800; margin: 30px 0 12px; letter-spacing: -0.01em; }
+    .admin-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 20px; align-items: start; }
+
+    /* Toolbar */
+    .admin-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+    .admin-search { position: relative; flex: 1; min-width: 200px; }
+    .admin-search input { width: 100%; }
+    .admin-count-pill { font-size: 0.72rem; font-weight: 700; color: var(--t-3); }
+
+    /* Users table */
+    .admin-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table.admin-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .admin-table thead th {
+      text-align: left; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--t-3); font-weight: 800; padding: 10px 12px; white-space: nowrap;
+      border-bottom: 1px solid var(--border-light); cursor: pointer; user-select: none;
+    }
+    .admin-table thead th.num { text-align: right; }
+    .admin-table thead th .sort-caret { opacity: 0.5; font-size: 0.7em; margin-left: 3px; }
+    .admin-table tbody td { padding: 11px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: middle; white-space: nowrap; }
+    .admin-table tbody td.num { text-align: right; font-family: var(--ff-mono); font-weight: 600; }
+    .admin-table tbody tr { cursor: pointer; transition: background 0.15s; }
+    .admin-table tbody tr:hover { background: rgba(255,255,255,0.04); }
+    .admin-user-cell { display: flex; align-items: center; gap: 10px; }
+    .admin-avatar { width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.8rem; color: #fff; }
+    .admin-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .admin-user-meta { display: flex; flex-direction: column; line-height: 1.2; }
+    .admin-user-name { font-weight: 700; }
+    .admin-user-id { font-size: 0.72rem; color: var(--t-3); }
+    .admin-pill { display: inline-block; padding: 2px 8px; border-radius: var(--r-full); font-size: 0.7rem; font-weight: 800; }
+    .admin-pill.hot { background: var(--c-green-bg); color: var(--c-green); }
+    .admin-pill.warm { background: var(--c-orange-bg); color: var(--c-orange); }
+    .admin-pill.cold { background: rgba(255,255,255,0.06); color: var(--t-3); }
+    .admin-empty { padding: 40px 20px; text-align: center; color: var(--t-3); font-weight: 600; }
+
+    /* Activity monitor */
+    .admin-activity { max-height: 620px; overflow-y: auto; scrollbar-width: thin; }
+    .admin-act-item { display: flex; align-items: center; gap: 12px; padding: 11px 4px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .admin-act-body { flex: 1; min-width: 0; }
+    .admin-act-line1 { font-size: 0.82rem; font-weight: 700; }
+    .admin-act-line1 span { color: var(--t-3); font-weight: 600; }
+    .admin-act-line2 { font-size: 0.72rem; color: var(--t-3); margin-top: 1px; }
+    .admin-act-vol { font-family: var(--ff-mono); font-weight: 700; font-size: 0.82rem; color: var(--accent); white-space: nowrap; }
+
+    /* Detail drawer */
+    .admin-drawer-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); z-index: 900; display: none; }
+    .admin-drawer-bg.open { display: block; }
+    .admin-drawer {
+      position: fixed; top: 0; right: 0; height: 100dvh; width: min(560px, 100vw);
+      background: linear-gradient(180deg, #14121c 0%, #0a0810 100%);
+      border-left: 1px solid var(--border-light); z-index: 901;
+      transform: translateX(100%); transition: transform 0.35s var(--spring);
+      display: flex; flex-direction: column; box-shadow: -20px 0 60px rgba(0,0,0,0.6);
+    }
+    .admin-drawer.open { transform: translateX(0); }
+    .admin-drawer-head { padding: calc(20px + var(--sat)) 22px 16px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; gap: 14px; }
+    .admin-drawer-head .admin-avatar { width: 52px; height: 52px; font-size: 1.2rem; }
+    .admin-drawer-close { margin-left: auto; }
+    .admin-drawer-body { flex: 1; overflow-y: auto; padding: 20px 22px calc(30px + var(--sab)); }
+    .admin-mini-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 22px; }
+    .admin-mini-stat { text-align: center; padding: 12px 6px; background: var(--glass-2); border: 1px solid var(--border-light); border-radius: var(--r-s); }
+    .admin-mini-stat-val { font-family: var(--ff-title); font-size: 1.25rem; font-weight: 800; }
+    .admin-mini-stat-label { font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--t-3); font-weight: 700; margin-top: 2px; }
+    .admin-wo { padding: 12px 14px; background: var(--glass-2); border: 1px solid var(--border-light); border-radius: var(--r-s); margin-bottom: 8px; }
+    .admin-wo-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .admin-wo-date { font-weight: 800; font-size: 0.86rem; }
+    .admin-wo-type { font-size: 0.68rem; font-weight: 800; padding: 2px 9px; border-radius: var(--r-full); }
+    .admin-wo-meta { font-size: 0.74rem; color: var(--t-3); margin-top: 4px; font-weight: 600; }
+    .admin-loading { text-align: center; color: var(--t-3); padding: 30px; font-weight: 700; }
+
+    @media (max-width: 900px) {
+      .admin-overview { grid-template-columns: repeat(2, 1fr); }
+      .admin-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 480px) {
+      .admin-overview { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      .admin-mini-stats { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Sign-in gate -->
+<div class="admin-gate" id="adminGate">
+  <div class="lock-card card glass-card">
+    <div class="lock-header">
+      <div class="admin-gate-badge">Admin Console</div>
+      <svg class="brand-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:34px;height:34px;color:var(--accent);margin:0 auto 10px;display:block">
+        <path d="M6 3h12l4 6-10 13L2 9z"/>
+      </svg>
+      <div class="lock-title">Asca Gym Admin</div>
+      <div class="lock-subtitle" id="adminGateSub">Maintainer sign-in required</div>
+    </div>
+    <div class="lock-setup-form" style="display:flex">
+      <div class="input-group" style="width:100%;margin-bottom:6px">
+        <input type="text" class="lock-input" id="adminUser" placeholder="Maintainer username" autocomplete="username" autocapitalize="off" autocorrect="off" style="text-align:center">
+      </div>
+      <div class="input-group" style="width:100%;margin-bottom:6px">
+        <input type="password" class="lock-input" id="adminPass" placeholder="Password" autocomplete="current-password" style="text-align:center">
+      </div>
+      <p class="lock-setup-desc" id="adminGateErr" style="display:none;color:#FF453A"></p>
+      <button class="lock-btn" id="adminSignIn" style="margin-top:8px">Enter Console</button>
+    </div>
+  </div>
+</div>
+
+<!-- Dashboard -->
+<div class="admin-shell" id="adminShell" style="display:none">
+  <div class="admin-head">
+    <div class="admin-head-brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 6-10 13L2 9z"/></svg>
+      <div class="admin-head-title">Asca <em>Admin</em></div>
+    </div>
+    <div class="admin-head-right">
+      <span class="admin-whoami" id="adminWhoami"></span>
+      <button class="btn btn-secondary btn-sm" id="adminRefresh">Refresh</button>
+      <button class="btn btn-secondary btn-sm" id="adminSignOut">Sign out</button>
+    </div>
+  </div>
+
+  <div class="admin-overview" id="adminOverview"></div>
+
+  <div class="admin-grid">
+    <div>
+      <div class="admin-section-title">Athletes</div>
+      <div class="admin-toolbar">
+        <div class="admin-search input-group search-input-wrap">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" class="input-field search-input" id="adminSearch" placeholder="Search athletes…" autocapitalize="off" autocorrect="off">
+        </div>
+        <span class="admin-count-pill" id="adminUserCount"></span>
+      </div>
+      <div class="card glass-card" style="padding:8px 8px 4px">
+        <div class="admin-table-wrap">
+          <table class="admin-table" id="adminTable">
+            <thead>
+              <tr>
+                <th data-sort="name">Athlete</th>
+                <th data-sort="workouts" class="num">Workouts</th>
+                <th data-sort="vol" class="num">Volume</th>
+                <th data-sort="score" class="num">Score</th>
+                <th data-sort="followers" class="num">Followers</th>
+                <th data-sort="ts" class="num">Last active</th>
+              </tr>
+            </thead>
+            <tbody id="adminTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="admin-section-title">Live Activity Monitor</div>
+      <div class="card glass-card">
+        <div class="admin-activity" id="adminActivity"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- User detail drawer -->
+<div class="admin-drawer-bg" id="adminDrawerBg"></div>
+<div class="admin-drawer" id="adminDrawer">
+  <div class="admin-drawer-head" id="adminDrawerHead"></div>
+  <div class="admin-drawer-body" id="adminDrawerBody"></div>
+</div>
+
+<script src="firebase-sync.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>

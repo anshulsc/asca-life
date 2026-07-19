@@ -1,3 +1,14 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Asca Gym — Admin Console">
+  <meta name="theme-color" content="#000000">
+  <title>Asca Gym · Admin</title>
+  
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FF7600' stroke-width='2'><path d='M6 3h12l4 6-10 13L2 9z'/></svg>">
+  <style>
 /* ═══════════════════════════════════════════════════════════════
    ASCA GYM — Liquid Glass Design System v2.0
    Apple-inspired liquid glass, iridescent refractions, depth blur
@@ -3739,3 +3750,1075 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 
+
+
+    /* ── Admin console layout (reuses the app's glass design tokens) ── */
+    html, body { height: auto; min-height: 100dvh; overflow: auto; display: block; }
+    body { background: radial-gradient(ellipse at 50% -10%, #0a0812 0%, #010103 60%); color: var(--t-1); }
+
+    .admin-shell { max-width: 1240px; margin: 0 auto; padding: calc(24px + var(--sat)) 20px 60px; }
+
+    /* Sign-in gate */
+    .admin-gate { min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .admin-gate .lock-card { width: 100%; max-width: 380px; }
+    .admin-gate-badge {
+      display: inline-flex; align-items: center; gap: 6px; margin: 0 auto 14px;
+      padding: 5px 12px; border-radius: var(--r-full);
+      background: var(--accent-bg); border: 1px solid var(--border-glow);
+      font-size: 0.66rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent);
+    }
+
+    /* Header */
+    .admin-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 26px; flex-wrap: wrap; }
+    .admin-head-brand { display: flex; align-items: center; gap: 12px; }
+    .admin-head-brand svg { width: 26px; height: 26px; color: var(--accent); filter: drop-shadow(0 0 8px rgba(255,118,0,0.5)); }
+    .admin-head-title { font-family: var(--ff-title); font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+    .admin-head-title em { font-family: var(--ff-serif); font-style: italic; font-weight: 400; color: var(--t-2); }
+    .admin-head-right { display: flex; align-items: center; gap: 10px; }
+    .admin-whoami { font-size: 0.78rem; font-weight: 700; color: var(--t-2); }
+    .admin-whoami b { color: var(--accent); }
+
+    /* Overview stat cards */
+    .admin-overview { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 26px; }
+    .admin-stat { padding: 18px 20px; }
+    .admin-stat-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--t-3); }
+    .admin-stat-val { font-family: var(--ff-title); font-size: 2rem; font-weight: 800; margin-top: 6px; letter-spacing: -0.02em; }
+    .admin-stat-sub { font-size: 0.72rem; font-weight: 600; color: var(--t-3); margin-top: 2px; }
+
+    .admin-section-title { font-family: var(--ff-title); font-size: 1.05rem; font-weight: 800; margin: 30px 0 12px; letter-spacing: -0.01em; }
+    .admin-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 20px; align-items: start; }
+
+    /* Toolbar */
+    .admin-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+    .admin-search { position: relative; flex: 1; min-width: 200px; }
+    .admin-search input { width: 100%; }
+    .admin-count-pill { font-size: 0.72rem; font-weight: 700; color: var(--t-3); }
+
+    /* Users table */
+    .admin-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table.admin-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .admin-table thead th {
+      text-align: left; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--t-3); font-weight: 800; padding: 10px 12px; white-space: nowrap;
+      border-bottom: 1px solid var(--border-light); cursor: pointer; user-select: none;
+    }
+    .admin-table thead th.num { text-align: right; }
+    .admin-table thead th .sort-caret { opacity: 0.5; font-size: 0.7em; margin-left: 3px; }
+    .admin-table tbody td { padding: 11px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: middle; white-space: nowrap; }
+    .admin-table tbody td.num { text-align: right; font-family: var(--ff-mono); font-weight: 600; }
+    .admin-table tbody tr { cursor: pointer; transition: background 0.15s; }
+    .admin-table tbody tr:hover { background: rgba(255,255,255,0.04); }
+    .admin-user-cell { display: flex; align-items: center; gap: 10px; }
+    .admin-avatar { width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.8rem; color: #fff; }
+    .admin-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .admin-user-meta { display: flex; flex-direction: column; line-height: 1.2; }
+    .admin-user-name { font-weight: 700; }
+    .admin-user-id { font-size: 0.72rem; color: var(--t-3); }
+    .admin-pill { display: inline-block; padding: 2px 8px; border-radius: var(--r-full); font-size: 0.7rem; font-weight: 800; }
+    .admin-pill.hot { background: var(--c-green-bg); color: var(--c-green); }
+    .admin-pill.warm { background: var(--c-orange-bg); color: var(--c-orange); }
+    .admin-pill.cold { background: rgba(255,255,255,0.06); color: var(--t-3); }
+    .admin-empty { padding: 40px 20px; text-align: center; color: var(--t-3); font-weight: 600; }
+
+    /* Activity monitor */
+    .admin-activity { max-height: 620px; overflow-y: auto; scrollbar-width: thin; }
+    .admin-act-item { display: flex; align-items: center; gap: 12px; padding: 11px 4px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .admin-act-body { flex: 1; min-width: 0; }
+    .admin-act-line1 { font-size: 0.82rem; font-weight: 700; }
+    .admin-act-line1 span { color: var(--t-3); font-weight: 600; }
+    .admin-act-line2 { font-size: 0.72rem; color: var(--t-3); margin-top: 1px; }
+    .admin-act-vol { font-family: var(--ff-mono); font-weight: 700; font-size: 0.82rem; color: var(--accent); white-space: nowrap; }
+
+    /* Detail drawer */
+    .admin-drawer-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); z-index: 900; display: none; }
+    .admin-drawer-bg.open { display: block; }
+    .admin-drawer {
+      position: fixed; top: 0; right: 0; height: 100dvh; width: min(560px, 100vw);
+      background: linear-gradient(180deg, #14121c 0%, #0a0810 100%);
+      border-left: 1px solid var(--border-light); z-index: 901;
+      transform: translateX(100%); transition: transform 0.35s var(--spring);
+      display: flex; flex-direction: column; box-shadow: -20px 0 60px rgba(0,0,0,0.6);
+    }
+    .admin-drawer.open { transform: translateX(0); }
+    .admin-drawer-head { padding: calc(20px + var(--sat)) 22px 16px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; gap: 14px; }
+    .admin-drawer-head .admin-avatar { width: 52px; height: 52px; font-size: 1.2rem; }
+    .admin-drawer-close { margin-left: auto; }
+    .admin-drawer-body { flex: 1; overflow-y: auto; padding: 20px 22px calc(30px + var(--sab)); }
+    .admin-mini-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 22px; }
+    .admin-mini-stat { text-align: center; padding: 12px 6px; background: var(--glass-2); border: 1px solid var(--border-light); border-radius: var(--r-s); }
+    .admin-mini-stat-val { font-family: var(--ff-title); font-size: 1.25rem; font-weight: 800; }
+    .admin-mini-stat-label { font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--t-3); font-weight: 700; margin-top: 2px; }
+    .admin-wo { padding: 12px 14px; background: var(--glass-2); border: 1px solid var(--border-light); border-radius: var(--r-s); margin-bottom: 8px; }
+    .admin-wo-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .admin-wo-date { font-weight: 800; font-size: 0.86rem; }
+    .admin-wo-type { font-size: 0.68rem; font-weight: 800; padding: 2px 9px; border-radius: var(--r-full); }
+    .admin-wo-meta { font-size: 0.74rem; color: var(--t-3); margin-top: 4px; font-weight: 600; }
+    .admin-loading { text-align: center; color: var(--t-3); padding: 30px; font-weight: 700; }
+
+    @media (max-width: 900px) {
+      .admin-overview { grid-template-columns: repeat(2, 1fr); }
+      .admin-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 480px) {
+      .admin-overview { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      .admin-mini-stats { grid-template-columns: repeat(2, 1fr); }
+    }
+  
+  </style>
+</head>
+<body>
+
+<!-- Sign-in gate -->
+<div class="admin-gate" id="adminGate">
+  <div class="lock-card card glass-card">
+    <div class="lock-header">
+      <div class="admin-gate-badge">Admin Console</div>
+      <svg class="brand-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:34px;height:34px;color:var(--accent);margin:0 auto 10px;display:block">
+        <path d="M6 3h12l4 6-10 13L2 9z"/>
+      </svg>
+      <div class="lock-title">Asca Gym Admin</div>
+      <div class="lock-subtitle" id="adminGateSub">Maintainer sign-in required</div>
+    </div>
+    <div class="lock-setup-form" style="display:flex">
+      <div class="input-group" style="width:100%;margin-bottom:6px">
+        <input type="text" class="lock-input" id="adminUser" placeholder="Maintainer username" autocomplete="username" autocapitalize="off" autocorrect="off" style="text-align:center">
+      </div>
+      <div class="input-group" style="width:100%;margin-bottom:6px">
+        <input type="password" class="lock-input" id="adminPass" placeholder="Password" autocomplete="current-password" style="text-align:center">
+      </div>
+      <p class="lock-setup-desc" id="adminGateErr" style="display:none;color:#FF453A"></p>
+      <button class="lock-btn" id="adminSignIn" style="margin-top:8px">Enter Console</button>
+    </div>
+  </div>
+</div>
+
+<!-- Dashboard -->
+<div class="admin-shell" id="adminShell" style="display:none">
+  <div class="admin-head">
+    <div class="admin-head-brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 6-10 13L2 9z"/></svg>
+      <div class="admin-head-title">Asca <em>Admin</em></div>
+    </div>
+    <div class="admin-head-right">
+      <span class="admin-whoami" id="adminWhoami"></span>
+      <button class="btn btn-secondary btn-sm" id="adminRefresh">Refresh</button>
+      <button class="btn btn-secondary btn-sm" id="adminSignOut">Sign out</button>
+    </div>
+  </div>
+
+  <div class="admin-overview" id="adminOverview"></div>
+
+  <div class="admin-grid">
+    <div>
+      <div class="admin-section-title">Athletes</div>
+      <div class="admin-toolbar">
+        <div class="admin-search input-group search-input-wrap">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" class="input-field search-input" id="adminSearch" placeholder="Search athletes…" autocapitalize="off" autocorrect="off">
+        </div>
+        <span class="admin-count-pill" id="adminUserCount"></span>
+      </div>
+      <div class="card glass-card" style="padding:8px 8px 4px">
+        <div class="admin-table-wrap">
+          <table class="admin-table" id="adminTable">
+            <thead>
+              <tr>
+                <th data-sort="name">Athlete</th>
+                <th data-sort="workouts" class="num">Workouts</th>
+                <th data-sort="vol" class="num">Volume</th>
+                <th data-sort="score" class="num">Score</th>
+                <th data-sort="followers" class="num">Followers</th>
+                <th data-sort="ts" class="num">Last active</th>
+              </tr>
+            </thead>
+            <tbody id="adminTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="admin-section-title">Live Activity Monitor</div>
+      <div class="card glass-card">
+        <div class="admin-activity" id="adminActivity"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- User detail drawer -->
+<div class="admin-drawer-bg" id="adminDrawerBg"></div>
+<div class="admin-drawer" id="adminDrawer">
+  <div class="admin-drawer-head" id="adminDrawerHead"></div>
+  <div class="admin-drawer-body" id="adminDrawerBody"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   ASCA GYM TRACKER — Firebase Backend Module (Auth + Realtime DB)
+
+   The app's single backend, spoken to over plain REST — no SDK
+   and no external <script>, so it works from the static GitHub
+   Pages bundle.
+
+   SINGLE SHARED BACKEND: every user of the site talks to the
+   same Firebase project, baked in below at build time. Users
+   are real Firebase Authentication accounts (email + password);
+   the old PIN + salt scheme is gone. Sign-in state persists in
+   localStorage and tokens are refreshed automatically.
+
+   Each user owns one Realtime Database node at gym/{syncId}:
+     { uid, ts, name, avatar, github, following: [ids],
+       workouts: { "YYYY-MM-DD": { dayType, exercises: [...] } } }
+   Workouts are stored day-wise (date-keyed), so the data is
+   directly browsable in the RTDB console. Old docs that still
+   hold a compressed `blob` progress code are decoded by app.js
+   on read. Security rules require sign-in to read and ownership
+   (uid) to write. RTDB is the source of truth; browser
+   localStorage is only a cache. A parallel directory/{syncId}
+   node holds { name, ts } for lightweight user listings.
+   ═══════════════════════════════════════════════════════════════ */
+
+const FirebaseSync = (() => {
+  // ── The one shared backend (fill in after creating the project) ──
+  const FIREBASE_PROJECT_ID = 'asca-gym';
+  const FIREBASE_API_KEY = 'AIzaSyCAvGn9blvhx-sGINHwbasYcx8LH1A-4mk';
+  const FIREBASE_RTDB_URL = 'https://asca-gym-default-rtdb.firebaseio.com';
+
+  // Users sign in with a username; Firebase Auth only speaks email, so
+  // usernames are mapped to a synthetic address on this fake domain.
+  // Existing full-email accounts still work (input containing @ passes
+  // through untouched).
+  const USERNAME_DOMAIN = 'asca-gym.app';
+
+  function usernameToEmail(name) {
+    name = (name || '').trim().toLowerCase();
+    if (name.includes('@')) return name;
+    if (!/^[a-z0-9._-]+$/.test(name)) {
+      throw new Error('Usernames can only use letters, numbers, dots, dashes and underscores');
+    }
+    return name + '@' + USERNAME_DOMAIN;
+  }
+
+  function emailToUsername(email) {
+    return (email || '').split('@')[0];
+  }
+
+  const CONFIG_KEY = 'asca_gym_firebase_config';  // sync ids + friend name
+  const AUTH_KEY = 'asca_gym_auth';               // tokens + user info
+
+  let config = {
+    userId: '',        // my node id under gym/, e.g. "anshul"
+    displayName: '',   // shown to followers; defaults to userId
+    avatar: '',        // small base64 data-URI profile photo
+    bio: '',           // short profile tagline
+    github: '',        // optional GitHub username
+    following: []      // Strava-style follow list: [{ id, name }]
+  };
+
+  // { uid, email, idToken, refreshToken, exp } or null
+  let auth = null;
+
+  // ── Config (sync identity) ───────────────────────────────
+  function loadConfig() {
+    try {
+      const saved = localStorage.getItem(CONFIG_KEY);
+      if (saved) {
+        const s = JSON.parse(saved);
+        config.userId = s.userId || '';
+        config.displayName = s.displayName || '';
+        config.avatar = s.avatar || '';
+        config.bio = s.bio || '';
+        config.github = s.github || '';
+        if (Array.isArray(s.following)) {
+          config.following = s.following
+            .filter(f => f && f.id)
+            .map(f => ({ id: String(f.id), name: f.name || '' }));
+        } else if (s.friendId) {
+          // Migrate the old single-friend config into the follow list
+          config.following = [{ id: s.friendId, name: (s.friendName && s.friendName !== 'Friend') ? s.friendName : '' }];
+          saveConfig();
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load firebase config:', e);
+    }
+    return config;
+  }
+
+  function saveConfig() {
+    try {
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+    } catch (e) {
+      console.warn('Failed to save firebase config:', e);
+    }
+  }
+
+  function updateConfig(partial) {
+    config = { ...config, ...partial };
+    saveConfig();
+    return getConfig();
+  }
+
+  function hasBackend() {
+    return !!(FIREBASE_PROJECT_ID && FIREBASE_API_KEY);
+  }
+
+  // ── Auth state ───────────────────────────────────────────
+  function loadAuth() {
+    try {
+      const saved = localStorage.getItem(AUTH_KEY);
+      auth = saved ? JSON.parse(saved) : null;
+    } catch (_) {
+      auth = null;
+    }
+    return auth;
+  }
+
+  function saveAuth() {
+    try {
+      if (auth) localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
+      else localStorage.removeItem(AUTH_KEY);
+    } catch (_) {}
+  }
+
+  function setAuthFromTokenResponse(d) {
+    auth = {
+      uid: d.localId || d.user_id || (auth && auth.uid) || '',
+      email: d.email || (auth && auth.email) || '',
+      idToken: d.idToken || d.id_token,
+      refreshToken: d.refreshToken || d.refresh_token,
+      exp: Date.now() + (parseInt(d.expiresIn || d.expires_in || 3600, 10) - 120) * 1000
+    };
+    saveAuth();
+    return auth;
+  }
+
+  function authErrorMessage(code) {
+    const map = {
+      EMAIL_NOT_FOUND: 'No account with that username',
+      INVALID_PASSWORD: 'Wrong password',
+      INVALID_LOGIN_CREDENTIALS: 'Wrong username or password',
+      EMAIL_EXISTS: 'That username is already taken',
+      WEAK_PASSWORD: 'Password must be at least 6 characters',
+      INVALID_EMAIL: 'That username is not valid',
+      USER_DISABLED: 'This account has been disabled',
+      TOO_MANY_ATTEMPTS_TRY_LATER: 'Too many attempts — try again later',
+      OPERATION_NOT_ALLOWED: 'Email/password sign-in is not enabled in Firebase',
+      ADMIN_ONLY_OPERATION: 'New sign-ups are disabled'
+    };
+    const key = String(code || '').split(' ')[0].split(':')[0];
+    return map[key] || ('Sign-in failed: ' + code);
+  }
+
+  async function identityCall(endpoint, body) {
+    if (!hasBackend()) throw new Error('This build has no Firebase backend configured');
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:${endpoint}?key=${encodeURIComponent(FIREBASE_API_KEY)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(authErrorMessage(data.error && data.error.message));
+    return data;
+  }
+
+  async function signUp(username, password) {
+    const email = usernameToEmail(username);
+    const d = await identityCall('signUp', { email, password, returnSecureToken: true });
+    return setAuthFromTokenResponse(d);
+  }
+
+  async function signIn(username, password) {
+    const email = usernameToEmail(username);
+    const d = await identityCall('signInWithPassword', { email, password, returnSecureToken: true });
+    return setAuthFromTokenResponse(d);
+  }
+
+  function signOut() {
+    auth = null;
+    saveAuth();
+  }
+
+  async function refreshToken() {
+    if (!auth || !auth.refreshToken) throw new Error('Not signed in');
+    const res = await fetch(
+      `https://securetoken.googleapis.com/v1/token?key=${encodeURIComponent(FIREBASE_API_KEY)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(auth.refreshToken)
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      // Refresh token revoked/expired — session is dead
+      signOut();
+      throw new Error('Session expired — please sign in again');
+    }
+    return setAuthFromTokenResponse(data);
+  }
+
+  async function getIdToken() {
+    if (!auth) loadAuth();
+    if (!auth) throw new Error('Not signed in');
+    if (Date.now() >= (auth.exp || 0)) await refreshToken();
+    return auth.idToken;
+  }
+
+  // Restore a persisted session on page load.
+  // Returns { uid, email } when signed in, 'offline' when we have a
+  // saved session but the network is unreachable, or null when the
+  // user must sign in.
+  async function restoreSession() {
+    loadAuth();
+    if (!hasBackend() || !auth || !auth.refreshToken) return null;
+    if (Date.now() < (auth.exp || 0)) return getUser();
+    try {
+      await refreshToken();
+      return getUser();
+    } catch (e) {
+      if (!auth) return null;          // refresh rejected → signed out
+      return 'offline';                // network error → allow cached use
+    }
+  }
+
+  function getUser() {
+    if (!auth) loadAuth();
+    return auth ? { uid: auth.uid, email: auth.email, username: emailToUsername(auth.email) } : null;
+  }
+
+  // ── Firebase Realtime Database ───────────────────────────
+  function dbUrl(path) {
+    const baseUrl = (typeof FIREBASE_RTDB_URL !== 'undefined' && FIREBASE_RTDB_URL)
+      ? FIREBASE_RTDB_URL.replace(/\/$/, '')
+      : `https://${FIREBASE_PROJECT_ID}-default-rtdb.firebaseio.com`;
+    return `${baseUrl}/${path}`;
+  }
+
+  // RTDB has no real arrays: they round-trip as objects with numeric
+  // keys when sparse, and empty ones vanish entirely.
+  function toArr(v) {
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === 'object') {
+      return Object.keys(v).sort((a, b) => (+a) - (+b)).map(k => v[k]);
+    }
+    return [];
+  }
+
+  // workouts array [{date, dayType, exercises}] ⇄ date-keyed map
+  // { "YYYY-MM-DD": { dayType, exercises } } as stored in RTDB.
+  function workoutsToMap(list) {
+    const map = {};
+    (list || []).forEach(w => {
+      if (!w || !w.date) return;
+      const { date, ...rest } = w;
+      map[date] = rest;
+    });
+    return map;
+  }
+
+  function workoutsToArray(map) {
+    if (!map || typeof map !== 'object') return null;
+    return Object.entries(map)
+      .map(([date, w]) => ({
+        date,
+        ...(w || {}),
+        exercises: toArr(w && w.exercises).map(e => ({ ...e, sets: toArr(e && e.sets) }))
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  // Shape a raw gym/{id} node (from readDoc or an EventSource packet)
+  // into { uid, ts, name, avatar, github, following, workouts, blob }.
+  // `workouts` is an array (or null for legacy blob-only docs, whose
+  // `blob` app.js still knows how to decode).
+  function normalizeDocData(data) {
+    if (!data) return null;
+    return {
+      uid: data.uid || '',
+      ts: data.ts || 0,
+      name: data.name || '',
+      avatar: data.avatar || '',
+      bio: data.bio || '',
+      github: data.github || '',
+      bw: data.bw || 0,
+      following: toArr(data.following).map(String),
+      workouts: workoutsToArray(data.workouts),
+      blob: data.blob || ''
+    };
+  }
+
+  // Read a user's node; returns the normalized doc or null when missing.
+  async function readDoc(docId) {
+    if (!hasBackend() || !docId) return null;
+    const token = await getIdToken();
+    const res = await fetch(dbUrl(`gym/${encodeURIComponent(docId)}.json?auth=${token}`));
+    if (!res.ok) throw new Error('Database responded ' + res.status);
+    return normalizeDocData(await res.json());
+  }
+
+  // Create-or-overwrite gym/{userId} with the structured day-wise doc
+  // ({ ts, workouts: [...] } in; profile fields come from config) and
+  // refresh the directory metadata.
+  async function writeDoc(payload) {
+    loadConfig();
+    if (!isConnected()) throw new Error('Firebase not configured');
+    const token = await getIdToken();
+
+    const data = {
+      uid: auth.uid,
+      ts: payload.ts || Date.now(),
+      name: (config.displayName || config.userId || '').slice(0, 60),
+      avatar: config.avatar || '',
+      bio: (config.bio || '').slice(0, 120),
+      github: config.github || '',
+      bw: Math.round((payload.bw || 0) * 10) / 10,
+      following: (config.following || []).map(f => f.id),
+      workouts: workoutsToMap(payload.workouts)
+    };
+
+    const res1 = await fetch(dbUrl(`gym/${encodeURIComponent(config.userId)}.json?auth=${token}`), {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+    
+    if (res1.status === 403 || res1.status === 401) {
+      throw new Error('That Sync ID belongs to another account');
+    }
+    if (!res1.ok) throw new Error('Database responded ' + res1.status);
+
+    // Save directory metadata for lightweight listings: name + avatar
+    // for search results, following ids so anyone can compute follower
+    // counts without downloading workout data.
+    const meta = {
+      name: data.name,
+      ts: data.ts,
+      avatar: data.avatar,
+      bio: data.bio,
+      bw: data.bw,
+      following: data.following
+    };
+    await fetch(dbUrl(`directory/${encodeURIComponent(config.userId)}.json?auth=${token}`), {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(meta)
+    });
+
+    return true;
+  }
+
+  // Read many gym/{id} docs in parallel (admin dashboard). Returns a map
+  // { id: normalizedDoc|null }; failed/missing reads become null rather
+  // than rejecting the whole batch.
+  async function readAllDocs(ids) {
+    const list = Array.isArray(ids) ? ids : [];
+    const out = {};
+    await Promise.all(list.map(async id => {
+      try { out[id] = await readDoc(id); }
+      catch (_) { out[id] = null; }
+    }));
+    return out;
+  }
+
+  // Lists every directory metadata entry
+  async function listUsers() {
+    if (!hasBackend()) return [];
+    const token = await getIdToken();
+    const res = await fetch(dbUrl(`directory.json?auth=${token}`));
+    if (!res.ok) throw new Error('Database responded ' + res.status);
+    const data = await res.json();
+    if (!data) return [];
+    const users = [];
+    Object.entries(data).forEach(([id, u]) => {
+      users.push({
+        id,
+        name: (u && u.name) || id,
+        ts: (u && u.ts) || 0,
+        avatar: (u && u.avatar) || '',
+        bio: (u && u.bio) || '',
+        bw: (u && u.bw) || 0,
+        following: toArr(u && u.following).map(String)
+      });
+    });
+    return users;
+  }
+
+  // ── Social: kudos + comments ─────────────────────────────
+  // Workouts are keyed day-wise, so a workout's social id is
+  // {ownerId}/{date}. Nodes:
+  //   kudos/{ownerId}/{date}/{likerUid}: true
+  //   comments/{ownerId}/{date}/{pushId}: {uid, name, text, ts}
+  // These require the extended RTDB rules (see the "Copy Database
+  // Rules" button in app.js). Until those are published, reads return
+  // empty and writes reject — the UI degrades gracefully.
+
+  function kudosPath(ownerId, date, uid) {
+    let p = `kudos/${encodeURIComponent(ownerId)}/${encodeURIComponent(date)}`;
+    if (uid) p += `/${encodeURIComponent(uid)}`;
+    return p + '.json';
+  }
+  function commentsPath(ownerId, date, pid) {
+    let p = `comments/${encodeURIComponent(ownerId)}/${encodeURIComponent(date)}`;
+    if (pid) p += `/${encodeURIComponent(pid)}`;
+    return p + '.json';
+  }
+
+  // Returns { count, mine, uids } — mine = did the signed-in user kudo.
+  async function readKudos(ownerId, date) {
+    const empty = { count: 0, mine: false, uids: [] };
+    if (!hasBackend() || !ownerId || !date) return empty;
+    try {
+      const token = await getIdToken();
+      const res = await fetch(dbUrl(`${kudosPath(ownerId, date)}?auth=${token}`));
+      if (!res.ok) return empty;
+      const data = await res.json();
+      const uids = (data && typeof data === 'object') ? Object.keys(data).filter(k => data[k]) : [];
+      const me = getUser();
+      return { count: uids.length, mine: !!(me && uids.indexOf(me.uid) !== -1), uids };
+    } catch (_) { return empty; }
+  }
+
+  // Add or remove the signed-in user's kudos; resolves to the new
+  // boolean state (true = now kudoed).
+  async function toggleKudos(ownerId, date) {
+    if (!isConnected()) throw new Error('Not signed in');
+    const me = getUser();
+    const token = await getIdToken();
+    const url = dbUrl(`${kudosPath(ownerId, date, me.uid)}?auth=${token}`);
+    const cur = await fetch(url);
+    const val = cur.ok ? await cur.json() : null;
+    if (val) {
+      await fetch(url, { method: 'DELETE' });
+      return false;
+    }
+    const put = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: 'true' });
+    if (!put.ok) throw new Error('Kudos not enabled yet');
+    return true;
+  }
+
+  // Returns an ascending-by-time array of { pid, uid, name, text, ts }.
+  async function readComments(ownerId, date) {
+    if (!hasBackend() || !ownerId || !date) return [];
+    try {
+      const token = await getIdToken();
+      const res = await fetch(dbUrl(`${commentsPath(ownerId, date)}?auth=${token}`));
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (!data || typeof data !== 'object') return [];
+      return Object.entries(data)
+        .map(([pid, c]) => ({ pid, uid: (c && c.uid) || '', name: (c && c.name) || '', text: (c && c.text) || '', ts: (c && c.ts) || 0 }))
+        .sort((a, b) => a.ts - b.ts);
+    } catch (_) { return []; }
+  }
+
+  async function addComment(ownerId, date, text) {
+    if (!isConnected()) throw new Error('Not signed in');
+    loadConfig();
+    const me = getUser();
+    const token = await getIdToken();
+    const body = {
+      uid: me.uid,
+      name: (config.displayName || config.userId || (me && me.username) || '').slice(0, 60),
+      text: String(text || '').slice(0, 300),
+      ts: Date.now()
+    };
+    const res = await fetch(dbUrl(`${commentsPath(ownerId, date)}?auth=${token}`), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error('Comments not enabled yet');
+    const out = await res.json();
+    return { pid: (out && out.name) || '', ...body };
+  }
+
+  // ── Status ───────────────────────────────────────────────
+  function isConnected() {
+    return hasBackend() && !!getUser() && !!config.userId;
+  }
+
+  function getConfig() {
+    loadConfig();
+    return {
+      ...config,
+      following: config.following.map(f => ({ ...f })),
+      projectId: FIREBASE_PROJECT_ID,
+      backendReady: hasBackend(),
+      user: getUser(),
+      connected: isConnected()
+    };
+  }
+
+  // Initialize
+  loadConfig();
+  loadAuth();
+
+  return {
+    updateConfig,
+    signUp,
+    signIn,
+    signOut,
+    restoreSession,
+    getUser,
+    getIdToken,
+    readDoc,
+    readAllDocs,
+    writeDoc,
+    normalizeDocData,
+    listUsers,
+    readKudos,
+    toggleKudos,
+    readComments,
+    addComment,
+    isConnected,
+    getConfig
+  };
+})();
+
+</script>
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   ASCA GYM — Admin Console
+   A maintainer-only dashboard to inspect every athlete's profile,
+   workouts and activity. Reuses the app's Firebase module
+   (firebase-sync.js) for auth + reads. Access is gated to maintainer
+   usernames (see ADMIN_PREFIXES) — anyone else who signs in is
+   refused. Note: the RTDB rules already let any signed-in account
+   read the directory + each gym/{id} node over REST, so this page
+   only gates the *console UI*, not the data itself.
+   ═══════════════════════════════════════════════════════════════ */
+(() => {
+  'use strict';
+
+  const ADMIN_PREFIXES = ['anshul'];
+
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  let USERS = [];      // directory entries [{id,name,ts,avatar,bio,bw,following}]
+  let DOCS = {};       // { id: normalizedDoc|null } full workout docs
+  let sortKey = 'ts';
+  let sortDir = -1;    // -1 desc, 1 asc
+  let searchQ = '';
+
+  // ── Metric helpers ───────────────────────────────────────
+  function setVol(s) { return (parseFloat(s.weight) || 0) * (parseInt(s.reps, 10) || 0); }
+  function woVol(w) { let v = 0; (w.exercises || []).forEach(e => (e.sets || []).forEach(s => { v += setVol(s); })); return v; }
+  function totalVol(ws) { let v = 0; (ws || []).forEach(w => { v += woVol(w); }); return v; }
+  function daysSince(dateStr) { const d = new Date(dateStr + 'T00:00:00'); return (Date.now() - d.getTime()) / 86400000; }
+  function weekVol(ws) { let v = 0; (ws || []).forEach(w => { const dd = daysSince(w.date); if (dd >= 0 && dd < 7) v += woVol(w); }); return v; }
+  function sessions(ws) { return (ws || []).filter(w => w && w.dayType !== 'Rest Day' && Array.isArray(w.exercises) && w.exercises.length); }
+  function score(ws, bw) { const b = bw > 0 ? bw : 75; return Math.round(weekVol(ws) / b); }
+  function setCount(w) { return (w.exercises || []).reduce((s, e) => s + (e.sets ? e.sets.length : 0), 0); }
+
+  function followersOf(id, dir) {
+    return dir.filter(u => u.id !== id && Array.isArray(u.following) && u.following.map(String).includes(String(id))).length;
+  }
+
+  function fmtNum(n) {
+    n = Math.round(n || 0);
+    if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    return String(n);
+  }
+  function timeAgo(ms) {
+    if (!ms) return 'never';
+    const s = (Date.now() - ms) / 1000;
+    if (s < 60) return 'just now';
+    if (s < 3600) return Math.floor(s / 60) + 'm ago';
+    if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+    const d = Math.floor(s / 86400);
+    if (d < 30) return d + 'd ago';
+    if (d < 365) return Math.floor(d / 30) + 'mo ago';
+    return Math.floor(d / 365) + 'y ago';
+  }
+  function fmtDate(dateStr) {
+    try { return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); }
+    catch (_) { return dateStr; }
+  }
+
+  function dayTypeColor(t) {
+    t = (t || '').toLowerCase();
+    if (t.includes('push')) return '#0A84FF';
+    if (t.includes('pull')) return '#BF5AF2';
+    if (t.includes('leg')) return '#30D158';
+    if (t.includes('shoulder')) return '#FF9F0A';
+    if (t.includes('rest')) return '#8E8E93';
+    return '#FF7600';
+  }
+
+  function hashHue(str) { let h = 0; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) % 360; return h; }
+  function avatarBg(id) { const h = hashHue(id || '?'); return `linear-gradient(135deg, hsl(${h} 70% 55%), hsl(${(h + 40) % 360} 70% 45%))`; }
+  function avatarHtml(u) {
+    const id = u.id || '?';
+    const name = u.name || id;
+    if (u.avatar) return `<div class="admin-avatar"><img src="${esc(u.avatar)}" alt=""></div>`;
+    return `<div class="admin-avatar" style="background:${avatarBg(id)}">${esc((name[0] || '?').toUpperCase())}</div>`;
+  }
+
+  // ── Auth gate ────────────────────────────────────────────
+  function isMaintainer(username) {
+    const u = (username || '').toLowerCase();
+    return ADMIN_PREFIXES.some(p => u.startsWith(p));
+  }
+
+  function showGate(msg) {
+    $('adminGate').style.display = 'flex';
+    $('adminShell').style.display = 'none';
+    const err = $('adminGateErr');
+    if (msg) { err.textContent = msg; err.style.display = 'block'; }
+    else err.style.display = 'none';
+  }
+
+  async function enterConsole(user) {
+    $('adminGate').style.display = 'none';
+    $('adminShell').style.display = 'block';
+    $('adminWhoami').innerHTML = 'Signed in as <b>@' + esc(user.username) + '</b>';
+    await loadData();
+  }
+
+  async function attemptSignIn() {
+    const err = $('adminGateErr');
+    err.style.display = 'none';
+    const btn = $('adminSignIn');
+    const username = $('adminUser').value.trim();
+    const password = $('adminPass').value;
+    if (!username || !password) { err.textContent = 'Enter username and password'; err.style.display = 'block'; return; }
+    btn.disabled = true; btn.textContent = 'Signing in…';
+    try {
+      await FirebaseSync.signIn(username, password);
+      const user = FirebaseSync.getUser();
+      if (!user || !isMaintainer(user.username)) {
+        showGate('Not authorized — maintainer accounts only.');
+      } else {
+        await enterConsole(user);
+      }
+    } catch (e) {
+      err.textContent = (e && e.message) || 'Sign-in failed';
+      err.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Enter Console';
+    }
+  }
+
+  // ── Data load + render ───────────────────────────────────
+  async function loadData() {
+    $('adminOverview').innerHTML = '<div class="admin-loading" style="grid-column:1/-1">Loading athletes…</div>';
+    $('adminTableBody').innerHTML = '<tr><td colspan="6" class="admin-loading">Loading…</td></tr>';
+    $('adminActivity').innerHTML = '<div class="admin-loading">Loading…</div>';
+    try {
+      USERS = await FirebaseSync.listUsers();
+      DOCS = await FirebaseSync.readAllDocs(USERS.map(u => u.id));
+    } catch (e) {
+      $('adminOverview').innerHTML = '<div class="admin-empty" style="grid-column:1/-1">Failed to load: ' + esc(e && e.message) + '</div>';
+      return;
+    }
+    renderOverview();
+    renderTable();
+    renderActivity();
+  }
+
+  function docWorkouts(id) { const d = DOCS[id]; return (d && d.workouts) ? d.workouts : []; }
+
+  function renderOverview() {
+    let totalWorkouts = 0, grandVol = 0, activeWeek = 0;
+    USERS.forEach(u => {
+      const ws = sessions(docWorkouts(u.id));
+      totalWorkouts += ws.length;
+      grandVol += totalVol(ws);
+      const recent = u.ts && (Date.now() - u.ts) < 7 * 86400000;
+      if (recent) activeWeek++;
+    });
+    const cards = [
+      { label: 'Athletes', val: USERS.length, sub: 'registered' },
+      { label: 'Active this week', val: activeWeek, sub: 'synced in 7d' },
+      { label: 'Total workouts', val: totalWorkouts, sub: 'across all users' },
+      { label: 'Total volume', val: fmtNum(grandVol), sub: 'kg lifted' }
+    ];
+    $('adminOverview').innerHTML = cards.map(c =>
+      `<div class="card glass-card admin-stat"><div class="admin-stat-label">${c.label}</div><div class="admin-stat-val">${c.val}</div><div class="admin-stat-sub">${c.sub}</div></div>`
+    ).join('');
+  }
+
+  function userRows() {
+    return USERS.map(u => {
+      const ws = docWorkouts(u.id);
+      const sess = sessions(ws);
+      return {
+        id: u.id,
+        name: u.name || u.id,
+        avatar: u.avatar,
+        bio: u.bio,
+        bw: u.bw,
+        ts: u.ts || 0,
+        workouts: sess.length,
+        vol: totalVol(sess),
+        week: weekVol(ws),
+        score: score(ws, u.bw),
+        followers: followersOf(u.id, USERS),
+        following: Array.isArray(u.following) ? u.following.length : 0
+      };
+    });
+  }
+
+  function renderTable() {
+    let rows = userRows();
+    if (searchQ) {
+      const q = searchQ.toLowerCase();
+      rows = rows.filter(r => r.name.toLowerCase().includes(q) || r.id.toLowerCase().includes(q) || (r.bio || '').toLowerCase().includes(q));
+    }
+    rows.sort((a, b) => {
+      let av = a[sortKey], bv = b[sortKey];
+      if (sortKey === 'name') { av = av.toLowerCase(); bv = (bv || '').toLowerCase(); return av < bv ? sortDir : av > bv ? -sortDir : 0; }
+      return (av - bv) * sortDir;
+    });
+    $('adminUserCount').textContent = rows.length + ' athlete' + (rows.length === 1 ? '' : 's');
+    const body = $('adminTableBody');
+    if (!rows.length) { body.innerHTML = '<tr><td colspan="6" class="admin-empty">No athletes found.</td></tr>'; return; }
+    body.innerHTML = rows.map(r => {
+      const dd = r.ts ? (Date.now() - r.ts) / 86400000 : 999;
+      const cls = dd < 7 ? 'hot' : dd < 30 ? 'warm' : 'cold';
+      return `<tr data-id="${esc(r.id)}">
+        <td><div class="admin-user-cell">${avatarHtml(r)}<div class="admin-user-meta"><span class="admin-user-name">${esc(r.name)}</span><span class="admin-user-id">@${esc(r.id)}</span></div></div></td>
+        <td class="num">${r.workouts}</td>
+        <td class="num">${fmtNum(r.vol)}</td>
+        <td class="num">${r.score}</td>
+        <td class="num">${r.followers}</td>
+        <td class="num"><span class="admin-pill ${cls}">${timeAgo(r.ts)}</span></td>
+      </tr>`;
+    }).join('');
+    body.querySelectorAll('tr[data-id]').forEach(tr => tr.addEventListener('click', () => openDrawer(tr.dataset.id)));
+  }
+
+  function renderActivity() {
+    const feed = [];
+    USERS.forEach(u => {
+      sessions(docWorkouts(u.id)).forEach(w => feed.push({ id: u.id, name: u.name || u.id, avatar: u.avatar, w }));
+    });
+    feed.sort((a, b) => (b.w.date || '').localeCompare(a.w.date || ''));
+    const el = $('adminActivity');
+    if (!feed.length) { el.innerHTML = '<div class="admin-empty">No activity yet.</div>'; return; }
+    el.innerHTML = feed.slice(0, 80).map(({ id, name, avatar, w }) => {
+      const vol = woVol(w);
+      const dtc = dayTypeColor(w.dayType);
+      return `<div class="admin-act-item" data-id="${esc(id)}" style="cursor:pointer">
+        ${avatarHtml({ id, name, avatar })}
+        <div class="admin-act-body">
+          <div class="admin-act-line1">${esc(name)} <span>· ${esc(w.dayType || 'Workout')}</span></div>
+          <div class="admin-act-line2">${fmtDate(w.date)} · ${w.exercises.length} exercises · ${setCount(w)} sets</div>
+        </div>
+        <div class="admin-act-vol" style="color:${dtc}">${fmtNum(vol)} kg</div>
+      </div>`;
+    }).join('');
+    el.querySelectorAll('.admin-act-item[data-id]').forEach(it => it.addEventListener('click', () => openDrawer(it.dataset.id)));
+  }
+
+  // ── Detail drawer ────────────────────────────────────────
+  function openDrawer(id) {
+    const u = USERS.find(x => x.id === id) || { id, name: id };
+    const ws = docWorkouts(id);
+    const sess = sessions(ws);
+    const doc = DOCS[id];
+    $('adminDrawerHead').innerHTML = `
+      ${avatarHtml(u)}
+      <div style="min-width:0">
+        <div style="font-family:var(--ff-title);font-size:1.15rem;font-weight:800">${esc(u.name || id)}</div>
+        <div style="font-size:0.78rem;color:var(--t-3)">@${esc(id)}${u.bio ? ' · ' + esc(u.bio) : ''}</div>
+      </div>
+      <button class="btn-close admin-drawer-close" id="adminDrawerClose" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>`;
+    const mini = [
+      { v: sess.length, l: 'Workouts' },
+      { v: fmtNum(totalVol(sess)), l: 'Volume kg' },
+      { v: score(ws, u.bw), l: 'Score' },
+      { v: u.bw ? u.bw + 'kg' : '—', l: 'Body wt' }
+    ];
+    const legacy = doc && !doc.workouts && doc.blob ? '<div class="admin-wo-meta" style="margin-bottom:12px">⚠︎ Legacy compressed data — workout details not expanded here.</div>' : '';
+    const woHtml = sess.length
+      ? sess.slice(0, 60).map(w => {
+          const dtc = dayTypeColor(w.dayType);
+          return `<div class="admin-wo">
+            <div class="admin-wo-head">
+              <span class="admin-wo-date">${fmtDate(w.date)}</span>
+              <span class="admin-wo-type" style="background:${dtc}22;color:${dtc}">${esc(w.dayType || 'Workout')}</span>
+            </div>
+            <div class="admin-wo-meta">${w.exercises.length} exercises · ${setCount(w)} sets · ${fmtNum(woVol(w))} kg volume</div>
+          </div>`;
+        }).join('')
+      : '<div class="admin-empty">No workouts logged.</div>';
+    $('adminDrawerBody').innerHTML = `
+      <div class="admin-mini-stats">${mini.map(m => `<div class="admin-mini-stat"><div class="admin-mini-stat-val">${m.v}</div><div class="admin-mini-stat-label">${m.l}</div></div>`).join('')}</div>
+      <div style="display:flex;gap:16px;margin-bottom:18px;font-size:0.78rem;color:var(--t-2);font-weight:700">
+        <span><b style="color:#fff">${Array.isArray(u.following) ? u.following.length : 0}</b> following</span>
+        <span><b style="color:#fff">${followersOf(id, USERS)}</b> followers</span>
+        <span>Last active <b style="color:#fff">${timeAgo(u.ts)}</b></span>
+      </div>
+      ${legacy}
+      <div class="admin-section-title" style="margin-top:0;font-size:0.9rem">Workout history</div>
+      ${woHtml}`;
+    $('adminDrawerClose').addEventListener('click', closeDrawer);
+    $('adminDrawerBg').classList.add('open');
+    $('adminDrawer').classList.add('open');
+  }
+  function closeDrawer() {
+    $('adminDrawerBg').classList.remove('open');
+    $('adminDrawer').classList.remove('open');
+  }
+
+  // ── Wire up ──────────────────────────────────────────────
+  function bind() {
+    $('adminSignIn').addEventListener('click', attemptSignIn);
+    $('adminPass').addEventListener('keydown', e => { if (e.key === 'Enter') attemptSignIn(); });
+    $('adminUser').addEventListener('keydown', e => { if (e.key === 'Enter') $('adminPass').focus(); });
+    $('adminRefresh').addEventListener('click', loadData);
+    $('adminSignOut').addEventListener('click', () => { FirebaseSync.signOut(); showGate(); });
+    $('adminSearch').addEventListener('input', e => { searchQ = e.target.value; renderTable(); });
+    $('adminDrawerBg').addEventListener('click', closeDrawer);
+    document.querySelectorAll('#adminTable thead th[data-sort]').forEach(th => {
+      th.addEventListener('click', () => {
+        const key = th.dataset.sort;
+        if (sortKey === key) sortDir = -sortDir;
+        else { sortKey = key; sortDir = (key === 'name') ? 1 : -1; }
+        document.querySelectorAll('#adminTable thead th .sort-caret').forEach(c => c.remove());
+        const caret = document.createElement('span');
+        caret.className = 'sort-caret';
+        caret.textContent = sortDir === 1 ? '▲' : '▼';
+        th.appendChild(caret);
+        renderTable();
+      });
+    });
+  }
+
+  async function init() {
+    bind();
+    if (!FirebaseSync.getConfig().backendReady) {
+      showGate('Backend not configured.');
+      return;
+    }
+    // Auto-enter if a maintainer session is already restored (shared origin).
+    try {
+      const res = await FirebaseSync.restoreSession();
+      const user = FirebaseSync.getUser();
+      if (res && res !== 'offline' && user && isMaintainer(user.username)) {
+        await enterConsole(user);
+        return;
+      }
+    } catch (_) {}
+    showGate();
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+
+</script>
+</body>
+</html>

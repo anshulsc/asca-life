@@ -236,3 +236,60 @@ ${lockScreenHtmlWithPreview.trim()}
 
 fs.writeFileSync(path.join(__dirname, 'index.html'), distHtml, 'utf8');
 console.log('Successfully compiled index.html (login-gated, no payload encryption)!');
+
+// ── Admin console (admin/index.html) ──────────────────────────────
+// A standalone maintainer-only dashboard served at /asca-life/admin/.
+// It reuses the app's design system (style.css) and Firebase module
+// (firebase-sync.js) — bundled as plaintext (no secrets beyond the
+// same client identifiers already public in index.html).
+const adminHtmlPath = path.join(srcDir, 'admin.html');
+const adminJsPath = path.join(srcDir, 'admin.js');
+if (fs.existsSync(adminHtmlPath) && fs.existsSync(adminJsPath)) {
+  const adminHtml = fs.readFileSync(adminHtmlPath, 'utf8');
+  const adminJs = fs.readFileSync(adminJsPath, 'utf8');
+
+  const adminHeadMatch = adminHtml.match(/<head>([\s\S]*?)<\/head>/);
+  let adminHead = adminHeadMatch ? adminHeadMatch[1] : '';
+  // Drop the dev-time stylesheet link — style.css is inlined below.
+  adminHead = adminHead.replace(/<link[^>]*href=["']style\.css[^"']*["'][^>]*>/i, '');
+  // Pull the admin-specific <style> out so it can be placed AFTER style.css
+  // (so admin overrides win the cascade), and keep <meta charset> first.
+  const adminStyleMatch = adminHead.match(/<style>([\s\S]*?)<\/style>/i);
+  const adminInlineCss = adminStyleMatch ? adminStyleMatch[1] : '';
+  const adminMeta = adminHead.replace(/<style>[\s\S]*?<\/style>/i, '').trim();
+
+  const adminBodyMatch = adminHtml.match(/<body>([\s\S]*?)<\/body>/);
+  let adminBody = adminBodyMatch ? adminBodyMatch[1] : adminHtml;
+  // Strip the dev-time <script src> tags — the code is inlined below.
+  adminBody = adminBody.replace(/<script[\s\S]*?<\/script>/gi, '');
+
+  const adminDist = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${adminMeta}
+  <style>
+${styleCss}
+${adminInlineCss}
+  </style>
+</head>
+<body>
+
+${adminBody.trim()}
+
+<script>
+${firebaseSyncJs}
+</script>
+<script>
+${adminJs}
+</script>
+</body>
+</html>
+`;
+
+  const adminDir = path.join(__dirname, 'admin');
+  if (!fs.existsSync(adminDir)) fs.mkdirSync(adminDir, { recursive: true });
+  fs.writeFileSync(path.join(adminDir, 'index.html'), adminDist, 'utf8');
+  console.log('Successfully compiled admin/index.html (maintainer console)!');
+} else {
+  console.warn('\x1b[33m%s\x1b[0m', 'Skipped admin build: src/admin.html or src/admin.js missing.');
+}

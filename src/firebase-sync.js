@@ -360,6 +360,19 @@ const FirebaseSync = (() => {
     return true;
   }
 
+  // Read many gym/{id} docs in parallel (admin dashboard). Returns a map
+  // { id: normalizedDoc|null }; failed/missing reads become null rather
+  // than rejecting the whole batch.
+  async function readAllDocs(ids) {
+    const list = Array.isArray(ids) ? ids : [];
+    const out = {};
+    await Promise.all(list.map(async id => {
+      try { out[id] = await readDoc(id); }
+      catch (_) { out[id] = null; }
+    }));
+    return out;
+  }
+
   // Lists every directory metadata entry
   async function listUsers() {
     if (!hasBackend()) return [];
@@ -381,6 +394,93 @@ const FirebaseSync = (() => {
       });
     });
     return users;
+  }
+
+  // ── Social: kudos + comments ─────────────────────────────
+  // Workouts are keyed day-wise, so a workout's social id is
+  // {ownerId}/{date}. Nodes:
+  //   kudos/{ownerId}/{date}/{likerUid}: true
+  //   comments/{ownerId}/{date}/{pushId}: {uid, name, text, ts}
+  // These require the extended RTDB rules (see the "Copy Database
+  // Rules" button in app.js). Until those are published, reads return
+  // empty and writes reject — the UI degrades gracefully.
+
+  function kudosPath(ownerId, date, uid) {
+    let p = `kudos/${encodeURIComponent(ownerId)}/${encodeURIComponent(date)}`;
+    if (uid) p += `/${encodeURIComponent(uid)}`;
+    return p + '.json';
+  }
+  function commentsPath(ownerId, date, pid) {
+    let p = `comments/${encodeURIComponent(ownerId)}/${encodeURIComponent(date)}`;
+    if (pid) p += `/${encodeURIComponent(pid)}`;
+    return p + '.json';
+  }
+
+  // Returns { count, mine, uids } — mine = did the signed-in user kudo.
+  async function readKudos(ownerId, date) {
+    const empty = { count: 0, mine: false, uids: [] };
+    if (!hasBackend() || !ownerId || !date) return empty;
+    try {
+      const token = await getIdToken();
+      const res = await fetch(dbUrl(`${kudosPath(ownerId, date)}?auth=${token}`));
+      if (!res.ok) return empty;
+      const data = await res.json();
+      const uids = (data && typeof data === 'object') ? Object.keys(data).filter(k => data[k]) : [];
+      const me = getUser();
+      return { count: uids.length, mine: !!(me && uids.indexOf(me.uid) !== -1), uids };
+    } catch (_) { return empty; }
+  }
+
+  // Add or remove the signed-in user's kudos; resolves to the new
+  // boolean state (true = now kudoed).
+  async function toggleKudos(ownerId, date) {
+    if (!isConnected()) throw new Error('Not signed in');
+    const me = getUser();
+    const token = await getIdToken();
+    const url = dbUrl(`${kudosPath(ownerId, date, me.uid)}?auth=${token}`);
+    const cur = await fetch(url);
+    const val = cur.ok ? await cur.json() : null;
+    if (val) {
+      await fetch(url, { method: 'DELETE' });
+      return false;
+    }
+    const put = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: 'true' });
+    if (!put.ok) throw new Error('Kudos not enabled yet');
+    return true;
+  }
+
+  // Returns an ascending-by-time array of { pid, uid, name, text, ts }.
+  async function readComments(ownerId, date) {
+    if (!hasBackend() || !ownerId || !date) return [];
+    try {
+      const token = await getIdToken();
+      const res = await fetch(dbUrl(`${commentsPath(ownerId, date)}?auth=${token}`));
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (!data || typeof data !== 'object') return [];
+      return Object.entries(data)
+        .map(([pid, c]) => ({ pid, uid: (c && c.uid) || '', name: (c && c.name) || '', text: (c && c.text) || '', ts: (c && c.ts) || 0 }))
+        .sort((a, b) => a.ts - b.ts);
+    } catch (_) { return []; }
+  }
+
+  async function addComment(ownerId, date, text) {
+    if (!isConnected()) throw new Error('Not signed in');
+    loadConfig();
+    const me = getUser();
+    const token = await getIdToken();
+    const body = {
+      uid: me.uid,
+      name: (config.displayName || config.userId || (me && me.username) || '').slice(0, 60),
+      text: String(text || '').slice(0, 300),
+      ts: Date.now()
+    };
+    const res = await fetch(dbUrl(`${commentsPath(ownerId, date)}?auth=${token}`), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error('Comments not enabled yet');
+    const out = await res.json();
+    return { pid: (out && out.name) || '', ...body };
   }
 
   // ── Status ───────────────────────────────────────────────
@@ -413,9 +513,14 @@ const FirebaseSync = (() => {
     getUser,
     getIdToken,
     readDoc,
+    readAllDocs,
     writeDoc,
     normalizeDocData,
     listUsers,
+    readKudos,
+    toggleKudos,
+    readComments,
+    addComment,
     isConnected,
     getConfig
   };
