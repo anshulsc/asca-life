@@ -1335,13 +1335,17 @@ function buildLBRows(){
   const mk=(id,name,me,workouts,bw)=>{
     const stats=periodStatsExtended(workouts,_lbTimeframe);
     stats.bw=bw;
-    stats.score=ascaScore(periodStatsExtended(workouts,'week').volume,bw);
+    // Score follows the selected timeframe: that period's volume ÷ body weight
+    stats.score=ascaScore(stats.volume,bw);
     return {id,name,me,stats,workouts,bw};
   };
   return [mk(fb.userId,myName,true,W,myBW()),
     ...ids.map(id=>mk(id,cache.friends[id].name||id,false,cache.friends[id].workouts||[],cache.friends[id].bw||0))];
 }
-function metricVal(stats,m){return {score:stats.score,vol7:stats.volume,week:stats.workouts,sets7:stats.sets,consistency:stats.streak}[m]||stats.volume;}
+function metricVal(stats,m){
+  const v={score:stats.score,vol7:stats.volume,week:stats.workouts,sets7:stats.sets,consistency:stats.streak}[m];
+  return v===undefined?stats.volume:v; // 0 is a real value (e.g. 0-day streak), not a miss
+}
 function metricLabel(m){return {score:'score',vol7:'kg',week:'workouts',sets7:'sets',consistency:'day streak'}[m]||'';}
 
 
@@ -1421,17 +1425,20 @@ function renderGymActivity(allRows){
   grids.innerHTML=allRows.map(r=>gymHeatmapHtml(r.id,r.name,r.workouts,r.stats.score)).join('');
 }
 
+let _h2hOpp=null; // survives re-renders so timeframe switches keep the matchup
 function renderH2HPicker(allRows){
   const label=document.getElementById('h2hLabel');const card=document.getElementById('h2hCard');const picker=document.getElementById('h2hPicker');
   if(!label||!card||!picker||allRows.length<2){if(label)label.style.display='none';if(card)card.style.display='none';return;}
   label.style.display='block';card.style.display='block';
   const meRow=allRows.find(r=>r.me)||allRows[0];const others=allRows.filter(r=>!r.me);
+  if(!others.some(r=>r.id===_h2hOpp))_h2hOpp=others[0].id;
   picker.innerHTML=`<div class="h2h-select" style="text-align:center;font-weight:700;color:#FF6B00">${esc(meRow.name)}</div>
     <div class="h2h-vs">VS</div>
-    <select class="h2h-select" id="h2hOpponent">${others.map((r,i)=>`<option value="${esc(r.id)}"${i===0?' selected':''}>${esc(r.name)}</option>`).join('')}</select>`;
+    <select class="h2h-select" id="h2hOpponent">${others.map(r=>`<option value="${esc(r.id)}"${r.id===_h2hOpp?' selected':''}>${esc(r.name)}</option>`).join('')}</select>`;
   const sel=document.getElementById('h2hOpponent');
   const render=()=>{const opp=allRows.find(r=>r.id===sel.value);if(opp)renderH2HBody(meRow,opp);};
-  sel.addEventListener('change',render);render();
+  sel.addEventListener('change',()=>{_h2hOpp=sel.value;render();});
+  render();
 }
 
 function renderH2HBody(a,b){
@@ -1581,12 +1588,12 @@ function bindFriend(){
   const tabs=document.getElementById('lbMetricTabs');
   if(tabs)tabs.addEventListener('click',e=>{const t=e.target.closest('.lb-metric-tab');if(!t)return;
     tabs.querySelectorAll('.lb-metric-tab').forEach(b=>b.classList.remove('on'));t.classList.add('on');
-    _lbMetric=t.dataset.metric||'vol7';const allRows=buildLBRows();renderPodium(allRows,_lbMetric);renderLeaderboardRows(allRows,_lbMetric);});
+    _lbMetric=t.dataset.metric||'score';const allRows=buildLBRows();renderPodium(allRows,_lbMetric);renderLeaderboardRows(allRows,_lbMetric);});
   
   const tfTabs=document.getElementById('lbTimeframeTabs');
   if(tfTabs)tfTabs.addEventListener('click',e=>{const t=e.target.closest('.lb-timeframe-tab');if(!t)return;
     tfTabs.querySelectorAll('.lb-timeframe-tab').forEach(b=>b.classList.remove('on'));t.classList.add('on');
-    _lbTimeframe=t.dataset.timeframe||'week';const allRows=buildLBRows();renderPodium(allRows,_lbMetric);renderLeaderboardRows(allRows,_lbMetric);});
+    _lbTimeframe=t.dataset.timeframe||'week';const allRows=buildLBRows();renderPodium(allRows,_lbMetric);renderLeaderboardRows(allRows,_lbMetric);renderH2HPicker(allRows);});
 }
 
 
@@ -2584,7 +2591,7 @@ function bindSettings(){
       if(id===cfg.userId){toast("That's you — follow a friend instead",'error');return;}
       if(isFollowing(id)){toast(`Already following @${id}`,'error');return;}
       FirebaseSync.updateConfig({following:[...cfg.following,{id,name:name||''}]});
-      renderFollowList();renderSearchResults();renderFriendsCard();
+      renderFollowList();renderSearchResults();renderFriendsCard();renderSuggestions();
       toast(`Following @${id}`,'success');
       fbPush(false);            // publish my new following list (their follower count)
       startRealtimeSync();      // open a live stream on the new friend
@@ -2596,7 +2603,7 @@ function bindSettings(){
       FirebaseSync.updateConfig({following:cfg.following.filter(f=>f.id!==id)});
       stopStream(id);           // or their stream re-adds them to the cache
       removeFriendEntry(id);
-      renderFollowList();renderSearchResults();renderFriendsCard();
+      renderFollowList();renderSearchResults();renderFriendsCard();renderSuggestions();
       toast(`Unfollowed @${id}`);
       fbPush(false);
     }
@@ -2631,6 +2638,35 @@ function bindSettings(){
     function bindUserRowButtons(container){
       container.querySelectorAll('[data-follow]').forEach(b=>b.addEventListener('click',()=>follow(b.dataset.follow,b.dataset.fname)));
       container.querySelectorAll('[data-unfollow]').forEach(b=>b.addEventListener('click',()=>unfollow(b.dataset.unfollow)));
+    }
+
+    // Suggested follows: directory athletes you don't follow yet —
+    // people who follow you first, then the most recently active.
+    // Rendered in Find Friends and inside the Social empty state.
+    function renderSuggestions(){
+      const wrap=document.getElementById('suggestList');
+      const lab=document.getElementById('suggestLabel');
+      const socWrap=document.getElementById('socSuggest');
+      if(!wrap&&!socWrap)return;
+      const cfg=fbCfg();
+      const dir=userDirectory||getDirectoryCache()||[];
+      const sugg=dir.filter(u=>u.id!==cfg.userId&&!isFollowing(u.id))
+        .sort((x,y)=>{
+          const xf=Array.isArray(x.following)&&x.following.includes(cfg.userId)?1:0;
+          const yf=Array.isArray(y.following)&&y.following.includes(cfg.userId)?1:0;
+          if(xf!==yf)return yf-xf;
+          return (y.ts||0)-(x.ts||0);
+        }).slice(0,5);
+      const html=sugg.map(u=>userRow(u,u.ts?`active ${timeAgo(u.ts)}`:'new athlete')).join('');
+      if(wrap){
+        wrap.innerHTML=html;
+        if(lab)lab.style.display=sugg.length?'block':'none';
+        if(sugg.length)bindUserRowButtons(wrap);
+      }
+      if(socWrap){
+        socWrap.innerHTML=html;
+        if(sugg.length)bindUserRowButtons(socWrap);
+      }
     }
 
     function renderFollowList(){
@@ -2707,7 +2743,7 @@ function bindSettings(){
         debounce=setTimeout(async()=>{
           renderSearchResults();
           if(!userDirectory){
-            try{userDirectory=await FirebaseSync.listUsers();}
+            try{userDirectory=await FirebaseSync.listUsers();renderSuggestions();}
             catch(_){searchResults.innerHTML='<p class="search-empty">Could not reach the athlete directory — check your connection.</p>';return;}
           }
           renderSearchResults();
@@ -2716,6 +2752,7 @@ function bindSettings(){
     }
 
     renderFollowList();
+    renderSuggestions();
 
     // Live directory updates (EventSource in listenToDirectory) land here:
     // refresh the search results + follow/follower lists with fresh
@@ -2725,6 +2762,7 @@ function bindSettings(){
       renderFollowList();
       renderFollowerList();
       renderSearchResults();
+      renderSuggestions();
     };
 
     // Strava-style: tapping the hero's Followers / Following stats jumps

@@ -438,6 +438,7 @@
         <div class="soc-empty-icon">🏆</div>
         <div class="soc-empty-title">Your crew isn't here yet</div>
         <div class="soc-empty-sub">Follow friends to race the leaderboard, compare scores head-to-head and see their workouts land in realtime.</div>
+        <div class="soc-suggest" id="socSuggest"></div>
         <button class="btn btn-primary" id="socEmptyCta">Find friends</button>
       </div>
 
@@ -561,6 +562,9 @@
           <input type="text" class="input-field search-input" id="fbSearch" placeholder="Search athletes…" autocapitalize="off" autocorrect="off">
         </div>
         <div id="searchResults"></div>
+
+        <div class="suggest-label" id="suggestLabel" style="display:none">Suggested for you</div>
+        <div id="suggestList"></div>
 
         <div class="seg-tabs" id="followTabs">
           <button class="seg-tab on" data-tab="following">Following <span id="followCount" class="seg-count"></span></button>
