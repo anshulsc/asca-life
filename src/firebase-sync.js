@@ -289,6 +289,7 @@ const FirebaseSync = (() => {
       avatar: data.avatar || '',
       bio: data.bio || '',
       github: data.github || '',
+      bw: data.bw || 0,
       following: toArr(data.following).map(String),
       workouts: workoutsToArray(data.workouts),
       blob: data.blob || ''
@@ -319,6 +320,7 @@ const FirebaseSync = (() => {
       avatar: config.avatar || '',
       bio: (config.bio || '').slice(0, 120),
       github: config.github || '',
+      bw: Math.round((payload.bw || 0) * 10) / 10,
       following: (config.following || []).map(f => f.id),
       workouts: workoutsToMap(payload.workouts)
     };
@@ -344,6 +346,7 @@ const FirebaseSync = (() => {
       ts: data.ts,
       avatar: data.avatar,
       bio: data.bio,
+      bw: data.bw,
       following: data.following
     };
     await fetch(dbUrl(`directory/${encodeURIComponent(config.userId)}.json?auth=${token}`), {
@@ -373,6 +376,7 @@ const FirebaseSync = (() => {
         ts: (u && u.ts) || 0,
         avatar: (u && u.avatar) || '',
         bio: (u && u.bio) || '',
+        bw: (u && u.bw) || 0,
         following: toArr(u && u.following).map(String)
       });
     });

@@ -459,6 +459,8 @@ function bindBodyWeight(){
     modal.classList.remove('show');
     input.value='';
     renderBodyWeight();
+    renderProfile();
+    if(typeof fbPush==='function'&&fbCfg().connected)fbPush(false); // score inputs changed — publish
     toast('Body weight saved','success');
   });
   
@@ -778,6 +780,7 @@ async function cloudPayload(doc){
       name:p.name||doc.name||'',
       avatar:p.avatar||'',
       bio:p.bio||'',
+      bw:p.bw||0,
       github:p.github||'',
       following:Array.isArray(p.following)?p.following:[],
       workouts:p.workouts
@@ -794,7 +797,7 @@ async function fbPush(interactive=true){
   }
   try{
     const ts=lastLocalWrite||Date.now();
-    await FirebaseSync.writeDoc({ts,workouts:W});
+    await FirebaseSync.writeDoc({ts,workouts:W,bw:myBW()});
     lastLocalWrite=ts;
     localStorage.setItem('asca_gym_last_write_ts',String(ts));
     if(interactive)toast('Backed up to Firebase','success');
@@ -861,6 +864,7 @@ function startRealtimeSync(){
           name:p.name||f.name||f.id,
           avatar:p.avatar||'',
           bio:p.bio||'',
+          bw:p.bw||0,
           github:p.github||'',
           following:Array.isArray(p.following)?p.following:[],
           workouts:p.workouts
@@ -985,6 +989,7 @@ async function fbPullFollowing(interactive=true){
       name:p.name||f.name||f.id,
       avatar:p.avatar||'',
       bio:p.bio||'',
+      bw:p.bw||0,
       github:p.github||'',
       following:Array.isArray(p.following)?p.following:[],
       workouts:p.workouts
@@ -1197,6 +1202,26 @@ function renderProfile(){
     if(fbBio)fbBio.value=cfg.bio||'';
   }
 
+  // ASCA Score gauge — the avatar ring is the arc (full circle at 150),
+  // the pill under it carries the number
+  const bw=myBW();
+  const score=ascaScore(periodStatsExtended(W,'week').volume,bw);
+  const ring=document.getElementById('profRing');
+  if(ring){
+    const deg=Math.max(Math.min(score/150,1)*360,8);
+    ring.style.background=`conic-gradient(from 220deg, #FF7600, #FFB25A ${deg}deg, rgba(255,255,255,0.07) ${deg}deg)`;
+  }
+  const pill=document.getElementById('profScorePill');
+  if(pill){
+    pill.style.display='';
+    const num=document.getElementById('profScoreNum');
+    if(num)num.textContent=score;
+    pill.classList.toggle('approx',!bw);
+    pill.title=bw
+      ?`ASCA Score — weekly volume ÷ your body weight (${bw} kg): you moved ${score}× your body weight this week`
+      :`ASCA Score is approximate — log your body weight (Log tab) for a real score (assuming ${DEFAULT_BW} kg)`;
+  }
+
   const sessions=W.filter(w=>w&&w.dayType!=='Rest Day');
   let vol=0;
   sessions.forEach(w=>(w.exercises||[]).forEach(e=>e.sets.forEach(s=>{const wv=getSetWeightVal(s);if(wv&&s.reps)vol+=wv*s.reps;})));
@@ -1208,8 +1233,17 @@ function renderProfile(){
   document.getElementById('profFollowing').textContent=cfg.following.length;
 }
 
+/* ── ASCA Score — relative strength ───────────────────────── */
+/* Weekly volume divided by body weight: how many times you moved
+   your own body weight in the last 7 days. Uses each athlete's
+   latest logged body weight (synced via their gym doc); when
+   unknown, 75 kg is assumed and the score is shown as approximate. */
+const DEFAULT_BW=75;
+function ascaScore(weekVol,bw){return Math.round((weekVol||0)/(bw||DEFAULT_BW));}
+function myBW(){const b=getBodyWeight();return (b&&b.weight)||0;}
+
 /* ── Extended Stats for Leaderboard / H2H ─────────────────── */
-let _lbMetric='vol7';
+let _lbMetric='score';
 let _lbTimeframe='week';
 function periodStatsExtended(list, timeframe='week'){
   const today=new Date();today.setHours(23,59,59,999);
@@ -1261,11 +1295,17 @@ function sparklineSvg(data,color){
 function buildLBRows(){
   const fb=fbCfg();const cache=getFriendsCache();const ids=Object.keys(cache.friends);
   const myName=fb.displayName||fb.userId||'You';
-  return [{id:fb.userId,name:myName,me:true,stats:periodStatsExtended(W,_lbTimeframe),workouts:W},
-    ...ids.map(id=>({id,name:cache.friends[id].name||id,me:false,stats:periodStatsExtended(cache.friends[id].workouts||[],_lbTimeframe),workouts:cache.friends[id].workouts||[]}))];
+  const mk=(id,name,me,workouts,bw)=>{
+    const stats=periodStatsExtended(workouts,_lbTimeframe);
+    stats.bw=bw;
+    stats.score=ascaScore(periodStatsExtended(workouts,'week').volume,bw);
+    return {id,name,me,stats,workouts,bw};
+  };
+  return [mk(fb.userId,myName,true,W,myBW()),
+    ...ids.map(id=>mk(id,cache.friends[id].name||id,false,cache.friends[id].workouts||[],cache.friends[id].bw||0))];
 }
-function metricVal(stats,m){return {vol7:stats.volume,week:stats.workouts,sets7:stats.sets,consistency:stats.streak}[m]||stats.volume;}
-function metricLabel(m){return {vol7:'kg',week:'workouts',sets7:'sets',consistency:'day streak'}[m]||'';}
+function metricVal(stats,m){return {score:stats.score,vol7:stats.volume,week:stats.workouts,sets7:stats.sets,consistency:stats.streak}[m]||stats.volume;}
+function metricLabel(m){return {score:'score',vol7:'kg',week:'workouts',sets7:'sets',consistency:'day streak'}[m]||'';}
 
 
 function renderPodium(rows,metric){
@@ -1297,10 +1337,10 @@ function renderLeaderboardRows(rows,metric){
   cmp.innerHTML=below.map((r,i)=>{
     const rank=startRank+i;const v=metricVal(r.stats,metric);
     return `<div class="lb-row${r.me?' lb-me':''}" data-uid="${esc(r.id)}">
-      <div class="lb-rank">${rank}</div>
+      <div class="lb-rank${rank===1?' lb-gold':rank===2?' lb-silver':rank===3?' lb-bronze':''}">${rank}</div>
       <div class="lb-avatar" style="background:${avatarBgOf(r.id)}">${avatarHtmlOf(r.id,r.name)}</div>
       <div class="lb-main">
-        <div class="lb-name">${esc(r.name)}${r.me?'<span class="lb-you">You</span>':''}${sparklineSvg(r.stats.spark,r.me?'#FF6B00':'#3A7BD5')}</div>
+        <div class="lb-name">${esc(r.name)}${r.me?'<span class="lb-you">You</span>':''}${sparklineSvg(r.stats.spark,r.me?'#FF6B00':'#0A84FF')}</div>
         <div class="lb-bar"><div class="lb-fill" style="width:${Math.max((v/maxV)*100,2)}%"></div></div>
       </div>
       <div class="lb-val">${fmtStatNum(v)} <span>${metricLabel(metric)}</span></div></div>`;
@@ -1358,19 +1398,52 @@ function renderH2HPicker(allRows){
 
 function renderH2HBody(a,b){
   const body=document.getElementById('h2hBody');if(!body)return;
-  const dims=[{label:'Volume',aVal:a.stats.volume,bVal:b.stats.volume,unit:'kg'},{label:'Workouts',aVal:a.stats.workouts,bVal:b.stats.workouts,unit:''},{label:'Sets',aVal:a.stats.sets,bVal:b.stats.sets,unit:''},{label:'Heaviest',aVal:a.stats.heaviest,bVal:b.stats.heaviest,unit:'kg'},{label:'Streak',aVal:a.stats.streak,bVal:b.stats.streak,unit:'days'}];
-  const cx=110,cy=110,r=80,n=dims.length;
+  const CA='#FF7600',CB='#0A84FF';
+  const dims=[
+    {label:'Score',aVal:a.stats.score,bVal:b.stats.score,unit:''},
+    {label:'Volume',aVal:a.stats.volume,bVal:b.stats.volume,unit:'kg'},
+    {label:'Workouts',aVal:a.stats.workouts,bVal:b.stats.workouts,unit:''},
+    {label:'Sets',aVal:a.stats.sets,bVal:b.stats.sets,unit:''},
+    {label:'Heaviest',aVal:a.stats.heaviest,bVal:b.stats.heaviest,unit:'kg'},
+    {label:'Streak',aVal:a.stats.streak,bVal:b.stats.streak,unit:'days'}
+  ];
+  const cx=150,cy=122,r=86,n=dims.length;
   const angles=dims.map((_,i)=>(Math.PI*2*i/n)-Math.PI/2);
-  const grid=[0.25,0.5,0.75,1].map(s=>`<polygon points="${angles.map(a=>`${cx+Math.cos(a)*r*s},${cy+Math.sin(a)*r*s}`).join(' ')}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>`).join('');
-  const labels=dims.map((d,i)=>{const x=cx+Math.cos(angles[i])*(r+18),y=cy+Math.sin(angles[i])*(r+14);return `<text x="${x}" y="${y}" fill="rgba(255,255,255,0.5)" font-size="8" font-weight="700" text-anchor="middle" dominant-baseline="central">${d.label}</text>`;}).join('');
-  const norm=vals=>vals.map((v,i)=>{const mx=Math.max(dims[i].aVal,dims[i].bVal,1);return v/mx;});
+  const ringPoly=s=>angles.map(a=>`${(cx+Math.cos(a)*r*s).toFixed(1)},${(cy+Math.sin(a)*r*s).toFixed(1)}`).join(' ');
+  const rings=[0.33,0.66,1].map((s,i)=>`<polygon points="${ringPoly(s)}" fill="none" stroke="rgba(255,255,255,${i===2?0.12:0.05})" stroke-width="1"/>`).join('');
+  const spokes=angles.map(a=>`<line x1="${cx}" y1="${cy}" x2="${(cx+Math.cos(a)*r).toFixed(1)}" y2="${(cy+Math.sin(a)*r).toFixed(1)}" stroke="rgba(255,255,255,0.05)"/>`).join('');
+  // Per-axis verdict: label takes the leader's colour
+  const labels=dims.map((d,i)=>{
+    const lx=cx+Math.cos(angles[i])*(r+22),ly=cy+Math.sin(angles[i])*(r+16);
+    const fill=d.aVal===d.bVal?'rgba(255,255,255,0.45)':(d.aVal>d.bVal?CA:CB);
+    return `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" fill="${fill}" font-size="9.5" font-weight="800" letter-spacing="1" text-anchor="middle" dominant-baseline="central" style="font-family:var(--ff-title),sans-serif;text-transform:uppercase">${d.label.toUpperCase()}</text>`;
+  }).join('');
+  const norm=vals=>vals.map((v,i)=>{const mx=Math.max(dims[i].aVal,dims[i].bVal,1);return Math.max(v/mx,0.03);});
   const aN=norm(dims.map(d=>d.aVal)),bN=norm(dims.map(d=>d.bVal));
-  const pA=angles.map((ang,i)=>`${cx+Math.cos(ang)*r*aN[i]},${cy+Math.sin(ang)*r*aN[i]}`).join(' ');
-  const pB=angles.map((ang,i)=>`${cx+Math.cos(ang)*r*bN[i]},${cy+Math.sin(ang)*r*bN[i]}`).join(' ');
-  const radar=`<svg viewBox="0 0 220 220" style="width:100%;max-width:220px">${grid}${angles.map(a=>`<line x1="${cx}" y1="${cy}" x2="${cx+Math.cos(a)*r}" y2="${cy+Math.sin(a)*r}" stroke="rgba(255,255,255,0.04)"/>`).join('')}<polygon points="${pA}" fill="rgba(255,107,0,0.12)" stroke="#FF6B00" stroke-width="1.5"/><polygon points="${pB}" fill="rgba(58,123,213,0.12)" stroke="#3A7BD5" stroke-width="1.5"/>${labels}</svg>`;
+  const pts=nv=>angles.map((ang,i)=>`${(cx+Math.cos(ang)*r*nv[i]).toFixed(1)},${(cy+Math.sin(ang)*r*nv[i]).toFixed(1)}`).join(' ');
+  const dots=(nv,c)=>angles.map((ang,i)=>`<circle cx="${(cx+Math.cos(ang)*r*nv[i]).toFixed(1)}" cy="${(cy+Math.sin(ang)*r*nv[i]).toFixed(1)}" r="2.6" fill="${c}" stroke="#000" stroke-width="1"/>`).join('');
+  const aWins=dims.filter(d=>d.aVal>d.bVal).length,bWins=dims.filter(d=>d.bVal>d.aVal).length;
+  const aLeads=aWins>=bWins;
+  const polyA=`<polygon points="${pts(aN)}" fill="url(#h2hFillA)" stroke="${CA}" stroke-width="2" stroke-linejoin="round"${aLeads?' filter="url(#h2hGlow)"':''}/>`;
+  const polyB=`<polygon points="${pts(bN)}" fill="url(#h2hFillB)" stroke="${CB}" stroke-width="2" stroke-linejoin="round"${!aLeads?' filter="url(#h2hGlow)"':''}/>`;
+  const radar=`<svg viewBox="0 0 300 244" style="width:100%;max-width:320px;display:block;margin:0 auto">
+    <defs>
+      <linearGradient id="h2hFillA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${CA}" stop-opacity="0.42"/><stop offset="1" stop-color="#FFB25A" stop-opacity="0.08"/></linearGradient>
+      <linearGradient id="h2hFillB" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${CB}" stop-opacity="0.42"/><stop offset="1" stop-color="#64D2FF" stop-opacity="0.08"/></linearGradient>
+      <filter id="h2hGlow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+    ${rings}${spokes}
+    ${aLeads?polyB+polyA:polyA+polyB}
+    ${dots(aN,CA)}${dots(bN,CB)}
+    ${labels}</svg>`;
+  const verdict=aWins===bWins
+    ?`Dead even — ${aWins}–${bWins}`
+    :`${esc(aLeads?a.name:b.name)} leads ${Math.max(aWins,bWins)}–${Math.min(aWins,bWins)}`;
+  const chip=(row,cls)=>`<div class="h2h-chip ${cls}"><span class="h2h-chip-avatar" style="background:${avatarBgOf(row.id)}">${avatarHtmlOf(row.id,row.name)}</span><span class="h2h-chip-name">${esc(row.name)}</span><b>${row.stats.score}</b></div>`;
   const statRows=dims.map(d=>{const total=d.aVal+d.bVal||1;const aW=Math.max((d.aVal/total)*50,1),bW=Math.max((d.bVal/total)*50,1);
-    return `<div class="h2h-stat-left${d.aVal>=d.bVal?' h2h-stat-win':''}">${fmtStatNum(d.aVal)}${d.unit?' '+d.unit:''}</div><div class="h2h-stat-label">${d.label}</div><div class="h2h-stat-right${d.bVal>d.aVal?' h2h-stat-win':''}">${fmtStatNum(d.bVal)}${d.unit?' '+d.unit:''}</div><div class="h2h-stat-bar"><div class="h2h-stat-fill-l" style="width:${aW}%"></div><div class="h2h-stat-fill-r" style="width:${bW}%"></div></div>`;}).join('');
-  body.innerHTML=`<div class="h2h-radar-wrap">${radar}</div><div style="display:flex;justify-content:space-between;padding:0 8px 8px;font-size:0.66rem;font-weight:700"><span style="color:#FF6B00">${esc(a.name)}</span><span style="color:#3A7BD5">${esc(b.name)}</span></div><div class="h2h-stats-grid">${statRows}</div>`;
+    return `<div class="h2h-stat-left${d.aVal>=d.bVal?' h2h-stat-win':''}">${fmtStatNum(d.aVal)}${d.unit?' '+d.unit:''}</div><div class="h2h-stat-label">${d.label}</div><div class="h2h-stat-right${d.bVal>d.aVal?' h2h-stat-win-b':''}">${fmtStatNum(d.bVal)}${d.unit?' '+d.unit:''}</div><div class="h2h-stat-bar"><div class="h2h-stat-fill-l" style="width:${aW}%"></div><div class="h2h-stat-fill-r" style="width:${bW}%"></div></div>`;}).join('');
+  body.innerHTML=`<div class="h2h-legend">${chip(a,'a')}<div class="h2h-verdict">${verdict}</div>${chip(b,'b')}</div>
+    <div class="h2h-radar-wrap">${radar}</div><div class="h2h-stats-grid">${statRows}</div>`;
 }
 
 function renderActivityFeed(allRows){
@@ -1407,7 +1480,7 @@ function showMiniProfile(userId){
   const theirFollowing=isMe?cfg.following.map(f=>f.id):(friendData&&Array.isArray(friendData.following)?friendData.following:(dirEntry?dirEntry.following:[]));
   const theirFollowers=isMe?getFollowers().length:getDirectoryCache().filter(u=>u.id!==userId&&Array.isArray(u.following)&&u.following.includes(userId)).length;
   content.innerHTML=`<div class="mini-profile-hero"><div class="mini-profile-avatar" style="background:${avatarBgOf(userId)}">${avatarHtmlOf(userId,name)}</div><div class="mini-profile-name">${esc(name)}${isMe?' <span class="lb-you">You</span>':''}</div><div class="mini-profile-user">@${esc(userId)}</div>${bio?`<div class="mini-profile-bio">${esc(bio)}</div>`:''}<div class="mini-profile-follows"><span><b>${(theirFollowing||[]).length}</b> Following</span><span><b>${theirFollowers}</b> Followers</span></div>${followsMe?'<div class="mini-profile-mutual"><span class="mutual-chip">Follows you</span></div>':''}</div>
-    <div class="mini-profile-stats"><div class="mini-profile-stat"><div class="mini-profile-stat-val">${sessions.length}</div><div class="mini-profile-stat-label">Workouts</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${fmtStatNum(vol)}</div><div class="mini-profile-stat-label">Volume (kg)</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${stats.week}</div><div class="mini-profile-stat-label">This Week</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${stats.streak}</div><div class="mini-profile-stat-label">Streak 🔥</div></div></div>
+    <div class="mini-profile-stats"><div class="mini-profile-stat"><div class="mini-profile-stat-val mini-profile-score">${ascaScore(periodStatsExtended(workouts,'week').volume,isMe?myBW():((friendData&&friendData.bw)||(dirEntry&&dirEntry.bw)||0))}</div><div class="mini-profile-stat-label">Score</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${sessions.length}</div><div class="mini-profile-stat-label">Workouts</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${fmtStatNum(vol)}</div><div class="mini-profile-stat-label">Volume (kg)</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${stats.streak}</div><div class="mini-profile-stat-label">Streak 🔥</div></div></div>
     ${!isMe?`<div class="mini-profile-actions">${iAmFollowing?`<button class="btn btn-secondary btn-full" id="mpUnfollow">Following</button>`:`<button class="btn btn-primary btn-full" id="mpFollow">Follow</button>`}</div>`:''}
     <div class="mini-profile-heatmap"><div class="mini-profile-heatmap-title">Activity — Last 16 Weeks</div>${gymHeatmapHtml(userId,name,workouts)}</div>`;
   const followBtn=document.getElementById('mpFollow');const unfollowBtn=document.getElementById('mpUnfollow');

@@ -452,7 +452,8 @@
         </div>
         <!-- Metric Tabs -->
         <div class="lb-metric-tabs" id="lbMetricTabs">
-          <button class="lb-metric-tab on" data-metric="vol7">Volume</button>
+          <button class="lb-metric-tab on" data-metric="score">Score</button>
+          <button class="lb-metric-tab" data-metric="vol7">Volume</button>
           <button class="lb-metric-tab" data-metric="week">Workouts</button>
           <button class="lb-metric-tab" data-metric="sets7">Sets</button>
           <button class="lb-metric-tab" data-metric="consistency">Streak</button>
@@ -499,9 +500,10 @@
           <span class="status-dot"></span>
           <span class="status-text" id="fbStatusT">Offline</span>
         </span>
-        <div class="profile-avatar-ring">
+        <div class="profile-avatar-ring" id="profRing">
           <div class="profile-avatar" id="profAvatar">?</div>
           <input type="file" id="fAvatarUpload" accept="image/*" style="display:none">
+          <div class="profile-score-pill" id="profScorePill" style="display:none"><span id="profScoreNum">0</span><em>score</em></div>
         </div>
         <div class="profile-name" id="profName">Athlete</div>
         <div class="profile-username" id="profUser">@—</div>

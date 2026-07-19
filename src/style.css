@@ -1536,6 +1536,14 @@ canvas { width: 100%; height: 100%; }
   color: #1a1a2e; font-weight: 900;
   box-shadow: 0 0 12px rgba(255,215,0,0.35);
 }
+.lb-silver {
+  background: linear-gradient(135deg, #E9EDF2, #98A2B0);
+  color: #1a1a2e; font-weight: 900;
+}
+.lb-bronze {
+  background: linear-gradient(135deg, #E2A16F, #A05A2C);
+  color: #1a1a2e; font-weight: 900;
+}
 .lb-avatar {
   width: 36px; height: 36px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
@@ -1918,11 +1926,41 @@ canvas { width: 100%; height: 100%; }
   color: #fff; cursor: pointer;
 }
 .h2h-body { min-height: 40px; }
+.h2h-legend {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 2px 2px 10px;
+}
+.h2h-chip {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 11px 5px 6px; border-radius: var(--r-full);
+  background: var(--glass-2); border: 1px solid var(--border-light);
+  font-size: 0.72rem; font-weight: 700; min-width: 0;
+}
+.h2h-chip.a { border-color: rgba(255, 118, 0, 0.45); }
+.h2h-chip.b { border-color: rgba(10, 132, 255, 0.45); }
+.h2h-chip-avatar {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.6rem; font-weight: 800; color: #fff;
+  text-transform: uppercase; overflow: hidden; flex-shrink: 0;
+}
+.h2h-chip-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 72px;
+}
+.h2h-chip b { font-family: var(--ff-mono); font-size: 0.74rem; font-weight: 800; }
+.h2h-chip.a b { color: #FF9F45; }
+.h2h-chip.b b { color: #64D2FF; }
+.h2h-verdict {
+  font-family: var(--ff-title); font-size: 0.58rem; font-weight: 800;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--t-3);
+  text-align: center;
+}
 .h2h-radar-wrap {
   display: flex; justify-content: center;
   padding: 8px 0 12px;
 }
-.h2h-radar-wrap svg { max-width: 220px; }
+.h2h-radar-wrap svg { max-width: 320px; }
 .h2h-stats-grid {
   display: grid; grid-template-columns: 1fr auto 1fr;
   gap: 6px 12px; font-size: 0.74rem;
@@ -1941,6 +1979,7 @@ canvas { width: 100%; height: 100%; }
   font-family: var(--ff-mono, monospace);
 }
 .h2h-stat-win { color: var(--accent, #FF6B00); }
+.h2h-stat-win-b { color: var(--c-blue, #0A84FF); }
 .h2h-stat-bar {
   height: 4px; border-radius: 2px;
   background: rgba(255,255,255,0.06);
@@ -1956,7 +1995,7 @@ canvas { width: 100%; height: 100%; }
 .h2h-stat-fill-r {
   position: absolute; left: 50%; top: 0; height: 100%;
   border-radius: 0 2px 2px 0;
-  background: linear-gradient(90deg, #3A7BD5, rgba(58,123,213,0.3));
+  background: linear-gradient(90deg, #0A84FF, rgba(10,132,255,0.3));
   transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -1999,6 +2038,7 @@ canvas { width: 100%; height: 100%; }
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }
 .mini-profile-name { font-size: 1.1rem; font-weight: 800; }
+.mini-profile-score { color: #FFB25A; font-family: var(--ff-mono); }
 .mini-profile-user { font-size: 0.72rem; color: var(--t-3); font-weight: 600; margin-top: 2px; }
 .mini-profile-bio { font-size: 0.74rem; color: var(--t-2); font-weight: 500; margin-top: 6px; line-height: 1.4; max-width: 260px; margin-left: auto; margin-right: auto; }
 .mini-profile-follows { display: flex; justify-content: center; gap: 16px; margin-top: 8px; font-size: 0.72rem; color: var(--t-3); font-weight: 600; }
@@ -2595,22 +2635,39 @@ canvas { width: 100%; height: 100%; }
   background: radial-gradient(ellipse at center, rgba(255, 118, 0, 0.25), rgba(191, 90, 242, 0.1) 40%, transparent 70%);
   filter: blur(10px);
 }
+/* The ring is the ASCA Score gauge: a conic arc (set inline by
+   renderProfile, full circle at 150) — data, not decoration. */
 .profile-avatar-ring {
-  width: 92px; height: 92px; margin: 0 auto 16px;
+  width: 96px; height: 96px; margin: 0 auto 24px;
   border-radius: 50%; padding: 3px;
-  background: conic-gradient(from 210deg, #FF7600, #BF5AF2, #64D2FF, #FF7600);
-  box-shadow: 0 0 24px rgba(255, 118, 0, 0.25), 0 8px 32px rgba(0, 0, 0, 0.3);
-  animation: ringSpin 12s linear infinite;
+  background: conic-gradient(from 220deg, #FF7600, #FFB25A 100deg, rgba(255, 255, 255, 0.07) 100deg);
+  box-shadow: 0 0 24px rgba(255, 118, 0, 0.22), 0 8px 32px rgba(0, 0, 0, 0.3);
   position: relative;
 }
 .profile-avatar-ring::after {
   content: ''; position: absolute; inset: 1px; border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.1); pointer-events: none;
 }
-.profile-avatar-ring .profile-avatar { animation: ringSpin 12s linear infinite reverse; }
-@keyframes ringSpin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) {
-  .profile-avatar-ring, .profile-avatar-ring .profile-avatar { animation: none; }
+.profile-score-pill {
+  position: absolute; left: 50%; bottom: -13px; transform: translateX(-50%);
+  display: flex; align-items: baseline; gap: 4px;
+  background: rgba(18, 12, 6, 0.94);
+  border: 1px solid rgba(255, 118, 0, 0.45);
+  border-radius: var(--r-full); padding: 3px 11px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  white-space: nowrap; z-index: 2;
+}
+.profile-score-pill span {
+  font-family: var(--ff-mono); font-size: 0.88rem; font-weight: 800;
+  color: #FFB25A; letter-spacing: -0.02em;
+}
+.profile-score-pill.approx span::before {
+  content: '≈'; font-size: 0.62rem; margin-right: 2px; color: var(--t-3);
+}
+.profile-score-pill em {
+  font-style: normal; font-family: var(--ff-title); font-size: 0.5rem;
+  font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--t-3);
 }
 .profile-avatar {
   width: 100%; height: 100%; border-radius: 50%;
