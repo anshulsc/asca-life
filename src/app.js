@@ -825,16 +825,26 @@ async function cloudPayload(doc){
   return null;
 }
 
+// Signature of the last payload we successfully wrote to the cloud, so
+// background pushes (fired after every save, score edit and on boot) can
+// skip re-uploading an identical doc. Interactive backups always write.
+let lastPushSig=null;
+function pushSignature(cfg){
+  return JSON.stringify([W,myBW(),cfg.userId,cfg.displayName,cfg.avatar,cfg.bio,cfg.github,(cfg.following||[]).map(f=>f.id)]);
+}
 async function fbPush(interactive=true){
   const cfg=fbCfg();
   if(!cfg.connected){
     if(interactive)toast('Connect Firebase in Settings first','error');
     return false;
   }
+  const sig=pushSignature(cfg);
+  if(!interactive&&sig===lastPushSig)return true; // nothing changed — skip the redundant write
   try{
     const ts=lastLocalWrite||Date.now();
     await FirebaseSync.writeDoc({ts,workouts:W,bw:myBW()});
     lastLocalWrite=ts;
+    lastPushSig=sig;
     localStorage.setItem('asca_gym_last_write_ts',String(ts));
     if(interactive)toast('Backed up to Firebase','success');
     return true;
@@ -858,11 +868,30 @@ function refreshAllUI() {
   renderChart();
 }
 
-let activeStreams={};
+let activeStreams={};              // id (or "_directory") -> EventSource
+let streamMeta={};                 // gym-doc streams: id -> { cb, retries, timer }
+let dirMeta={retries:0,timer:null};// directory stream reconnect state
+let streamRefreshTimer=null;
+let streamsWanted=false;           // false = we intentionally stopped; block reconnects
+// A gym session runs for hours, but the auth token baked into each
+// EventSource URL expires after ~1h. Rebuild every stream with a fresh
+// token well before that, so live sync never dies mid-workout.
+const STREAM_REFRESH_MS=45*60*1000;
+const STREAM_MAX_BACKOFF=60000;
+
+// Reopen a gym-doc stream after a backoff, fetching a fresh token (the one
+// in the dropped URL may simply have expired). Only if we still want it.
+function scheduleStreamReconnect(userId,meta){
+  if(!streamsWanted||!streamMeta[userId])return;
+  const wait=Math.min(2000*Math.pow(2,meta.retries++),STREAM_MAX_BACKOFF);
+  if(meta.timer)clearTimeout(meta.timer);
+  meta.timer=setTimeout(()=>{ if(streamsWanted&&streamMeta[userId])listenToDoc(userId,meta.cb); },wait);
+}
 
 function startRealtimeSync(){
   const cfg=fbCfg();
   if(!cfg.connected)return;
+  streamsWanted=true;
 
   listenToDirectory();
 
@@ -911,6 +940,16 @@ function startRealtimeSync(){
       }).catch(console.warn);
     });
   });
+
+  // Periodic token-refresh rebuild — the safety net that keeps a 4h+
+  // session live even if no error ever fires to trigger a reconnect.
+  if(!streamRefreshTimer){
+    streamRefreshTimer=setInterval(()=>{
+      if(!streamsWanted||!fbCfg().connected)return;
+      closeAllSources();
+      startRealtimeSync();
+    },STREAM_REFRESH_MS);
+  }
 }
 
 function listenToDoc(userId,callback){
@@ -918,13 +957,18 @@ function listenToDoc(userId,callback){
   const cfg=fbCfg();
   if(!cfg.projectId)return;
   const baseUrl=`https://${cfg.projectId}-default-rtdb.firebaseio.com`;
+  const meta=streamMeta[userId]||(streamMeta[userId]={retries:0,timer:null});
+  meta.cb=callback;
 
   FirebaseSync.getIdToken().then(token=>{
+    if(!streamsWanted||!streamMeta[userId])return;   // stopped while fetching token
     const url=`${baseUrl}/gym/${encodeURIComponent(userId)}.json?auth=${token}`;
     const source=new EventSource(url);
     activeStreams[userId]=source;
 
+    source.addEventListener('open',()=>{meta.retries=0;});
     source.addEventListener('put',e=>{
+      meta.retries=0;
       try{
         const packet=JSON.parse(e.data);
         if(packet&&packet.path==='/'&&packet.data){
@@ -937,20 +981,36 @@ function listenToDoc(userId,callback){
 
     source.onerror=err=>{
       console.warn(`[Sync stream err] @${userId}:`,err);
-      source.close();
+      try{source.close();}catch(_){}
       delete activeStreams[userId];
+      scheduleStreamReconnect(userId,meta);          // reopen with a fresh token
     };
-  }).catch(console.warn);
+  }).catch(err=>{
+    console.warn(`[Sync token err] @${userId}:`,err);
+    scheduleStreamReconnect(userId,meta);
+  });
+}
+
+// Close every live EventSource + cancel pending reconnects, but leave
+// streamsWanted / the refresh interval alone (used by the rebuild path).
+function closeAllSources(){
+  Object.values(activeStreams).forEach(source=>{try{source.close();}catch(_){}});
+  activeStreams={};
+  Object.values(streamMeta).forEach(m=>{if(m&&m.timer)clearTimeout(m.timer);});
+  streamMeta={};
+  if(dirMeta.timer){clearTimeout(dirMeta.timer);dirMeta.timer=null;}
 }
 
 function stopRealtimeSync(){
-  Object.values(activeStreams).forEach(source=>{
-    try{source.close();}catch(_){}
-  });
-  activeStreams={};
+  streamsWanted=false;
+  closeAllSources();
+  if(streamRefreshTimer){clearInterval(streamRefreshTimer);streamRefreshTimer=null;}
 }
 
 function stopStream(id){
+  const m=streamMeta[id];
+  if(m&&m.timer)clearTimeout(m.timer);
+  delete streamMeta[id];
   if(!activeStreams[id])return;
   try{activeStreams[id].close();}catch(_){}
   delete activeStreams[id];
@@ -1000,14 +1060,25 @@ function listenToDirectory(){
       renderFriendsCard();
       if(dirChangedHook)dirChangedHook(users);
     };
+    source.addEventListener('open',()=>{dirMeta.retries=0;});
     source.addEventListener('put',e=>{try{const k=JSON.parse(e.data);setPath(k.path,k.data,false);publish();}catch(err){console.warn('[Dir stream]',err);}});
     source.addEventListener('patch',e=>{try{const k=JSON.parse(e.data);setPath(k.path,k.data,true);publish();}catch(err){console.warn('[Dir stream]',err);}});
     source.onerror=err=>{
       console.warn('[Dir stream err]',err);
       try{source.close();}catch(_){}
       delete activeStreams._directory;
+      scheduleDirReconnect();                        // reopen with a fresh token
     };
-  }).catch(console.warn);
+  }).catch(err=>{console.warn('[Dir token err]',err);scheduleDirReconnect();});
+}
+
+// Reopen the directory stream after a backoff (fresh token), unless we
+// intentionally stopped syncing.
+function scheduleDirReconnect(){
+  if(!streamsWanted)return;
+  const wait=Math.min(2000*Math.pow(2,dirMeta.retries++),STREAM_MAX_BACKOFF);
+  if(dirMeta.timer)clearTimeout(dirMeta.timer);
+  dirMeta.timer=setTimeout(()=>{if(streamsWanted)listenToDirectory();},wait);
 }
 
 // Pull every followed user's doc in parallel and refresh the cache
@@ -1151,11 +1222,20 @@ function avatarOf(id){
   const d=getDirectoryCache().find(u=>u.id===id);
   return (d&&d.avatar)||'';
 }
+// Avatars come from other users' cloud docs, so the raw value is
+// untrusted. Only allow an inline image data-URI (what the canvas
+// cropper produces) — anything else can't be a real photo and could be
+// a crafted string trying to break out of the src="" attribute and
+// inject markup into every viewer's feed. Reject → fall back to gradient.
+function safeAvatarUrl(av){
+  av=String(av||'');
+  return /^data:image\/(png|jpe?g|gif|webp|bmp);base64,[A-Za-z0-9+/=\s]+$/i.test(av)?av:'';
+}
 function avatarHtmlOf(id,name){
-  const av=avatarOf(id);
+  const av=safeAvatarUrl(avatarOf(id));
   return av?`<img src="${av}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:initialOf(name);
 }
-function avatarBgOf(id){return avatarOf(id)?'none':avatarGrad(id);}
+function avatarBgOf(id){return safeAvatarUrl(avatarOf(id))?'none':avatarGrad(id);}
 
 // A followed athlete renamed themselves → mirror it into config.following
 // so the follow list / leaderboard show the new name everywhere.
@@ -1213,8 +1293,9 @@ function renderProfile(){
   const username=cfg.userId||(cfg.user&&cfg.user.username)||'';
   const name=cfg.displayName||username||'Athlete';
   
-  if(cfg.avatar){
-    avatar.innerHTML=`<img src="${cfg.avatar}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+  const myAv=safeAvatarUrl(cfg.avatar);
+  if(myAv){
+    avatar.innerHTML=`<img src="${myAv}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
     avatar.style.background='none';
   }else{
     avatar.textContent=(name.trim()[0]||'?');
@@ -2695,8 +2776,24 @@ function bindSettings(){
 
     bFbSave.addEventListener('click',async()=>{
       const fbBioIn=document.getElementById('fbBio');
+      const prevId=fbCfg().userId||'';
+      const newId=fbMyId.value.trim().toLowerCase();
+      // The username doubles as the RTDB node key, so it must be a legal
+      // key ([a-z0-9_-], no . $ # [ ] /) — otherwise the cloud write fails
+      // silently and a crafted value could inject markup elsewhere.
+      if(!newId){toast('Pick a username to sync','error');return;}
+      if(!/^[a-z0-9_-]{1,40}$/.test(newId)){
+        toast('Username can only use letters, numbers, dashes and underscores','error');
+        fbMyId.value=prevId;return;
+      }
+      // Repointing to a different id moves your cloud node — confirm so a
+      // typo doesn't silently orphan your history and followers.
+      if(prevId&&newId!==prevId){
+        const go=window.confirm(`Change your username from @${prevId} to @${newId}?\n\nYour existing cloud history stays under @${prevId}; @${newId} starts a fresh node and current followers keep following @${prevId}.`);
+        if(!go){fbMyId.value=prevId;return;}
+      }
       const updateObj={
-        userId:fbMyId.value.trim().toLowerCase(),
+        userId:newId,
         displayName:fbDisplayName?fbDisplayName.value.trim():'',
         bio:fbBioIn?fbBioIn.value.trim().slice(0,120):'',
         github:fbGithub?fbGithub.value.trim():''
@@ -2760,7 +2857,7 @@ function bindSettings(){
           ?`<button class="btn btn-secondary btn-sm" data-unfollow="${esc(u.id)}">Following</button>`
           :`<button class="btn btn-primary btn-sm" data-follow="${esc(u.id)}" data-fname="${esc(u.name||'')}">Follow</button>`;
       
-      const av=avatarOf(u.id)||u.avatar||'';
+      const av=safeAvatarUrl(avatarOf(u.id)||u.avatar||'');
       const avatarHtml=av?`<img src="${av}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:initialOf(u.name||u.id);
       const avatarBg=av?'none':avatarGrad(u.id);
 
@@ -2936,7 +3033,53 @@ function bindSettings(){
   const copyRulesBtn=document.getElementById('copyFbRules');
   if(copyRulesBtn){
     copyRulesBtn.addEventListener('click',()=>{
-      const rules=`{\n  "rules": {\n    "gym": {\n      "$userId": {\n        ".read": "auth != null",\n        ".write": "auth != null && (data.exists() ? data.child('uid').val() === auth.uid : newData.child('uid').val() === auth.uid)"\n      }\n    },\n    "directory": {\n      ".read": "auth != null",\n      "$userId": {\n        ".write": "auth != null && root.child('gym').child($userId).child('uid').val() === auth.uid"\n      }\n    },\n    "kudos": {\n      ".read": "auth != null",\n      "$ownerId": {\n        "$date": {\n          "$likerUid": {\n            ".write": "auth != null && auth.uid === $likerUid"\n          }\n        }\n      }\n    },\n    "comments": {\n      ".read": "auth != null",\n      "$ownerId": {\n        "$date": {\n          "$commentId": {\n            ".write": "auth != null && (!data.exists() ? newData.child('uid').val() === auth.uid : data.child('uid').val() === auth.uid)",\n            ".validate": "newData.hasChildren(['uid','text','ts'])"\n          }\n        }\n      }\n    }\n  }\n}`;
+      const rules=JSON.stringify({
+        rules: {
+          gym: {
+            // Any signed-in member can read (Strava-style); only the owner
+            // (uid) may write, and the payload is validated + size-capped so
+            // a hostile client can't store malformed or oversized data.
+            $userId: {
+              ".read": "auth != null",
+              ".write": "auth != null && (data.exists() ? data.child('uid').val() === auth.uid : newData.child('uid').val() === auth.uid)",
+              ".validate": "newData.hasChildren(['uid','ts']) && newData.child('uid').val() === auth.uid && newData.child('ts').isNumber()",
+              name:   { ".validate": "newData.isString() && newData.val().length <= 60" },
+              bio:    { ".validate": "newData.isString() && newData.val().length <= 120" },
+              github: { ".validate": "newData.isString() && newData.val().length <= 40" },
+              avatar: { ".validate": "newData.isString() && newData.val().length <= 200000" },
+              bw:     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 700" }
+            }
+          },
+          directory: {
+            ".read": "auth != null",
+            // Writable by the node's owner: self-uid stamp (atomic writes) or
+            // the matching gym node's uid (legacy path). Fields are validated.
+            $userId: {
+              ".write": "auth != null && (newData.child('uid').val() === auth.uid || root.child('gym').child($userId).child('uid').val() === auth.uid)",
+              uid:    { ".validate": "newData.val() === auth.uid" },
+              name:   { ".validate": "newData.isString() && newData.val().length <= 60" },
+              bio:    { ".validate": "newData.isString() && newData.val().length <= 120" },
+              avatar: { ".validate": "newData.isString() && newData.val().length <= 200000" },
+              bw:     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 700" },
+              ts:     { ".validate": "newData.isNumber()" }
+            }
+          },
+          kudos: {
+            ".read": "auth != null",
+            $ownerId: { $date: { $likerUid: {
+              ".write": "auth != null && auth.uid === $likerUid",
+              ".validate": "newData.val() === true"
+            } } }
+          },
+          comments: {
+            ".read": "auth != null",
+            $ownerId: { $date: { $commentId: {
+              ".write": "auth != null && (!data.exists() ? newData.child('uid').val() === auth.uid : data.child('uid').val() === auth.uid)",
+              ".validate": "newData.hasChildren(['uid','text','ts']) && newData.child('uid').val() === auth.uid && newData.child('text').isString() && newData.child('text').val().length <= 300 && newData.child('ts').isNumber()"
+            } } }
+          }
+        }
+      }, null, 2);
       navigator.clipboard.writeText(rules).then(()=>{toast('Database Rules copied!','success');}).catch(()=>{toast('Failed to copy','error');});
     });
   }
@@ -3010,7 +3153,11 @@ function toast(msg,type=''){
   const svg = type === 'success' 
     ? `<svg class="toast-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
     : `<svg class="toast-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
-  t.innerHTML=`<span class="toast-icon-svg">${svg}</span><div>${msg}</div>`;
+  // Only the icon is trusted markup; the message can carry user-controlled
+  // text (usernames, error strings) so it goes in as text, never HTML.
+  const icon=document.createElement('span');icon.className='toast-icon-svg';icon.innerHTML=svg;
+  const body=document.createElement('div');body.textContent=msg;
+  t.appendChild(icon);t.appendChild(body);
   el.appendChild(t);setTimeout(()=>{t.style.animation='toastOut 0.35s ease forwards';setTimeout(()=>t.remove(),350);},2500);
 }
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML.replace(/"/g,'&quot;');}

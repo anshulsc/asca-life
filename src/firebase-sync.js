@@ -187,23 +187,36 @@ const FirebaseSync = (() => {
     saveAuth();
   }
 
-  async function refreshToken() {
-    if (!auth || !auth.refreshToken) throw new Error('Not signed in');
-    const res = await fetch(
-      `https://securetoken.googleapis.com/v1/token?key=${encodeURIComponent(FIREBASE_API_KEY)}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(auth.refreshToken)
+  // Coalesce concurrent refreshes: many calls (readDoc, listUsers, each
+  // EventSource, fbPullFollowing) can hit getIdToken at once on boot. Without
+  // this they'd each POST to securetoken, racing and rotating the refresh
+  // token — one in-flight request serves them all.
+  let refreshInFlight = null;
+  function refreshToken() {
+    if (!auth || !auth.refreshToken) return Promise.reject(new Error('Not signed in'));
+    if (refreshInFlight) return refreshInFlight;
+    const p = (async () => {
+      const res = await fetch(
+        `https://securetoken.googleapis.com/v1/token?key=${encodeURIComponent(FIREBASE_API_KEY)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(auth.refreshToken)
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        // Refresh token revoked/expired — session is dead
+        signOut();
+        throw new Error('Session expired — please sign in again');
       }
-    );
-    const data = await res.json();
-    if (!res.ok) {
-      // Refresh token revoked/expired — session is dead
-      signOut();
-      throw new Error('Session expired — please sign in again');
-    }
-    return setAuthFromTokenResponse(data);
+      return setAuthFromTokenResponse(data);
+    })();
+    refreshInFlight = p;
+    // Release the handle once settled so the next expiry can refresh again;
+    // the identity check avoids clearing a newer refresh started meanwhile.
+    p.catch(() => {}).then(() => { if (refreshInFlight === p) refreshInFlight = null; });
+    return p;
   }
 
   async function getIdToken() {
@@ -313,6 +326,7 @@ const FirebaseSync = (() => {
     if (!isConnected()) throw new Error('Firebase not configured');
     const token = await getIdToken();
 
+    const id = config.userId;
     const data = {
       uid: auth.uid,
       ts: payload.ts || Date.now(),
@@ -325,23 +339,12 @@ const FirebaseSync = (() => {
       workouts: workoutsToMap(payload.workouts)
     };
 
-    const res1 = await fetch(dbUrl(`gym/${encodeURIComponent(config.userId)}.json?auth=${token}`), {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(data)
-    });
-    
-    if (res1.status === 403 || res1.status === 401) {
-      throw new Error('That Sync ID belongs to another account');
-    }
-    if (!res1.ok) throw new Error('Database responded ' + res1.status);
-
-    // Save directory metadata for lightweight listings: name + avatar
-    // for search results, following ids so anyone can compute follower
-    // counts without downloading workout data.
+    // Directory metadata: a lightweight mirror (name/avatar/bio/bw/following)
+    // so listings don't have to download workout data. `uid` lets the rules
+    // validate the write on its own, which is what makes the atomic write below
+    // legal for a brand-new account.
     const meta = {
+      uid: auth.uid,
       name: data.name,
       ts: data.ts,
       avatar: data.avatar,
@@ -349,14 +352,42 @@ const FirebaseSync = (() => {
       bw: data.bw,
       following: data.following
     };
-    await fetch(dbUrl(`directory/${encodeURIComponent(config.userId)}.json?auth=${token}`), {
+
+    // One atomic multi-path update: gym/ and directory/ commit together (or
+    // not at all), in a single round-trip instead of two.
+    const res = await fetch(dbUrl(`.json?auth=${token}`), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [`gym/${id}`]: data, [`directory/${id}`]: meta })
+    });
+    if (res.ok) return true;
+    if (res.status === 403 || res.status === 401) {
+      // Either the id is taken, or the older security rules (which gate the
+      // directory write on an already-existing gym node) reject the atomic
+      // write for a first-time account. Fall back to the sequential path,
+      // which succeeds under both rule sets and surfaces the "taken" error.
+      return writeDocSequential(id, token, data, meta);
+    }
+    throw new Error('Database responded ' + res.status);
+  }
+
+  // Legacy two-step write: gym/ first (so the node exists), then directory/.
+  async function writeDocSequential(id, token, data, meta) {
+    const res1 = await fetch(dbUrl(`gym/${encodeURIComponent(id)}.json?auth=${token}`), {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (res1.status === 403 || res1.status === 401) {
+      throw new Error(`Username "${id}" is taken by another account — pick a different one in My Account`);
+    }
+    if (!res1.ok) throw new Error('Database responded ' + res1.status);
+
+    await fetch(dbUrl(`directory/${encodeURIComponent(id)}.json?auth=${token}`), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(meta)
     });
-
     return true;
   }
 
