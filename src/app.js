@@ -291,6 +291,7 @@ function load(){
     });
     save();
   }
+  stripSeededHistory();
 }
 let lastLocalWrite = parseInt(localStorage.getItem('asca_gym_last_write_ts') || '0', 10);
 function save(){
@@ -307,11 +308,34 @@ function save(){
 // accounts, seeding it into another user's fresh browser would push it
 // to THEIR cloud doc — so only seed for the owner (or standalone
 // builds with no backend); everyone else starts from their cloud doc.
+// An unset userId does NOT seed: the sign-in flow fills it before
+// load(), so an empty id means we don't know whose browser this is.
 function canSeedHistorical(){
   const fb=fbCfg();
   if(!fb.backendReady)return true;
-  const id=(fb.userId||'').toLowerCase();
-  return !id||id.startsWith('anshul');
+  return (fb.userId||'').toLowerCase().startsWith('anshul');
+}
+
+// Older builds did seed other accounts. For non-anshul users, remove
+// any workout still identical to a seed entry (compared through a
+// canonical form that survives the RTDB round-trip, where null weights
+// are dropped); anything the user edited is kept. save() pushes the
+// cleanup to their cloud doc.
+function seedKeyOf(w){
+  return JSON.stringify([w.date,w.dayType,(w.exercises||[]).map(e=>[
+    canonicalName(e.name||''),
+    (e.sets||[]).map(s=>[(s.weight==null||s.weight==='')?null:+s.weight,+s.reps||0,s.notes||''])
+  ])]);
+}
+function stripSeededHistory(){
+  if(canSeedHistorical()||typeof HISTORICAL_DATA==='undefined'||!W.length)return false;
+  const seeds=new Set(HISTORICAL_DATA.map(seedKeyOf));
+  const before=W.length;
+  W=W.filter(w=>!seeds.has(seedKeyOf(w)));
+  if(W.length===before)return false;
+  save();
+  console.log(`[Seed cleanup] removed ${before-W.length} workouts that belong to Anshul's baked-in log`);
+  return true;
 }
 function loadCX(){
   try{
@@ -847,6 +871,7 @@ function startRealtimeSync(){
           if(payload.bio)up.bio=payload.bio;
           if(payload.github)up.github=payload.github;
           if(Object.keys(up).length>0)FirebaseSync.updateConfig(up);
+          stripSeededHistory();
           refreshAllUI();
         }
       }).catch(console.warn);
@@ -1034,6 +1059,7 @@ async function fbRestore(interactive=true){
       W.sort((a,b)=>b.date.localeCompare(a.date));save();
       renderRecent();renderHeatmapCalendar();renderVolWidget();
     }
+    stripSeededHistory();
     const up={};
     if(payload.name)up.displayName=payload.name;
     if(payload.avatar)up.avatar=payload.avatar;
