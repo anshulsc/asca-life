@@ -2179,18 +2179,13 @@ function bindSettings(){
     const fbGithub=document.getElementById('fbGithub');
     const fAvatarUpload=document.getElementById('fAvatarUpload');
     const profAvatar=document.getElementById('profAvatar');
-    let tempAvatarData=null;
-
     if(bEditProfile&&profileEdit){
       bEditProfile.addEventListener('click',()=>{
         const open=profileEdit.classList.toggle('open');
         const hero=document.querySelector('.profile-hero');
         if(hero)hero.classList.toggle('editing',open);
         bEditProfile.textContent=open?'Close':'Edit profile';
-        if(!open){
-          tempAvatarData=null; // clear unsaved
-          renderProfile();
-        }
+        if(!open) renderProfile();
       });
     }
 
@@ -2210,7 +2205,7 @@ function bindSettings(){
         const reader=new FileReader();
         reader.onload=event=>{
           const img=new Image();
-          img.onload=()=>{
+          img.onload=async()=>{
             const canvas=document.createElement('canvas');
             canvas.width=120;
             canvas.height=120;
@@ -2219,10 +2214,19 @@ function bindSettings(){
             const sx=(img.width-minDim)/2;
             const sy=(img.height-minDim)/2;
             ctx.drawImage(img,sx,sy,minDim,minDim,0,0,120,120);
-            tempAvatarData=canvas.toDataURL('image/jpeg',0.7);
+            const avatarDataUrl=canvas.toDataURL('image/jpeg',0.7);
+            const cfg=FirebaseSync.updateConfig({ avatar: avatarDataUrl });
             if(profAvatar){
-              profAvatar.innerHTML=`<img src="${tempAvatarData}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+              profAvatar.innerHTML=`<img src="${avatarDataUrl}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
               profAvatar.style.background='none';
+            }
+            if(cfg.connected){
+              toast('Uploading profile picture...','info');
+              const ok=await fbPush(false);
+              if(ok)toast('Profile picture updated and synced','success');
+              else toast('Profile picture saved locally (cloud offline)','error');
+            }else{
+              toast('Profile picture saved locally','success');
             }
           };
           img.src=event.target.result;
@@ -2249,10 +2253,6 @@ function bindSettings(){
         displayName:fbDisplayName?fbDisplayName.value.trim():'',
         github:fbGithub?fbGithub.value.trim():''
       };
-      if(tempAvatarData!==null){
-        updateObj.avatar=tempAvatarData;
-        tempAvatarData=null;
-      }
       const cfg=FirebaseSync.updateConfig(updateObj);
       setFbStatus(cfg.connected);
       renderProfile();
