@@ -28,7 +28,11 @@ function startApp() {
   // fallback that painted the first frame.
   if(fbCfg().connected){
     startRealtimeSync();
-    fbRestore(false);
+    // Push after the restore settles so every signed-in user has a
+    // fresh doc + directory entry from their first session — otherwise
+    // new accounts are invisible in search and suggestions until they
+    // save something.
+    fbRestore(false).then(()=>fbPush(false)).catch(()=>{});
     fbPullFollowing(false);
   }
   
@@ -2656,8 +2660,17 @@ function bindSettings(){
           const yf=Array.isArray(y.following)&&y.following.includes(cfg.userId)?1:0;
           if(xf!==yf)return yf-xf;
           return (y.ts||0)-(x.ts||0);
-        }).slice(0,5);
-      const html=sugg.map(u=>userRow(u,u.ts?`active ${timeAgo(u.ts)}`:'new athlete')).join('');
+        }).slice(0,12);
+      // Horizontal carousel of athlete cards — several visible at once
+      const html=sugg.length?`<div class="sug-row">${sugg.map(u=>{
+        const followsMe=Array.isArray(u.following)&&cfg.userId&&u.following.includes(cfg.userId);
+        return `<div class="sug-card">
+          <div class="sug-avatar" style="background:${avatarBgOf(u.id)}">${avatarHtmlOf(u.id,u.name)}</div>
+          <div class="sug-name">${esc(u.name||u.id)}</div>
+          <div class="sug-sub">${followsMe?'Follows you':(u.ts?timeAgo(u.ts):'new athlete')}</div>
+          <button class="btn btn-primary btn-sm" data-follow="${esc(u.id)}" data-fname="${esc(u.name||'')}">Follow</button>
+        </div>`;
+      }).join('')}</div>`:'';
       if(wrap){
         wrap.innerHTML=html;
         if(lab)lab.style.display=sugg.length?'block':'none';

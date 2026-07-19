@@ -1651,13 +1651,39 @@ canvas { width: 100%; height: 100%; }
   border: 1px solid rgba(255,107,0,0.2);
 }
 
-/* ── Suggested follows ───────────────────────────────────── */
+/* ── Suggested follows — horizontal athlete-card carousel ── */
 .suggest-label {
   font-family: var(--ff-title); font-size: 0.62rem; font-weight: 800;
   letter-spacing: 0.1em; text-transform: uppercase; color: var(--t-3);
   margin: 14px 2px 6px;
 }
-.soc-suggest { text-align: left; margin: 0 auto 16px; max-width: 340px; }
+.soc-suggest { text-align: left; margin: 0 auto 16px; }
+.sug-row {
+  display: flex; gap: 10px; overflow-x: auto;
+  padding: 4px 2px 8px;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.sug-row::-webkit-scrollbar { display: none; }
+.sug-card {
+  flex: 0 0 116px; display: flex; flex-direction: column;
+  align-items: center; gap: 6px; text-align: center;
+  padding: 14px 10px 12px;
+  border-radius: var(--r-s);
+  background: var(--glass-2); border: 1px solid var(--border-light);
+}
+.sug-avatar {
+  width: 52px; height: 52px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem; font-weight: 800; color: #fff;
+  text-transform: uppercase; overflow: hidden;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+}
+.sug-name {
+  font-size: 0.72rem; font-weight: 700; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sug-sub { font-size: 0.58rem; color: var(--t-3); font-weight: 600; margin-top: -2px; }
+.sug-card .btn { width: 100%; padding: 6px 10px; font-size: 0.66rem; margin-top: 2px; }
 
 /* ── Social empty state ──────────────────────────────────── */
 .soc-empty-card { text-align: center; padding: 40px 24px 32px; }
