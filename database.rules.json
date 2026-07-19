@@ -67,6 +67,15 @@
           }
         }
       }
+    },
+    "progress": {
+      ".read": "auth != null",
+      "$ownerId": {
+        "$picId": {
+          ".write": "auth != null && root.child('gym').child($ownerId).child('uid').val() === auth.uid && (!newData.exists() || newData.child('uid').val() === auth.uid)",
+          ".validate": "!newData.exists() || (newData.hasChildren(['uid','img','ts']) && newData.child('uid').val() === auth.uid && newData.child('img').isString() && newData.child('img').val().length <= 900000 && newData.child('ts').isNumber())"
+        }
+      }
     }
   }
 }

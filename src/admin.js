@@ -240,6 +240,10 @@
     const ws = docWorkouts(id);
     const sess = sessions(ws);
     const doc = DOCS[id];
+    const me = FirebaseSync.getUser();
+    // Deletable only if the node's uid matches the signed-in maintainer —
+    // the same condition the RTDB write rule enforces.
+    const mine = !!(me && doc && doc.uid && doc.uid === me.uid);
     $('adminDrawerHead').innerHTML = `
       ${avatarHtml(u)}
       <div style="min-width:0">
@@ -277,10 +281,50 @@
       </div>
       ${legacy}
       <div class="admin-section-title" style="margin-top:0;font-size:0.9rem">Workout history</div>
-      ${woHtml}`;
+      ${woHtml}
+      <div class="admin-section-title" style="font-size:0.9rem;color:#ff5a5a">Danger zone</div>
+      <div class="admin-wo-meta" style="margin-bottom:10px">${mine
+        ? 'Permanently delete this account’s <b>gym</b> and <b>directory</b> nodes. Use this to clear orphan accounts left behind by username changes.'
+        : 'This account isn’t yours — the database rules only let you delete accounts you own (same login). Deleting it here will be rejected.'}</div>
+      <button id="adminDeleteBtn" class="admin-danger-btn" data-id="${esc(id)}" style="background:${mine ? 'rgba(255,60,60,0.14)' : 'rgba(120,120,120,0.14)'};color:${mine ? '#ff5a5a' : 'var(--t-3)'};border:1px solid ${mine ? 'rgba(255,60,60,0.4)' : 'rgba(120,120,120,0.3)'};border-radius:10px;padding:10px 16px;font-weight:800;font-size:0.82rem;cursor:pointer;font-family:inherit">Delete @${esc(id)}</button>`;
     $('adminDrawerClose').addEventListener('click', closeDrawer);
+    bindDeleteBtn(id);
     $('adminDrawerBg').classList.add('open');
     $('adminDrawer').classList.add('open');
+  }
+
+  // Two-step, no blocking dialog: first click arms, second click deletes.
+  function bindDeleteBtn(id) {
+    const btn = $('adminDeleteBtn');
+    if (!btn) return;
+    let armed = false, timer = null;
+    btn.addEventListener('click', async () => {
+      if (!armed) {
+        armed = true;
+        btn.textContent = 'Click again to confirm delete';
+        timer = setTimeout(() => { armed = false; btn.textContent = 'Delete @' + id; }, 4000);
+        return;
+      }
+      clearTimeout(timer);
+      btn.disabled = true; btn.textContent = 'Deleting…';
+      try {
+        await FirebaseSync.deleteDoc(id);
+        closeDrawer();
+        await loadData();
+      } catch (e) {
+        btn.disabled = false; armed = false;
+        btn.textContent = 'Delete @' + id;
+        let msg = document.getElementById('adminDeleteErr');
+        if (!msg) {
+          msg = document.createElement('div');
+          msg.id = 'adminDeleteErr';
+          msg.className = 'admin-wo-meta';
+          msg.style.cssText = 'color:#ff5a5a;margin-top:10px';
+          btn.insertAdjacentElement('afterend', msg);
+        }
+        msg.textContent = (e && e.message) || 'Delete failed';
+      }
+    });
   }
   function closeDrawer() {
     $('adminDrawerBg').classList.remove('open');

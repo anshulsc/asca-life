@@ -404,6 +404,78 @@ const FirebaseSync = (() => {
     return out;
   }
 
+  // Delete an athlete's gym + directory nodes (orphans left behind by a
+  // username change, or a duplicate account). The RTDB rules only permit a
+  // client to write a node whose `uid` matches the signed-in user, so this
+  // succeeds only for accounts the caller owns — e.g. your own leftover
+  // nodes from renames, which all carry your uid. Directory is deleted
+  // first: its rule falls back to the gym node's uid, which must still
+  // exist to authorize the removal.
+  async function deleteDoc(id) {
+    if (!isConnected()) throw new Error('Not signed in');
+    const token = await getIdToken();
+    const dir = await fetch(dbUrl(`directory/${encodeURIComponent(id)}.json?auth=${token}`), { method: 'DELETE' });
+    if (dir.status === 401 || dir.status === 403) {
+      throw new Error(`Not allowed to delete @${id} — that account isn't yours`);
+    }
+    if (!dir.ok) throw new Error('Database responded ' + dir.status);
+    const gym = await fetch(dbUrl(`gym/${encodeURIComponent(id)}.json?auth=${token}`), { method: 'DELETE' });
+    if (!gym.ok) throw new Error('Database responded ' + gym.status);
+    return true;
+  }
+
+  // ── Progress Pics (base64 JPEG stored in RTDB) ──────────
+  // Each pic is a record at progress/{userId}/{pushId} =
+  // { uid, img, ts, caption, bw } where `img` is a base64 JPEG data-URI
+  // (same approach as avatars, just larger). Stored in the Realtime
+  // Database — NOT Cloud Storage — so it stays on the free Spark plan.
+  // Kept OUT of the gym node so a workout save (which PUT-replaces the
+  // whole gym node) can't wipe it. Keep images small: they download with
+  // the record, and the RTDB rule caps `img` length.
+  async function addProgressPic(dataUri, info) {
+    if (!isConnected()) throw new Error('Not signed in');
+    const img = String(dataUri || '');
+    if (!img.startsWith('data:image/')) throw new Error('Invalid image');
+    if (img.length > 900000) throw new Error('Photo too large — try a smaller image');
+    const token = await getIdToken();
+    const record = {
+      uid: auth.uid,
+      img,
+      ts: Date.now(),
+      caption: String((info && info.caption) || '').slice(0, 80),
+      bw: Math.round(((info && info.bw) || 0) * 10) / 10
+    };
+    const res = await fetch(dbUrl(`progress/${encodeURIComponent(config.userId)}.json?auth=${token}`), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(record)
+    });
+    if (res.status === 401 || res.status === 403) throw new Error('Progress pics need the updated database rules');
+    if (!res.ok) throw new Error('Could not save photo (' + res.status + ')');
+    const out = await res.json();
+    return { pid: (out && out.name) || '', ...record };
+  }
+  // List an athlete's progress pics, newest first.
+  async function listProgressPics(ownerId) {
+    if (!hasBackend() || !ownerId) return [];
+    try {
+      const token = await getIdToken();
+      const res = await fetch(dbUrl(`progress/${encodeURIComponent(ownerId)}.json?auth=${token}`));
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (!data || typeof data !== 'object') return [];
+      return Object.entries(data)
+        .map(([pid, p]) => ({ pid, img: (p && p.img) || '', ts: (p && p.ts) || 0, caption: (p && p.caption) || '', bw: (p && p.bw) || 0 }))
+        .sort((a, b) => b.ts - a.ts);
+    } catch (_) { return []; }
+  }
+  // Remove a pic record.
+  async function deleteProgressPic(pid) {
+    if (!isConnected()) throw new Error('Not signed in');
+    const token = await getIdToken();
+    const del = await fetch(dbUrl(`progress/${encodeURIComponent(config.userId)}/${encodeURIComponent(pid)}.json?auth=${token}`), { method: 'DELETE' });
+    if (!del.ok) throw new Error('Could not delete photo (' + del.status + ')');
+    return true;
+  }
+
   // Lists every directory metadata entry
   async function listUsers() {
     if (!hasBackend()) return [];
@@ -546,6 +618,10 @@ const FirebaseSync = (() => {
     readDoc,
     readAllDocs,
     writeDoc,
+    deleteDoc,
+    addProgressPic,
+    listProgressPics,
+    deleteProgressPic,
     normalizeDocData,
     listUsers,
     readKudos,

@@ -116,6 +116,39 @@
   </div>
 </div>
 
+<!-- Progress Pic — compose (preview + caption before upload) -->
+<div class="modal-bg" id="ppxComposeBg">
+  <div class="modal card">
+    <div class="modal-title">New Progress Pic</div>
+    <div class="ppx-preview-wrap"><img id="ppxPreview" class="ppx-preview" alt="Preview"></div>
+    <div class="input-group" style="margin-bottom:12px">
+      <input type="text" class="input-field" id="ppxCaption" maxlength="80" placeholder="Caption (optional)">
+    </div>
+    <div class="input-group" style="margin-bottom:16px">
+      <input type="number" class="input-field" id="ppxBw" step="0.1" inputmode="decimal" placeholder="Body weight kg (optional)">
+    </div>
+    <div class="modal-acts">
+      <button class="btn btn-secondary btn-full" id="ppxComposeCancel">Cancel</button>
+      <button class="btn btn-primary btn-full" id="ppxComposeSave">Save Photo</button>
+    </div>
+  </div>
+</div>
+
+<!-- Progress Pic — viewer / lightbox -->
+<div class="modal-bg" id="ppxViewBg">
+  <div class="modal card ppx-view-card">
+    <button class="btn-close ppx-view-close" id="ppxViewClose" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="ppx-view-imgwrap"><img id="ppxViewImg" class="ppx-view-img" alt="Progress photo"></div>
+    <div class="ppx-view-meta">
+      <div id="ppxViewCap" class="ppx-view-cap"></div>
+      <div id="ppxViewSub" class="ppx-view-sub"></div>
+    </div>
+    <button class="btn btn-secondary btn-full ppx-view-del" id="ppxViewDel">Delete Photo</button>
+  </div>
+</div>
+
 <!-- Exercise Library Modal -->
 <div class="modal-bg" id="libBg">
   <div class="modal card lib-card">
@@ -403,6 +436,12 @@
         <div class="pr-grid" id="prS"></div>
       </div>
 
+      <!-- Exercise Ranks -->
+      <div class="label label-rank">Exercise Ranks <span class="label-hint">Wood → Diamond</span></div>
+      <div class="card glass-card rank-card">
+        <div class="rank-list" id="rankList"></div>
+      </div>
+
       <!-- Custom Chart Card -->
       <div class="label">Progressive Overload Chart</div>
       <div class="card glass-card chart-card">
@@ -572,6 +611,20 @@
         </div>
         <div id="followList"></div>
         <div id="followersList" style="display:none"></div>
+      </div>
+
+      <!-- Progress Pics -->
+      <div class="label">Progress Pics</div>
+      <div class="card glass-card ppx-card">
+        <div class="ppx-head">
+          <div class="ppx-head-txt">Your transformation timeline — photos sync privately to your account.</div>
+          <button class="ppx-add-btn" id="ppxAdd" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            Add Photo
+          </button>
+          <input type="file" id="ppxUpload" accept="image/*" style="display:none">
+        </div>
+        <div class="ppx-grid" id="ppxGrid"></div>
       </div>
 
       <!-- SECTION 1: ACCOUNT CONNECTION -->

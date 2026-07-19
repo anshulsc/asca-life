@@ -18,7 +18,7 @@ function init(){
 
 function startApp() {
   load();loadCX();fillTypes();bindTabs();bindSearch();bindSets();bindActs();
-  bindHist();bindAna();bindSettings();bindModal();bindLibraryModal();bindVolInsights();bindTimer();bindBodyWeight();bindFriend();
+  bindHist();bindAna();bindSettings();bindModal();bindLibraryModal();bindVolInsights();bindTimer();bindBodyWeight();bindFriend();bindProgressPics();
   setToday();renderRecent();renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderProfile();
   restoreSE();
   
@@ -422,6 +422,7 @@ function bindTabs(){
       if(tgt==='Hist')renderHist();
       if(tgt==='Ana')refreshAna();
       if(tgt==='Soc')renderFriendsCard();
+      if(tgt==='Set')renderProgressPics();
       if(tgt==='Log'){renderBodyWeight();renderHeatmapCalendar();renderVolWidget();}
       
       const container = document.querySelector('.views-container');
@@ -865,6 +866,7 @@ function refreshAllUI() {
   renderVolInsights();
   renderSG();
   renderPRs();
+  renderRanks();
   renderChart();
 }
 
@@ -952,6 +954,32 @@ function startRealtimeSync(){
   }
 }
 
+// Apply one RTDB SSE data event onto a running node snapshot, returning the
+// new full node. `put` replaces the value at `path`; `patch` merges its
+// children in. RTDB only sends a full put at path '/' when the stream opens;
+// every later change to a followed athlete (a freshly logged workout) arrives
+// as a child put or a patch, so we must fold those in to stay current — not
+// just wait for the opening put like the old handler did.
+function applyStreamEvent(node,path,data,merge){
+  const parts=(path||'/').split('/').filter(Boolean);
+  if(!parts.length){                         // event at the node root
+    if(merge)return {...(node||{}),...(data||{})};
+    return data===null?null:(data||{});
+  }
+  const root=(node&&typeof node==='object')?{...node}:{};
+  let cur=root;
+  for(let i=0;i<parts.length-1;i++){         // clone down to the target's parent
+    const k=parts[i];
+    cur[k]=(cur[k]&&typeof cur[k]==='object')?{...cur[k]}:{};
+    cur=cur[k];
+  }
+  const last=parts[parts.length-1];
+  if(data===null)delete cur[last];
+  else if(merge&&data&&typeof data==='object'&&!Array.isArray(data))cur[last]={...(cur[last]||{}),...data};
+  else cur[last]=data;
+  return root;
+}
+
 function listenToDoc(userId,callback){
   if(activeStreams[userId])return;
   const cfg=fbCfg();
@@ -966,17 +994,22 @@ function listenToDoc(userId,callback){
     const source=new EventSource(url);
     activeStreams[userId]=source;
 
+    let nodeState=null;   // last-known full gym node, kept live across the
+                          // opening put + every later put/patch child event.
+    const applyAndEmit=(packet,merge)=>{
+      meta.retries=0;
+      if(!packet)return;
+      nodeState=applyStreamEvent(nodeState,packet.path,packet.data,merge);
+      if(nodeState)callback(nodeState);
+    };
     source.addEventListener('open',()=>{meta.retries=0;});
     source.addEventListener('put',e=>{
-      meta.retries=0;
-      try{
-        const packet=JSON.parse(e.data);
-        if(packet&&packet.path==='/'&&packet.data){
-          callback(packet.data);
-        }
-      }catch(err){
-        console.warn(`[Sync packet err] @${userId}:`,err);
-      }
+      try{applyAndEmit(JSON.parse(e.data),false);}
+      catch(err){console.warn(`[Sync packet err] @${userId}:`,err);}
+    });
+    source.addEventListener('patch',e=>{
+      try{applyAndEmit(JSON.parse(e.data),true);}
+      catch(err){console.warn(`[Sync patch err] @${userId}:`,err);}
     });
 
     source.onerror=err=>{
@@ -2533,6 +2566,59 @@ function renderSG(){
     <div class="widget w-4"><div class="w-val">${te}</div><div class="w-lbl">Exercises</div></div>`;
 }
 
+/* ── Exercise Ranks (Wood → Diamond mastery tiers) ─────────
+   Levelling is driven by accumulated sets logged for an exercise, so it's
+   fair across every movement — no per-exercise weight calibration that
+   would make a lateral raise unrankable next to a deadlift. Thresholds are
+   tunable here; nothing else needs to change if they move. */
+const RANK_TIERS=[
+  {name:'Wood',     min:0,   color:'#a67c52', emoji:'🪵'},
+  {name:'Bronze',   min:12,  color:'#cd7f32', emoji:'🥉'},
+  {name:'Silver',   min:30,  color:'#c0c6cf', emoji:'🥈'},
+  {name:'Gold',     min:60,  color:'#f4c542', emoji:'🥇'},
+  {name:'Platinum', min:120, color:'#5fd3c4', emoji:'💠'},
+  {name:'Diamond',  min:260, color:'#5aa9ff', emoji:'💎'}
+];
+function tierForSets(sets){
+  let idx=0;
+  for(let i=0;i<RANK_TIERS.length;i++)if(sets>=RANK_TIERS[i].min)idx=i;
+  return {tier:RANK_TIERS[idx],next:RANK_TIERS[idx+1]||null,sets};
+}
+// Aggregate every logged set by canonical exercise → tier + quick stats.
+function exerciseRankStats(){
+  const m={};
+  W.forEach(w=>(w.exercises||[]).forEach(ex=>{
+    const k=canonicalName(ex.name);
+    if(!m[k])m[k]={name:k,sets:0,vol:0,maxW:0};
+    (ex.sets||[]).forEach(s=>{
+      m[k].sets++;
+      const wv=getSetWeightVal(s);
+      if(wv&&s.reps)m[k].vol+=wv*s.reps;
+      if(wv>m[k].maxW)m[k].maxW=wv;
+    });
+  }));
+  return Object.values(m).map(e=>({...e,...tierForSets(e.sets)}))
+    .sort((a,b)=>(b.tier.min-a.tier.min)||(b.sets-a.sets));
+}
+function renderRanks(){
+  const el=document.getElementById('rankList');if(!el)return;
+  const rows=exerciseRankStats();
+  if(!rows.length){el.innerHTML='<p class="rank-empty">Log some sets to start ranking up your exercises.</p>';return;}
+  el.innerHTML=rows.map(r=>{
+    const t=r.tier,nx=r.next;
+    const prog=nx?Math.max(4,Math.min(100,Math.round(((r.sets-t.min)/(nx.min-t.min))*100))):100;
+    const sub=nx?`${nx.min-r.sets} more set${nx.min-r.sets===1?'':'s'} → ${nx.name}`:'Max tier reached';
+    return `<div class="rank-row">
+      <div class="rank-badge" style="border-color:${t.color};box-shadow:0 0 14px ${t.color}44"><span class="rank-emoji">${t.emoji}</span></div>
+      <div class="rank-main">
+        <div class="rank-head"><span class="rank-name">${esc(r.name)}</span><span class="rank-tier" style="color:${t.color}">${t.name}</span></div>
+        <div class="rank-bar"><div class="rank-fill" style="width:${prog}%;background:${t.color}"></div></div>
+        <div class="rank-sub">${r.sets} set${r.sets===1?'':'s'}${r.maxW?` · best ${r.maxW}kg`:''} · ${sub}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function renderPRs(){
   const el=document.getElementById('prS');
   const prs={};
@@ -2689,6 +2775,112 @@ function drawChart(pts,canvas,ctx,metric){
 }
 
 /* ── Settings ──────────────────────────────────────────────── */
+/* ── Progress Pics (base64 JPEG in RTDB, synced) ─────────── */
+let _ppxCache=[];         // last-listed pics for the signed-in user
+let _ppxPendingImg=null;  // compressed JPEG data-URI waiting on the compose modal
+
+function ppxReady(){return typeof FirebaseSync!=='undefined'&&FirebaseSync.isConnected&&FirebaseSync.isConnected();}
+
+// Shrink an uploaded photo and re-encode as a JPEG data-URI. Kept small
+// because the image is stored in (and downloaded from) the Realtime
+// Database, same as avatars — just a larger cap.
+function compressToJpeg(file,maxDim,quality){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const img=new Image();
+      img.onload=()=>{
+        let w=img.width,h=img.height;
+        if(w>maxDim||h>maxDim){const r=Math.min(maxDim/w,maxDim/h);w=Math.round(w*r);h=Math.round(h*r);}
+        const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+        cv.getContext('2d').drawImage(img,0,0,w,h);
+        try{resolve(cv.toDataURL('image/jpeg',quality));}
+        catch(_){reject(new Error('Could not process image'));}
+      };
+      img.onerror=()=>reject(new Error('Could not read image'));
+      img.src=ev.target.result;
+    };
+    reader.onerror=()=>reject(new Error('Could not read file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderProgressPics(){
+  const grid=document.getElementById('ppxGrid');if(!grid)return;
+  if(!ppxReady()){grid.innerHTML='<p class="ppx-empty">Sign in to sync progress pics.</p>';return;}
+  grid.innerHTML='<p class="ppx-empty">Loading…</p>';
+  FirebaseSync.listProgressPics(fbCfg().userId).then(list=>{
+    _ppxCache=list;
+    if(!list.length){grid.innerHTML='<p class="ppx-empty">No progress pics yet — tap Add Photo to start your timeline.</p>';return;}
+    grid.innerHTML=list.map(p=>`<button class="ppx-thumb" data-pid="${esc(p.pid)}" style="background-image:url('${esc(p.img)}')" type="button">
+      <span class="ppx-thumb-tag">${esc(new Date(p.ts).toLocaleDateString('en-US',{month:'short',day:'numeric'}))}</span>
+    </button>`).join('');
+    grid.querySelectorAll('.ppx-thumb').forEach(el=>el.addEventListener('click',()=>openPpxViewer(el.dataset.pid)));
+  }).catch(()=>{grid.innerHTML='<p class="ppx-empty">Could not load pics.</p>';});
+}
+
+function bindProgressPics(){
+  const addBtn=document.getElementById('ppxAdd');
+  const fileIn=document.getElementById('ppxUpload');
+  const compBg=document.getElementById('ppxComposeBg');
+  const compImg=document.getElementById('ppxPreview');
+  const compCap=document.getElementById('ppxCaption');
+  const compBw=document.getElementById('ppxBw');
+  const compSave=document.getElementById('ppxComposeSave');
+  const compCancel=document.getElementById('ppxComposeCancel');
+  const viewBg=document.getElementById('ppxViewBg');
+  const viewClose=document.getElementById('ppxViewClose');
+  if(!addBtn||!fileIn||!compBg||!viewBg)return;
+
+  addBtn.addEventListener('click',()=>{
+    if(!ppxReady()){toast('Sign in to add progress pics','error');return;}
+    fileIn.click();
+  });
+  fileIn.addEventListener('change',async e=>{
+    const f=e.target.files[0];e.target.value='';if(!f)return;
+    try{
+      _ppxPendingImg=await compressToJpeg(f,1000,0.75);
+      compImg.src=_ppxPendingImg;
+      compCap.value='';compBw.value=myBW()||'';
+      compBg.classList.add('show');
+    }catch(err){toast(err.message||'Could not process image','error');}
+  });
+  const closeComp=()=>{compBg.classList.remove('show');_ppxPendingImg=null;};
+  compCancel.addEventListener('click',closeComp);
+  compBg.addEventListener('click',e=>{if(e.target===compBg)closeComp();});
+  compSave.addEventListener('click',async()=>{
+    if(!_ppxPendingImg)return;
+    compSave.disabled=true;compSave.textContent='Saving…';
+    try{
+      await FirebaseSync.addProgressPic(_ppxPendingImg,{caption:compCap.value.trim(),bw:parseFloat(compBw.value)||0});
+      closeComp();toast('Progress pic saved','success');renderProgressPics();
+    }catch(err){toast(err.message||'Save failed','error');}
+    finally{compSave.disabled=false;compSave.textContent='Save Photo';}
+  });
+
+  viewClose.addEventListener('click',()=>viewBg.classList.remove('show'));
+  viewBg.addEventListener('click',e=>{if(e.target===viewBg)viewBg.classList.remove('show');});
+}
+
+function openPpxViewer(pid){
+  const p=_ppxCache.find(x=>x.pid===pid);if(!p)return;
+  const viewBg=document.getElementById('ppxViewBg');if(!viewBg)return;
+  document.getElementById('ppxViewImg').src=p.img;
+  document.getElementById('ppxViewCap').textContent=p.caption||'';
+  document.getElementById('ppxViewSub').textContent=`${new Date(p.ts).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}${p.bw?' · '+p.bw+' kg':''}`;
+  // Rebuild the delete button so a fresh two-step handler is bound each open.
+  const old=document.getElementById('ppxViewDel');
+  const del=old.cloneNode(true);old.parentNode.replaceChild(del,old);
+  del.textContent='Delete Photo';let armed=false,timer=null;
+  del.addEventListener('click',async()=>{
+    if(!armed){armed=true;del.textContent='Tap again to confirm';timer=setTimeout(()=>{armed=false;del.textContent='Delete Photo';},4000);return;}
+    clearTimeout(timer);del.disabled=true;del.textContent='Deleting…';
+    try{await FirebaseSync.deleteProgressPic(p.pid);viewBg.classList.remove('show');toast('Photo deleted');renderProgressPics();}
+    catch(err){toast(err.message||'Delete failed','error');del.disabled=false;armed=false;del.textContent='Delete Photo';}
+  });
+  viewBg.classList.add('show');
+}
+
 function bindSettings(){
   // Firebase Cloud Sync settings — the backend itself is baked into
   // firebase-sync.js at build time; users pick a Sync ID and follow others.
@@ -3077,6 +3269,17 @@ function bindSettings(){
               ".write": "auth != null && (!data.exists() ? newData.child('uid').val() === auth.uid : data.child('uid').val() === auth.uid)",
               ".validate": "newData.hasChildren(['uid','text','ts']) && newData.child('uid').val() === auth.uid && newData.child('text').isString() && newData.child('text').val().length <= 300 && newData.child('ts').isNumber()"
             } } }
+          },
+          progress: {
+            // Progress pics stored as base64 JPEG (`img`) directly in RTDB —
+            // no Cloud Storage / billing. Any member can read; only the owner
+            // of that username's gym node may write/delete, the record must
+            // stamp their own uid, and `img` is size-capped (~900KB).
+            ".read": "auth != null",
+            $ownerId: { $picId: {
+              ".write": "auth != null && root.child('gym').child($ownerId).child('uid').val() === auth.uid && (!newData.exists() || newData.child('uid').val() === auth.uid)",
+              ".validate": "!newData.exists() || (newData.hasChildren(['uid','img','ts']) && newData.child('uid').val() === auth.uid && newData.child('img').isString() && newData.child('img').val().length <= 900000 && newData.child('ts').isNumber())"
+            } }
           }
         }
       }, null, 2);

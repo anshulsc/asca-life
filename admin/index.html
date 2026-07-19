@@ -3751,6 +3751,89 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
 
 
+/* ── Exercise Ranks (Wood → Diamond mastery tiers) ── */
+.label-hint {
+  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em;
+  color: var(--t-3); padding: 2px 8px; border-radius: 999px;
+  background: rgba(255,255,255,0.05); border: 1px solid var(--border-light);
+  text-transform: none;
+}
+.rank-card { padding: 8px 8px; }
+.rank-list { display: flex; flex-direction: column; }
+.rank-empty { color: var(--t-3); font-size: 0.9rem; padding: 12px; }
+.rank-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--border-light);
+}
+.rank-row:last-child { border-bottom: none; }
+.rank-badge {
+  width: 42px; height: 42px; flex-shrink: 0;
+  border-radius: 50%; border: 2px solid;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.03);
+}
+.rank-emoji { font-size: 1.15rem; line-height: 1; }
+.rank-main { flex: 1; min-width: 0; }
+.rank-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.rank-name {
+  font-family: var(--ff-title); font-size: 0.9rem; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rank-tier {
+  font-family: var(--ff-title); font-size: 0.72rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.06em; flex-shrink: 0;
+}
+.rank-bar {
+  height: 6px; border-radius: 999px;
+  background: rgba(255,255,255,0.06); overflow: hidden; margin-bottom: 5px;
+}
+.rank-fill { height: 100%; border-radius: 999px; transition: width 0.5s ease; }
+.rank-sub { font-size: 0.68rem; color: var(--t-3); font-family: var(--ff-mono); }
+
+/* ── Progress Pics (Cloud Storage timeline) ── */
+.ppx-card { padding: 16px; }
+.ppx-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.ppx-head-txt { flex: 1; font-size: 0.76rem; color: var(--t-3); line-height: 1.4; }
+.ppx-add-btn {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--c-orange), #ff8a3d);
+  color: #fff; border: none; border-radius: 999px;
+  padding: 9px 16px; font-family: var(--ff-title); font-weight: 800;
+  font-size: 0.78rem; cursor: pointer;
+}
+.ppx-add-btn svg { width: 15px; height: 15px; }
+.ppx-empty { color: var(--t-3); font-size: 0.85rem; padding: 8px 2px; }
+.ppx-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ppx-thumb {
+  position: relative; aspect-ratio: 3 / 4;
+  border-radius: var(--r-s); overflow: hidden; cursor: pointer;
+  border: 1px solid var(--border-light); padding: 0;
+  background-size: cover; background-position: center; background-color: rgba(255,255,255,0.04);
+}
+.ppx-thumb-tag {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 10px 8px 6px; font-size: 0.66rem; font-weight: 700; color: #fff;
+  text-align: left; background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+}
+/* Compose preview */
+.ppx-preview-wrap {
+  border-radius: var(--r-m); overflow: hidden; margin-bottom: 14px;
+  background: rgba(255,255,255,0.04); max-height: 340px; display: flex; justify-content: center;
+}
+.ppx-preview { max-width: 100%; max-height: 340px; object-fit: contain; }
+/* Viewer / lightbox */
+.ppx-view-card { position: relative; padding: 14px; max-width: 440px; }
+.ppx-view-close {
+  position: absolute; top: 10px; right: 10px; z-index: 2;
+  background: rgba(0,0,0,0.45); border-radius: 50%;
+}
+.ppx-view-imgwrap { border-radius: var(--r-m); overflow: hidden; margin-bottom: 12px; background: #000; }
+.ppx-view-img { width: 100%; max-height: 68vh; object-fit: contain; display: block; }
+.ppx-view-cap { font-family: var(--ff-title); font-size: 1rem; font-weight: 800; margin-bottom: 2px; }
+.ppx-view-sub { font-size: 0.78rem; color: var(--t-3); margin-bottom: 14px; }
+.ppx-view-del { color: #ff5a5a; }
+
 
     /* ── Admin console layout (reuses the app's glass design tokens) ── */
     html, body { height: auto; min-height: 100dvh; overflow: auto; display: block; }
@@ -4360,6 +4443,78 @@ const FirebaseSync = (() => {
     return out;
   }
 
+  // Delete an athlete's gym + directory nodes (orphans left behind by a
+  // username change, or a duplicate account). The RTDB rules only permit a
+  // client to write a node whose `uid` matches the signed-in user, so this
+  // succeeds only for accounts the caller owns — e.g. your own leftover
+  // nodes from renames, which all carry your uid. Directory is deleted
+  // first: its rule falls back to the gym node's uid, which must still
+  // exist to authorize the removal.
+  async function deleteDoc(id) {
+    if (!isConnected()) throw new Error('Not signed in');
+    const token = await getIdToken();
+    const dir = await fetch(dbUrl(`directory/${encodeURIComponent(id)}.json?auth=${token}`), { method: 'DELETE' });
+    if (dir.status === 401 || dir.status === 403) {
+      throw new Error(`Not allowed to delete @${id} — that account isn't yours`);
+    }
+    if (!dir.ok) throw new Error('Database responded ' + dir.status);
+    const gym = await fetch(dbUrl(`gym/${encodeURIComponent(id)}.json?auth=${token}`), { method: 'DELETE' });
+    if (!gym.ok) throw new Error('Database responded ' + gym.status);
+    return true;
+  }
+
+  // ── Progress Pics (base64 JPEG stored in RTDB) ──────────
+  // Each pic is a record at progress/{userId}/{pushId} =
+  // { uid, img, ts, caption, bw } where `img` is a base64 JPEG data-URI
+  // (same approach as avatars, just larger). Stored in the Realtime
+  // Database — NOT Cloud Storage — so it stays on the free Spark plan.
+  // Kept OUT of the gym node so a workout save (which PUT-replaces the
+  // whole gym node) can't wipe it. Keep images small: they download with
+  // the record, and the RTDB rule caps `img` length.
+  async function addProgressPic(dataUri, info) {
+    if (!isConnected()) throw new Error('Not signed in');
+    const img = String(dataUri || '');
+    if (!img.startsWith('data:image/')) throw new Error('Invalid image');
+    if (img.length > 900000) throw new Error('Photo too large — try a smaller image');
+    const token = await getIdToken();
+    const record = {
+      uid: auth.uid,
+      img,
+      ts: Date.now(),
+      caption: String((info && info.caption) || '').slice(0, 80),
+      bw: Math.round(((info && info.bw) || 0) * 10) / 10
+    };
+    const res = await fetch(dbUrl(`progress/${encodeURIComponent(config.userId)}.json?auth=${token}`), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(record)
+    });
+    if (res.status === 401 || res.status === 403) throw new Error('Progress pics need the updated database rules');
+    if (!res.ok) throw new Error('Could not save photo (' + res.status + ')');
+    const out = await res.json();
+    return { pid: (out && out.name) || '', ...record };
+  }
+  // List an athlete's progress pics, newest first.
+  async function listProgressPics(ownerId) {
+    if (!hasBackend() || !ownerId) return [];
+    try {
+      const token = await getIdToken();
+      const res = await fetch(dbUrl(`progress/${encodeURIComponent(ownerId)}.json?auth=${token}`));
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (!data || typeof data !== 'object') return [];
+      return Object.entries(data)
+        .map(([pid, p]) => ({ pid, img: (p && p.img) || '', ts: (p && p.ts) || 0, caption: (p && p.caption) || '', bw: (p && p.bw) || 0 }))
+        .sort((a, b) => b.ts - a.ts);
+    } catch (_) { return []; }
+  }
+  // Remove a pic record.
+  async function deleteProgressPic(pid) {
+    if (!isConnected()) throw new Error('Not signed in');
+    const token = await getIdToken();
+    const del = await fetch(dbUrl(`progress/${encodeURIComponent(config.userId)}/${encodeURIComponent(pid)}.json?auth=${token}`), { method: 'DELETE' });
+    if (!del.ok) throw new Error('Could not delete photo (' + del.status + ')');
+    return true;
+  }
+
   // Lists every directory metadata entry
   async function listUsers() {
     if (!hasBackend()) return [];
@@ -4502,6 +4657,10 @@ const FirebaseSync = (() => {
     readDoc,
     readAllDocs,
     writeDoc,
+    deleteDoc,
+    addProgressPic,
+    listProgressPics,
+    deleteProgressPic,
     normalizeDocData,
     listUsers,
     readKudos,
@@ -4757,6 +4916,10 @@ const FirebaseSync = (() => {
     const ws = docWorkouts(id);
     const sess = sessions(ws);
     const doc = DOCS[id];
+    const me = FirebaseSync.getUser();
+    // Deletable only if the node's uid matches the signed-in maintainer —
+    // the same condition the RTDB write rule enforces.
+    const mine = !!(me && doc && doc.uid && doc.uid === me.uid);
     $('adminDrawerHead').innerHTML = `
       ${avatarHtml(u)}
       <div style="min-width:0">
@@ -4794,10 +4957,50 @@ const FirebaseSync = (() => {
       </div>
       ${legacy}
       <div class="admin-section-title" style="margin-top:0;font-size:0.9rem">Workout history</div>
-      ${woHtml}`;
+      ${woHtml}
+      <div class="admin-section-title" style="font-size:0.9rem;color:#ff5a5a">Danger zone</div>
+      <div class="admin-wo-meta" style="margin-bottom:10px">${mine
+        ? 'Permanently delete this account’s <b>gym</b> and <b>directory</b> nodes. Use this to clear orphan accounts left behind by username changes.'
+        : 'This account isn’t yours — the database rules only let you delete accounts you own (same login). Deleting it here will be rejected.'}</div>
+      <button id="adminDeleteBtn" class="admin-danger-btn" data-id="${esc(id)}" style="background:${mine ? 'rgba(255,60,60,0.14)' : 'rgba(120,120,120,0.14)'};color:${mine ? '#ff5a5a' : 'var(--t-3)'};border:1px solid ${mine ? 'rgba(255,60,60,0.4)' : 'rgba(120,120,120,0.3)'};border-radius:10px;padding:10px 16px;font-weight:800;font-size:0.82rem;cursor:pointer;font-family:inherit">Delete @${esc(id)}</button>`;
     $('adminDrawerClose').addEventListener('click', closeDrawer);
+    bindDeleteBtn(id);
     $('adminDrawerBg').classList.add('open');
     $('adminDrawer').classList.add('open');
+  }
+
+  // Two-step, no blocking dialog: first click arms, second click deletes.
+  function bindDeleteBtn(id) {
+    const btn = $('adminDeleteBtn');
+    if (!btn) return;
+    let armed = false, timer = null;
+    btn.addEventListener('click', async () => {
+      if (!armed) {
+        armed = true;
+        btn.textContent = 'Click again to confirm delete';
+        timer = setTimeout(() => { armed = false; btn.textContent = 'Delete @' + id; }, 4000);
+        return;
+      }
+      clearTimeout(timer);
+      btn.disabled = true; btn.textContent = 'Deleting…';
+      try {
+        await FirebaseSync.deleteDoc(id);
+        closeDrawer();
+        await loadData();
+      } catch (e) {
+        btn.disabled = false; armed = false;
+        btn.textContent = 'Delete @' + id;
+        let msg = document.getElementById('adminDeleteErr');
+        if (!msg) {
+          msg = document.createElement('div');
+          msg.id = 'adminDeleteErr';
+          msg.className = 'admin-wo-meta';
+          msg.style.cssText = 'color:#ff5a5a;margin-top:10px';
+          btn.insertAdjacentElement('afterend', msg);
+        }
+        msg.textContent = (e && e.message) || 'Delete failed';
+      }
+    });
   }
   function closeDrawer() {
     $('adminDrawerBg').classList.remove('open');
