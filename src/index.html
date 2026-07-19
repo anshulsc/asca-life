@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Asca Gym</title>
-  <link rel="stylesheet" href="style.css?v=2.3">
+  <link rel="stylesheet" href="style.css?v=2.4">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230A84FF' stroke-width='2'><path d='M6 3h12l4 6-10 13L2 9z'/></svg>">
 </head>
 <body>
@@ -715,12 +715,12 @@
             <ol>
               <li>Go to <strong>console.firebase.google.com</strong> and create a project (any name, Analytics off).</li>
               <li>Open <strong>Build &gt; Authentication &gt; Get started</strong> and enable <strong>Email/Password</strong> sign-in method.</li>
-              <li>Open <strong>Build &gt; Firestore Database &gt; Create database</strong>, choose <strong>Production mode</strong> and region.</li>
+              <li>Open <strong>Build &gt; Realtime Database &gt; Create database</strong>, choose location, and start in <strong>locked mode</strong>.</li>
               <li>In the <strong>Rules</strong> tab, paste rules (button below) and click <strong>Publish</strong>.</li>
               <li>Open <strong>Project settings</strong> (gear icon): copy <strong>Project ID</strong> and Web App <strong>apiKey</strong>.</li>
               <li>Paste both into <code>src/firebase-sync.js</code>, run <code>node build.js</code>, and push.</li>
             </ol>
-            <button class="btn btn-secondary btn-sm btn-full" id="copyFbRules" style="margin-top: 10px;">Copy Firestore Rules</button>
+            <button class="btn btn-secondary btn-sm btn-full" id="copyFbRules" style="margin-top: 10px;">Copy Database Rules</button>
           </div>
         </div>
       </div>

@@ -22,15 +22,17 @@ function startApp() {
   setToday();renderRecent();renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderProfile();
   restoreSE();
   
-  // Real-time synchronization loop: sync own updates and friends every 8s
+  // Real-time synchronization stream: sub-second updates using EventSource
   if(fbCfg().connected){
-    syncRealtime();
+    startRealtimeSync();
   }
-  setInterval(syncRealtime, 8000);
   
   document.addEventListener('visibilitychange',()=>{
-    if(!document.hidden&&fbCfg().connected){
-      syncRealtime();
+    if(!document.hidden){
+      stopRealtimeSync();
+      startRealtimeSync();
+    }else{
+      stopRealtimeSync();
     }
   });
 
@@ -818,20 +820,21 @@ function refreshAllUI() {
   renderChart();
 }
 
-async function syncRealtime() {
-  const fb=fbCfg();
-  if(!fb.connected||document.hidden)return;
-  try{
-    const doc=await FirebaseSync.readDoc(fb.userId);
-    if(doc&&doc.blob){
-      if(doc.ts>lastLocalWrite){
-        const payload=await decodeProgressCode(doc.blob);
+let activeStreams={};
+
+function startRealtimeSync(){
+  const cfg=fbCfg();
+  if(!cfg.connected)return;
+
+  listenToDoc(cfg.userId,data=>{
+    if(data&&data.ts>lastLocalWrite){
+      decodeProgressCode(data.blob).then(payload=>{
         if(payload&&Array.isArray(payload.workouts)){
           W=payload.workouts;
           try{
             localStorage.setItem(WK,encryptStr(JSON.stringify(W)));
-            lastLocalWrite=doc.ts;
-            localStorage.setItem('asca_gym_last_write_ts',String(doc.ts));
+            lastLocalWrite=data.ts;
+            localStorage.setItem('asca_gym_last_write_ts',String(data.ts));
           }catch(_){}
           const up={};
           if(payload.name)up.displayName=payload.name;
@@ -840,20 +843,64 @@ async function syncRealtime() {
           if(Object.keys(up).length>0)FirebaseSync.updateConfig(up);
           refreshAllUI();
         }
-      }else if(doc.ts<lastLocalWrite){
-        await fbPush(false);
+      }).catch(console.warn);
+    }
+  });
+
+  cfg.following.forEach(f=>{
+    listenToDoc(f.id,data=>{
+      if(data&&data.blob){
+        decodeProgressCode(data.blob).then(p=>{
+          saveFriendEntry(f.id,{
+            ts:data.ts||p.ts||Date.now(),
+            name:f.name||p.name||f.id,
+            avatar:p.avatar||'',
+            github:p.github||'',
+            following:Array.isArray(p.following)?p.following:[],
+            workouts:p.workouts
+          });
+          renderFriendsCard();
+        }).catch(console.warn);
       }
-    }
-  }catch(e){
-    console.warn('[SyncRealtime Own]',e);
-  }
-  if(fb.following.length){
-    try{
-      await fbPullFollowing(false);
-    }catch(e){
-      console.warn('[SyncRealtime Friends]',e);
-    }
-  }
+    });
+  });
+}
+
+function listenToDoc(userId,callback){
+  if(activeStreams[userId])return;
+  const cfg=fbCfg();
+  if(!cfg.projectId)return;
+  const baseUrl=`https://${cfg.projectId}-default-rtdb.firebaseio.com`;
+
+  FirebaseSync.getIdToken().then(token=>{
+    const url=`${baseUrl}/gym/${encodeURIComponent(userId)}.json?auth=${token}`;
+    const source=new EventSource(url);
+    activeStreams[userId]=source;
+
+    source.addEventListener('put',e=>{
+      try{
+        const packet=JSON.parse(e.data);
+        if(packet&&packet.path==='/'&&packet.data){
+          callback(packet.data);
+        }
+      }catch(err){
+        console.warn(`[Sync packet err] @${userId}:`,err);
+      }
+    });
+
+    source.onerror=err=>{
+      console.warn(`[Sync stream err] @${userId}:`,err);
+      source.close();
+      delete activeStreams[userId];
+    };
+  }).catch(console.warn);
+}
+
+function stopRealtimeSync(){
+  Object.values(activeStreams).forEach(source=>{
+    try{source.close();}catch(_){}
+  });
+  activeStreams={};
 }
 
 // Pull every followed user's doc in parallel and refresh the cache
@@ -2420,8 +2467,8 @@ function bindSettings(){
   const copyRulesBtn=document.getElementById('copyFbRules');
   if(copyRulesBtn){
     copyRulesBtn.addEventListener('click',()=>{
-      const rules=`rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    // Reading requires sign-in; each doc is claimed by the first\n    // account that writes it (uid) and only that account can update.\n    // 'name' is the public display name shown in Find Friends search.\n    match /gym/{syncId} {\n      allow read: if request.auth != null;\n      allow create: if request.auth != null\n                    && request.resource.data.uid == request.auth.uid\n                    && request.resource.data.keys().hasOnly(['uid', 'ts', 'blob', 'name'])\n                    && request.resource.data.blob is string\n                    && request.resource.data.blob.size() < 900000\n                    && (!('name' in request.resource.data) || (request.resource.data.name is string && request.resource.data.name.size() < 100));\n      allow update: if request.auth != null\n                    && resource.data.uid == request.auth.uid\n                    && request.resource.data.uid == request.auth.uid\n                    && request.resource.data.keys().hasOnly(['uid', 'ts', 'blob', 'name'])\n                    && request.resource.data.blob is string\n                    && request.resource.data.blob.size() < 900000\n                    && (!('name' in request.resource.data) || (request.resource.data.name is string && request.resource.data.name.size() < 100));\n    }\n  }\n}`;
-      navigator.clipboard.writeText(rules).then(()=>{toast('Rules copied!','success');}).catch(()=>{toast('Failed to copy','error');});
+      const rules=`{\n  "rules": {\n    "gym": {\n      "$userId": {\n        ".read": "auth != null",\n        ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || newData.child('uid').val() === auth.uid)"\n      }\n    },\n    "directory": {\n      "$userId": {\n        ".read": "auth != null",\n        ".write": "auth != null && (!data.exists() || root.child('gym').child($userId).child('uid').val() === auth.uid)"\n      }\n    }\n  }\n}`;
+      navigator.clipboard.writeText(rules).then(()=>{toast('Database Rules copied!','success');}).catch(()=>{toast('Failed to copy','error');});
     });
   }
 

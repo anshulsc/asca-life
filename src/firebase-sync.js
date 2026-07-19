@@ -23,6 +23,7 @@ const FirebaseSync = (() => {
   // ── The one shared backend (fill in after creating the project) ──
   const FIREBASE_PROJECT_ID = 'asca-gym';
   const FIREBASE_API_KEY = 'AIzaSyCAvGn9blvhx-sGINHwbasYcx8LH1A-4mk';
+  const FIREBASE_RTDB_URL = 'https://asca-gym-default-rtdb.firebaseio.com';
 
   // Users sign in with a username; Firebase Auth only speaks email, so
   // usernames are mapped to a synthetic address on this fake domain.
@@ -224,94 +225,87 @@ const FirebaseSync = (() => {
     return auth ? { uid: auth.uid, email: auth.email, username: emailToUsername(auth.email) } : null;
   }
 
-  // ── Firestore ────────────────────────────────────────────
-  function docUrl(docId) {
-    return 'https://firestore.googleapis.com/v1/projects/' +
-      encodeURIComponent(FIREBASE_PROJECT_ID) +
-      '/databases/(default)/documents/gym/' +
-      encodeURIComponent(docId);
+  // ── Firebase Realtime Database ───────────────────────────
+  function dbUrl(path) {
+    const baseUrl = (typeof FIREBASE_RTDB_URL !== 'undefined' && FIREBASE_RTDB_URL)
+      ? FIREBASE_RTDB_URL.replace(/\/$/, '')
+      : `https://${FIREBASE_PROJECT_ID}-default-rtdb.firebaseio.com`;
+    return `${baseUrl}/${path}`;
   }
 
   // Read a user's doc; returns { uid, ts, blob } or null when missing.
   async function readDoc(docId) {
     if (!hasBackend() || !docId) return null;
     const token = await getIdToken();
-    const res = await fetch(docUrl(docId), {
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error('Firestore responded ' + res.status);
-    const doc = await res.json();
-    const f = doc.fields || {};
+    const res = await fetch(dbUrl(`gym/${encodeURIComponent(docId)}.json?auth=${token}`));
+    if (!res.ok) throw new Error('Database responded ' + res.status);
+    const data = await res.json();
+    if (!data) return null;
     return {
-      uid: f.uid && f.uid.stringValue ? f.uid.stringValue : '',
-      ts: f.ts ? parseInt(f.ts.integerValue || f.ts.doubleValue || 0, 10) : 0,
-      blob: f.blob && f.blob.stringValue ? f.blob.stringValue : ''
+      uid: data.uid || '',
+      ts: data.ts || 0,
+      blob: data.blob || ''
     };
   }
 
-  // Create-or-overwrite gym/{userId} with { uid, ts, blob, name }.
-  // The top-level name field makes user search possible without
-  // decoding blobs; if the project still runs the older rules that
-  // reject it, we retry without the field so sync keeps working.
+  // Create-or-overwrite gym/{userId} with { uid, ts, blob, name } & directory metadata.
   async function writeDoc(payload) {
     loadConfig();
     if (!isConnected()) throw new Error('Firebase not configured');
     const token = await getIdToken();
 
-    async function attempt(includeName) {
-      const fields = {
-        uid: { stringValue: auth.uid },
-        ts: { integerValue: String(payload.ts || Date.now()) },
-        blob: { stringValue: payload.blob || '' }
-      };
-      if (includeName) {
-        fields.name = { stringValue: (config.displayName || config.userId || '').slice(0, 60) };
-      }
-      return fetch(docUrl(config.userId), {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + token
-        },
-        body: JSON.stringify({ fields })
-      });
-    }
+    const data = {
+      uid: auth.uid,
+      ts: payload.ts || Date.now(),
+      blob: payload.blob || '',
+      name: (config.displayName || config.userId || '').slice(0, 60)
+    };
 
-    let res = await attempt(true);
-    if (res.status === 403) res = await attempt(false);
-    if (res.status === 403) throw new Error('That Sync ID belongs to another account');
-    if (!res.ok) throw new Error('Firestore responded ' + res.status);
+    const res1 = await fetch(dbUrl(`gym/${encodeURIComponent(config.userId)}.json?auth=${token}`), {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+    
+    if (res1.status === 403 || res1.status === 401) {
+      throw new Error('That Sync ID belongs to another account');
+    }
+    if (!res1.ok) throw new Error('Database responded ' + res1.status);
+
+    // Save directory metadata for lightweight listings
+    const meta = {
+      name: data.name,
+      ts: data.ts
+    };
+    await fetch(dbUrl(`directory/${encodeURIComponent(config.userId)}.json?auth=${token}`), {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(meta)
+    });
+
     return true;
   }
 
-  // ── User directory (for Find Friends search) ─────────────
-  // Lists every gym/ doc's id + display name via a field mask, so no
-  // blobs are downloaded. Fine at this scale; paginates just in case.
+  // Lists every directory metadata entry
   async function listUsers() {
     if (!hasBackend()) return [];
     const token = await getIdToken();
+    const res = await fetch(dbUrl(`directory.json?auth=${token}`));
+    if (!res.ok) throw new Error('Database responded ' + res.status);
+    const data = await res.json();
+    if (!data) return [];
     const users = [];
-    let pageToken = '';
-    do {
-      const url = 'https://firestore.googleapis.com/v1/projects/' +
-        encodeURIComponent(FIREBASE_PROJECT_ID) +
-        '/databases/(default)/documents/gym?pageSize=300&mask.fieldPaths=name&mask.fieldPaths=ts' +
-        (pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : '');
-      const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
-      if (!res.ok) throw new Error('Firestore responded ' + res.status);
-      const data = await res.json();
-      (data.documents || []).forEach(d => {
-        const id = decodeURIComponent(d.name.split('/').pop());
-        const f = d.fields || {};
-        users.push({
-          id,
-          name: f.name && f.name.stringValue ? f.name.stringValue : '',
-          ts: f.ts ? parseInt(f.ts.integerValue || 0, 10) : 0
-        });
+    Object.entries(data).forEach(([id, u]) => {
+      users.push({
+        id,
+        name: u.name || id,
+        ts: u.ts || 0
       });
-      pageToken = data.nextPageToken || '';
-    } while (pageToken);
+    });
     return users;
   }
 
@@ -343,6 +337,7 @@ const FirebaseSync = (() => {
     signOut,
     restoreSession,
     getUser,
+    getIdToken,
     readDoc,
     writeDoc,
     listUsers,
