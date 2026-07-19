@@ -833,6 +833,11 @@ async function syncRealtime() {
             lastLocalWrite=doc.ts;
             localStorage.setItem('asca_gym_last_write_ts',String(doc.ts));
           }catch(_){}
+          const up={};
+          if(payload.name)up.displayName=payload.name;
+          if(payload.avatar)up.avatar=payload.avatar;
+          if(payload.github)up.github=payload.github;
+          if(Object.keys(up).length>0)FirebaseSync.updateConfig(up);
           refreshAllUI();
         }
       }else if(doc.ts<lastLocalWrite){
@@ -909,6 +914,12 @@ async function fbRestore(interactive=true){
       W.sort((a,b)=>b.date.localeCompare(a.date));save();
       renderRecent();renderHeatmapCalendar();renderVolWidget();
     }
+    const up={};
+    if(payload.name)up.displayName=payload.name;
+    if(payload.avatar)up.avatar=payload.avatar;
+    if(payload.github)up.github=payload.github;
+    if(Object.keys(up).length>0)FirebaseSync.updateConfig(up);
+    refreshAllUI();
     if(interactive)toast(added?`Restored ${added} sessions from cloud`:'Already up to date','success');
     return added;
   }catch(e){
@@ -1002,6 +1013,18 @@ function renderProfile(){
     }else{
       githubLink.style.display='none';
     }
+  }
+
+  // Repopulate form inputs if not editing
+  const hero=document.querySelector('.profile-hero');
+  const isEditing=hero&&hero.classList.contains('editing');
+  if(!isEditing){
+    const fbMyId=document.getElementById('fbMyId');
+    const fbDisplayName=document.getElementById('fbDisplayName');
+    const fbGithub=document.getElementById('fbGithub');
+    if(fbMyId)fbMyId.value=cfg.userId||'';
+    if(fbDisplayName)fbDisplayName.value=cfg.displayName||'';
+    if(fbGithub)fbGithub.value=cfg.github||'';
   }
 
   const sessions=W.filter(w=>w&&w.dayType!=='Rest Day');
