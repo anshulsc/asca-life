@@ -2881,6 +2881,66 @@ function playBeep() {
   } catch (_) {}
 }
 
+/* ── Timer sound ──────────────────────────────────────────── */
+/* The ring must fire even when the app is backgrounded, where browsers
+   suspend Web Audio and throttle JS timers. So: starting the timer (a
+   user gesture) plays a looping silent WAV through a real <audio>
+   element — that keeps the page's audio session alive (and its timers
+   running) — and when time's up the ring plays through that same,
+   already-unlocked element. Both sounds are synthesized at runtime, no
+   audio assets in the bundle. */
+const timerSound=(()=>{
+  let el=null,ringUrl=null,silenceUrl=null;
+  function wavUrl(render,seconds){
+    const sr=22050,n=Math.floor(sr*seconds);
+    const buf=new ArrayBuffer(44+n*2),v=new DataView(buf);
+    const ws=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};
+    ws(0,'RIFF');v.setUint32(4,36+n*2,true);ws(8,'WAVEfmt ');
+    v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+    v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);
+    ws(36,'data');v.setUint32(40,n*2,true);
+    for(let i=0;i<n;i++){const s=Math.max(-1,Math.min(1,render(i/sr)));v.setInt16(44+i*2,s*32767,true);}
+    return URL.createObjectURL(new Blob([buf],{type:'audio/wav'}));
+  }
+  // Two rounds of a rising three-note chime (A5 → D6 → G6)
+  function getRing(){
+    if(!ringUrl)ringUrl=wavUrl(t=>{
+      let s=0;
+      [[0,880],[0.28,1174.7],[0.56,1568],[1.2,880],[1.48,1174.7],[1.76,1568]].forEach(([at,f])=>{
+        const dt=t-at;
+        if(dt>0&&dt<0.5)s+=Math.sin(2*Math.PI*f*dt)*0.32*Math.exp(-dt*7);
+      });
+      return s;
+    },2.5);
+    return ringUrl;
+  }
+  function getSilence(){
+    if(!silenceUrl)silenceUrl=wavUrl(()=>0,1);
+    return silenceUrl;
+  }
+  function ensureEl(){
+    if(!el){el=new Audio();el.setAttribute('playsinline','');el.preload='auto';}
+    return el;
+  }
+  return {
+    arm(){ // call from the user gesture that starts/resumes the timer
+      try{
+        const a=ensureEl();a.loop=true;
+        if(a.src!==getSilence())a.src=getSilence();
+        a.play().catch(()=>{});
+      }catch(_){}
+    },
+    ring(){
+      try{if(navigator.vibrate)navigator.vibrate([300,150,300,150,600]);}catch(_){}
+      try{
+        const a=ensureEl();a.loop=false;a.src=getRing();
+        a.play().catch(()=>{playBeep();});
+      }catch(_){playBeep();}
+    },
+    disarm(){try{if(el){el.pause();el.loop=false;}}catch(_){}}
+  };
+})();
+
 function bindTimer() {
   const bar=document.getElementById('gtBar');const display=document.getElementById('gtTime');
   const desc=document.getElementById('gtDesc');const fill=document.getElementById('gtFill');
@@ -2908,6 +2968,7 @@ function bindTimer() {
   function start(sec) {
     if(timerInterval)clearInterval(timerInterval);
     timerSecs=sec;timerTotal=sec;timerRunning=true;
+    timerSound.arm();
     timerEndTime = Date.now() + sec * 1000;
     bar.classList.remove('hidden');bar.classList.add('visible');
     updateDisplay();desc.textContent="Resting...";
@@ -2919,13 +2980,14 @@ function bindTimer() {
   function stopTimer(completed=false) {
     if(timerInterval){clearInterval(timerInterval);timerInterval=null;}
     timerRunning=false;timerEndTime=0;playIcon.style.display='block';pauseIcon.style.display='none';
-    if(completed){desc.textContent="Time to lift!";playBeep();toast("Rest complete!","success");
+    if(completed){desc.textContent="Time to lift!";timerSound.ring();toast("Rest complete!","success");
       setTimeout(()=>{if(!timerRunning&&timerSecs===0){bar.classList.remove('visible');bar.classList.add('hidden');document.querySelectorAll('.btn-timer-chip').forEach(btn=>btn.classList.remove('active'));}},5000);
-    }else{desc.textContent="Paused";}
+    }else{desc.textContent="Paused";timerSound.disarm();}
   }
 
   function resume() {
     if(timerSecs<=0)return;timerRunning=true;
+    timerSound.arm();
     timerEndTime = Date.now() + timerSecs * 1000;
     playIcon.style.display='none';pauseIcon.style.display='block';desc.textContent="Resting...";
     timerInterval=setInterval(tick, 250);
@@ -2940,8 +3002,8 @@ function bindTimer() {
 
   document.addEventListener('click',e=>{const btn=e.target.closest('.btn-timer-chip');if(btn){start(parseInt(btn.dataset.sec));}});
   toggle.addEventListener('click',()=>{if(timerRunning)stopTimer();else if(timerSecs>0)resume();else start(60);});
-  reset.addEventListener('click',()=>{if(timerInterval)clearInterval(timerInterval);timerInterval=null;timerEndTime=0;timerSecs=timerTotal;timerRunning=false;updateDisplay();desc.textContent="Reset";playIcon.style.display='block';pauseIcon.style.display='none';});
-  close.addEventListener('click',()=>{if(timerInterval)clearInterval(timerInterval);timerInterval=null;timerRunning=false;timerEndTime=0;timerSecs=0;timerTotal=0;bar.classList.remove('visible');bar.classList.add('hidden');document.querySelectorAll('.btn-timer-chip').forEach(btn=>btn.classList.remove('active'));});
+  reset.addEventListener('click',()=>{if(timerInterval)clearInterval(timerInterval);timerInterval=null;timerEndTime=0;timerSecs=timerTotal;timerRunning=false;timerSound.disarm();updateDisplay();desc.textContent="Reset";playIcon.style.display='block';pauseIcon.style.display='none';});
+  close.addEventListener('click',()=>{if(timerInterval)clearInterval(timerInterval);timerInterval=null;timerRunning=false;timerEndTime=0;timerSecs=0;timerTotal=0;timerSound.disarm();bar.classList.remove('visible');bar.classList.add('hidden');document.querySelectorAll('.btn-timer-chip').forEach(btn=>btn.classList.remove('active'));});
   window.triggerRestTimer = start;
 }
 
