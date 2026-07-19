@@ -1,0 +1,72 @@
+{
+  "rules": {
+    "gym": {
+      "$userId": {
+        ".read": "auth != null",
+        ".write": "auth != null && (data.exists() ? data.child('uid').val() === auth.uid : newData.child('uid').val() === auth.uid)",
+        ".validate": "newData.hasChildren(['uid','ts']) && newData.child('uid').val() === auth.uid && newData.child('ts').isNumber()",
+        "name": {
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        },
+        "bio": {
+          ".validate": "newData.isString() && newData.val().length <= 120"
+        },
+        "github": {
+          ".validate": "newData.isString() && newData.val().length <= 40"
+        },
+        "avatar": {
+          ".validate": "newData.isString() && newData.val().length <= 200000"
+        },
+        "bw": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 700"
+        }
+      }
+    },
+    "directory": {
+      ".read": "auth != null",
+      "$userId": {
+        ".write": "auth != null && (newData.child('uid').val() === auth.uid || root.child('gym').child($userId).child('uid').val() === auth.uid)",
+        "uid": {
+          ".validate": "newData.val() === auth.uid"
+        },
+        "name": {
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        },
+        "bio": {
+          ".validate": "newData.isString() && newData.val().length <= 120"
+        },
+        "avatar": {
+          ".validate": "newData.isString() && newData.val().length <= 200000"
+        },
+        "bw": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 700"
+        },
+        "ts": {
+          ".validate": "newData.isNumber()"
+        }
+      }
+    },
+    "kudos": {
+      ".read": "auth != null",
+      "$ownerId": {
+        "$date": {
+          "$likerUid": {
+            ".write": "auth != null && auth.uid === $likerUid",
+            ".validate": "newData.val() === true"
+          }
+        }
+      }
+    },
+    "comments": {
+      ".read": "auth != null",
+      "$ownerId": {
+        "$date": {
+          "$commentId": {
+            ".write": "auth != null && (!data.exists() ? newData.child('uid').val() === auth.uid : data.child('uid').val() === auth.uid)",
+            ".validate": "newData.hasChildren(['uid','text','ts']) && newData.child('uid').val() === auth.uid && newData.child('text').isString() && newData.child('text').val().length <= 300 && newData.child('ts').isNumber()"
+          }
+        }
+      }
+    }
+  }
+}
