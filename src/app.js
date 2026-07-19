@@ -2624,7 +2624,7 @@ function bindSettings(){
   const copyRulesBtn=document.getElementById('copyFbRules');
   if(copyRulesBtn){
     copyRulesBtn.addEventListener('click',()=>{
-      const rules=`{\n  "rules": {\n    "gym": {\n      "$userId": {\n        ".read": "auth != null",\n        ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || newData.child('uid').val() === auth.uid)"\n      }\n    },\n    "directory": {\n      "$userId": {\n        ".read": "auth != null",\n        ".write": "auth != null && (!data.exists() || root.child('gym').child($userId).child('uid').val() === auth.uid)"\n      }\n    }\n  }\n}`;
+      const rules=`{\n  "rules": {\n    "gym": {\n      "$userId": {\n        ".read": "auth != null",\n        ".write": "auth != null && (data.exists() ? data.child('uid').val() === auth.uid : newData.child('uid').val() === auth.uid)"\n      }\n    },\n    "directory": {\n      ".read": "auth != null",\n      "$userId": {\n        ".write": "auth != null && root.child('gym').child($userId).child('uid').val() === auth.uid"\n      }\n    }\n  }\n}`;
       navigator.clipboard.writeText(rules).then(()=>{toast('Database Rules copied!','success');}).catch(()=>{toast('Failed to copy','error');});
     });
   }
