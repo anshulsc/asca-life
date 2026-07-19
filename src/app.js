@@ -2415,13 +2415,15 @@ function bindSettings(){
 function setFbStatus(on){
   const b=document.getElementById('fbStatus');
   if(b){
-    b.className=`status-badge ${on?'on':'off'}`;
+    b.classList.toggle('on',on);
+    b.classList.toggle('off',!on);
     const t=document.getElementById('fbStatusT');
     if(t)t.textContent=on?'Synced':'Offline';
   }
   const h=document.getElementById('dConn');
   if(h){
-    h.className=`status-badge ${on?'on':'off'}`;
+    h.classList.toggle('on',on);
+    h.classList.toggle('off',!on);
     const ht=document.getElementById('dConnT');
     if(ht)ht.textContent=on?'Synced':'Offline';
   }
