@@ -1154,6 +1154,17 @@ function updateFollowName(id,name){
   if(f&&f.name!==name)FirebaseSync.updateConfig({following:c.following.map(x=>x.id===id?{...x,name}:x)});
 }
 
+// Day-type colour system — the workout's split is information, so it
+// gets a consistent hue everywhere it appears (feed rail + chip).
+function dayTypeColor(dt){
+  const s=String(dt||'').toLowerCase();
+  if(s.includes('push'))return '#FF7600';
+  if(s.includes('pull'))return '#0A84FF';
+  if(s.includes('leg')||s.includes('lower'))return '#BF5AF2';
+  if(s.includes('upper')||s.includes('full'))return '#30D158';
+  return '#64D2FF';
+}
+
 // Relative day label for feed items ('2026-07-18' → Today / Yesterday / 3d ago)
 function dayAgo(dateStr){
   const d=new Date(dateStr+'T00:00:00');
@@ -1374,7 +1385,7 @@ function renderLeaderboardRows(rows,metric){
   cmp.querySelectorAll('.lb-row').forEach(el=>el.addEventListener('click',()=>showMiniProfile(el.dataset.uid)));
 }
 
-function gymHeatmapHtml(id,name,workouts){
+function gymHeatmapHtml(id,name,workouts,score){
   const today=new Date();today.setHours(0,0,0,0);const weeks=16,days=weeks*7;
   const volMap={};
   (workouts||[]).forEach(w=>{if(!w||!w.date||w.dayType==='Rest Day')return;let v=0;
@@ -1392,6 +1403,7 @@ function gymHeatmapHtml(id,name,workouts){
   return `<div class="gym-activity-section"><div class="gym-activity-header">
     <div class="gym-activity-avatar" style="background:${avatarBgOf(id)}">${avatarHtmlOf(id,name)}</div>
     <div class="gym-activity-name">${esc(name)}</div>
+    ${score?`<div class="gym-activity-score">${score}<span>score</span></div>`:''}
     <div class="gym-activity-streak">${streak?'🔥 '+streak+' day streak':''}</div></div>
     <div class="gym-heatmap-wrap"><div class="gym-heatmap-grid">${dots}</div></div>
     <div class="gym-heatmap-legend">Less <div class="gym-heatmap-legend-dot" style="background:rgba(255,255,255,0.04)"></div>
@@ -1406,7 +1418,7 @@ function renderGymActivity(allRows){
   if(!label||!card||!grids)return;
   if(!allRows.length){label.style.display='none';card.style.display='none';return;}
   label.style.display='block';card.style.display='block';
-  grids.innerHTML=allRows.map(r=>gymHeatmapHtml(r.id,r.name,r.workouts)).join('');
+  grids.innerHTML=allRows.map(r=>gymHeatmapHtml(r.id,r.name,r.workouts,r.stats.score)).join('');
 }
 
 function renderH2HPicker(allRows){
@@ -1484,7 +1496,8 @@ function renderActivityFeed(allRows){
     const sets=w.exercises.reduce((s,e)=>s+e.sets.length,0);
     const vol=w.exercises.reduce((s,e)=>s+e.sets.reduce((ss,x)=>ss+((getSetWeightVal(x))*(x.reps||0)),0),0);
     let top=null;w.exercises.forEach(e=>e.sets.forEach(s=>{const wv=getSetWeightVal(s);if(wv&&(!top||wv>top.w))top={name:e.name,w:wv};}));
-    return `<div class="feed-item" data-uid="${esc(id)}"><div class="feed-head"><div class="feed-avatar" style="background:${avatarBgOf(id)}">${avatarHtmlOf(id,name)}</div><div class="feed-who"><span class="feed-name">${esc(name)}</span><span class="feed-when">${dayAgo(w.date)} · ${esc(w.dayType||'Workout')}</span></div><div class="feed-vol">${fmtStatNum(vol)}<span>kg</span></div></div><div class="feed-chips"><span class="feed-chip">${w.exercises.length} exercise${w.exercises.length===1?'':'s'}</span><span class="feed-chip">${sets} sets</span>${top?`<span class="feed-chip feed-chip-top">${esc(top.name)} ${top.w} kg</span>`:''}</div></div>`;
+    const dtc=dayTypeColor(w.dayType);
+    return `<div class="feed-item" data-uid="${esc(id)}" style="--dt:${dtc};--dt-bg:${dtc}22;--dt-bd:${dtc}44"><div class="feed-head"><div class="feed-avatar" style="background:${avatarBgOf(id)}">${avatarHtmlOf(id,name)}</div><div class="feed-who"><span class="feed-name">${esc(name)}</span><span class="feed-when">${dayAgo(w.date)}</span></div><span class="feed-type">${esc(w.dayType||'Workout')}</span><div class="feed-vol">${fmtStatNum(vol)}<span>kg</span></div></div><div class="feed-chips"><span class="feed-chip">${w.exercises.length} exercise${w.exercises.length===1?'':'s'}</span><span class="feed-chip">${sets} sets</span>${top?`<span class="feed-chip feed-chip-top">${esc(top.name)} ${top.w} kg</span>`:''}</div></div>`;
   }).join('');
   recent.querySelectorAll('.feed-item').forEach(el=>el.addEventListener('click',()=>showMiniProfile(el.dataset.uid)));
 }
@@ -1505,10 +1518,11 @@ function showMiniProfile(userId){
   const bio=isMe?(cfg.bio||''):((friendData&&friendData.bio)||(dirEntry&&dirEntry.bio)||'');
   const theirFollowing=isMe?cfg.following.map(f=>f.id):(friendData&&Array.isArray(friendData.following)?friendData.following:(dirEntry?dirEntry.following:[]));
   const theirFollowers=isMe?getFollowers().length:getDirectoryCache().filter(u=>u.id!==userId&&Array.isArray(u.following)&&u.following.includes(userId)).length;
+  const mpScore=ascaScore(periodStatsExtended(workouts,'week').volume,isMe?myBW():((friendData&&friendData.bw)||(dirEntry&&dirEntry.bw)||0));
   content.innerHTML=`<div class="mini-profile-hero"><div class="mini-profile-avatar" style="background:${avatarBgOf(userId)}">${avatarHtmlOf(userId,name)}</div><div class="mini-profile-name">${esc(name)}${isMe?' <span class="lb-you">You</span>':''}</div><div class="mini-profile-user">@${esc(userId)}</div>${bio?`<div class="mini-profile-bio">${esc(bio)}</div>`:''}<div class="mini-profile-follows"><span><b>${(theirFollowing||[]).length}</b> Following</span><span><b>${theirFollowers}</b> Followers</span></div>${followsMe?'<div class="mini-profile-mutual"><span class="mutual-chip">Follows you</span></div>':''}</div>
-    <div class="mini-profile-stats"><div class="mini-profile-stat"><div class="mini-profile-stat-val mini-profile-score">${ascaScore(periodStatsExtended(workouts,'week').volume,isMe?myBW():((friendData&&friendData.bw)||(dirEntry&&dirEntry.bw)||0))}</div><div class="mini-profile-stat-label">Score</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${sessions.length}</div><div class="mini-profile-stat-label">Workouts</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${fmtStatNum(vol)}</div><div class="mini-profile-stat-label">Volume (kg)</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${stats.streak}</div><div class="mini-profile-stat-label">Streak 🔥</div></div></div>
+    <div class="mini-profile-stats"><div class="mini-profile-stat"><div class="mini-profile-stat-val mini-profile-score">${mpScore}</div><div class="mini-profile-stat-label">Score</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${sessions.length}</div><div class="mini-profile-stat-label">Workouts</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${fmtStatNum(vol)}</div><div class="mini-profile-stat-label">Volume (kg)</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${stats.streak}</div><div class="mini-profile-stat-label">Streak 🔥</div></div></div>
     ${!isMe?`<div class="mini-profile-actions">${iAmFollowing?`<button class="btn btn-secondary btn-full" id="mpUnfollow">Following</button>`:`<button class="btn btn-primary btn-full" id="mpFollow">Follow</button>`}</div>`:''}
-    <div class="mini-profile-heatmap"><div class="mini-profile-heatmap-title">Activity — Last 16 Weeks</div>${gymHeatmapHtml(userId,name,workouts)}</div>`;
+    <div class="mini-profile-heatmap"><div class="mini-profile-heatmap-title">Activity — Last 16 Weeks</div>${gymHeatmapHtml(userId,name,workouts,mpScore)}</div>`;
   const followBtn=document.getElementById('mpFollow');const unfollowBtn=document.getElementById('mpUnfollow');
   if(followBtn)followBtn.addEventListener('click',()=>{const c=FirebaseSync.getConfig();if(!c.following.some(f=>f.id===userId)){FirebaseSync.updateConfig({following:[...c.following,{id:userId,name:name}]});toast('Following @'+userId,'success');closeMiniProfile();renderFriendsCard();fbPush(false);startRealtimeSync();fbPullFollowing(false);}});
   if(unfollowBtn)unfollowBtn.addEventListener('click',()=>{const c=FirebaseSync.getConfig();FirebaseSync.updateConfig({following:c.following.filter(f=>f.id!==userId)});stopStream(userId);removeFriendEntry(userId);toast('Unfollowed @'+userId);closeMiniProfile();renderFriendsCard();fbPush(false);});
@@ -1522,11 +1536,24 @@ function renderFriendsCard(){
   if(!label||!card)return;
   const fb=fbCfg();const cache=getFriendsCache();const ids=Object.keys(cache.friends);
   const hasRemote=fb.connected&&fb.following.length>0;
+  const emptyCard=document.getElementById('socEmptyCard');
   if(!hasRemote&&!ids.length){
     label.style.display='none';card.style.display='none';
     ['activityLabel','activityCard','h2hLabel','h2hCard','feedLabel','feedCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+    if(emptyCard){
+      emptyCard.style.display='block';
+      const cta=document.getElementById('socEmptyCta');
+      if(cta&&!cta.dataset.bound){
+        cta.dataset.bound='1';
+        cta.addEventListener('click',()=>{
+          const b=document.querySelector('.bot-btn[data-v="Set"]');if(b)b.click();
+          const s=document.getElementById('fbSearch');if(s)setTimeout(()=>s.focus(),350);
+        });
+      }
+    }
     return;
   }
+  if(emptyCard)emptyCard.style.display='none';
   label.style.display='block';card.style.display='block';
   const syncBtn=document.getElementById('btnFriendSync');if(syncBtn)syncBtn.style.display=hasRemote?'':'none';
   const titleEl=document.getElementById('friendNameEl');if(titleEl)titleEl.textContent='Leaderboard';

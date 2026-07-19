@@ -433,6 +433,14 @@
         <p class="view-subtitle">Leaderboard & activity feed</p>
       </div>
 
+      <!-- Empty state: shown until the athlete follows someone -->
+      <div class="card glass-card soc-empty-card" id="socEmptyCard" style="display:none">
+        <div class="soc-empty-icon">🏆</div>
+        <div class="soc-empty-title">Your crew isn't here yet</div>
+        <div class="soc-empty-sub">Follow friends to race the leaderboard, compare scores head-to-head and see their workouts land in realtime.</div>
+        <button class="btn btn-primary" id="socEmptyCta">Find friends</button>
+      </div>
+
       <!-- Social: Leaderboard + Activity + Comparison -->
       <div class="label" id="friendLabel" style="display:none">Leaderboard</div>
       <div class="card glass-card friend-card" id="friendCard" style="display:none">

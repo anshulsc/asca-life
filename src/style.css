@@ -1584,13 +1584,31 @@ canvas { width: 100%; height: 100%; }
 }
 
 /* ── Activity Feed ───────────────────────────────────────── */
+/* Each item carries its day-type colour (--dt/--dt-bg/--dt-bd set
+   inline): a left rail plus the split chip, so a glance down the feed
+   reads the training split without reading a word. */
 .feed-item {
-  padding: 12px 8px;
+  position: relative;
+  padding: 12px 8px 12px 16px;
   border-bottom: 1px solid var(--border-light, rgba(255,255,255,0.06));
-  transition: background 0.15s;
+  transition: background 0.15s, transform 0.12s var(--spring);
+}
+.feed-item::before {
+  content: ''; position: absolute; left: 2px; top: 14px; bottom: 14px;
+  width: 3px; border-radius: 2px;
+  background: var(--dt, var(--accent)); opacity: 0.85;
 }
 .feed-item:last-child { border-bottom: none; }
 .feed-item:hover { background: rgba(255,255,255,0.03); }
+.feed-type {
+  font-size: 0.58rem; font-weight: 800; letter-spacing: 0.07em;
+  text-transform: uppercase; white-space: nowrap; flex-shrink: 0;
+  color: var(--dt, var(--accent));
+  background: var(--dt-bg, rgba(255,118,0,0.13));
+  border: 1px solid var(--dt-bd, rgba(255,118,0,0.27));
+  padding: 3px 9px; border-radius: 20px;
+  margin-right: 2px;
+}
 .feed-head {
   display: flex; align-items: center; gap: 10px;
 }
@@ -1618,7 +1636,7 @@ canvas { width: 100%; height: 100%; }
 }
 .feed-chips {
   display: flex; flex-wrap: wrap; gap: 6px;
-  margin-top: 8px; padding-left: 44px;
+  margin-top: 8px; padding-left: 46px;
 }
 .feed-chip {
   font-size: 0.64rem; font-weight: 600;
@@ -1632,6 +1650,25 @@ canvas { width: 100%; height: 100%; }
   color: var(--accent, #FF6B00); font-weight: 700;
   border: 1px solid rgba(255,107,0,0.2);
 }
+
+/* ── Social empty state ──────────────────────────────────── */
+.soc-empty-card { text-align: center; padding: 40px 24px 32px; }
+.soc-empty-icon { font-size: 2.1rem; margin-bottom: 12px; }
+.soc-empty-title {
+  font-family: var(--ff-title); font-size: 1.08rem; font-weight: 800;
+  letter-spacing: -0.01em; margin-bottom: 7px;
+}
+.soc-empty-sub {
+  font-size: 0.78rem; color: var(--t-3); line-height: 1.55;
+  max-width: 300px; margin: 0 auto 18px;
+}
+.soc-empty-card .btn { display: inline-flex; width: auto; padding: 10px 26px; }
+
+/* Tappable rows press in slightly — everything that opens a profile */
+.lb-row, .feed-item, .podium-item { cursor: pointer; }
+.lb-row:active, .feed-item:active, .podium-item:active { transform: scale(0.98); }
+.lb-row { transition: background 0.2s, transform 0.12s var(--spring); }
+.podium-item { transition: transform 0.12s var(--spring); }
 
 /* ── Mutual Follow Chip ──────────────────────────────────── */
 .mutual-chip {
@@ -1865,6 +1902,16 @@ canvas { width: 100%; height: 100%; }
   display: flex; align-items: center; gap: 8px;
   margin-bottom: 8px;
 }
+.gym-activity-score {
+  font-family: var(--ff-mono); font-size: 0.72rem; font-weight: 800;
+  color: #FFB25A; margin-left: auto; white-space: nowrap;
+}
+.gym-activity-score span {
+  font-family: var(--ff-title); font-size: 0.48rem; font-weight: 800;
+  color: var(--t-3); margin-left: 3px;
+  text-transform: uppercase; letter-spacing: 0.1em;
+}
+.gym-activity-score + .gym-activity-streak { margin-left: 8px; }
 .gym-activity-avatar {
   width: 24px; height: 24px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
