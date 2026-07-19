@@ -22,9 +22,14 @@ function startApp() {
   setToday();renderRecent();renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderProfile();
   restoreSE();
   
-  // Real-time synchronization stream: sub-second updates using EventSource
+  // Backend-first boot: the RTDB is the source of truth. Merge my cloud
+  // doc and pull every followed athlete immediately, then the EventSource
+  // streams keep everything live — localStorage is only the offline
+  // fallback that painted the first frame.
   if(fbCfg().connected){
     startRealtimeSync();
+    fbRestore(false);
+    fbPullFollowing(false);
   }
   
   document.addEventListener('visibilitychange',()=>{
@@ -228,7 +233,7 @@ function rc4Unhex(key, hex) {
   }
 }
 
-// localStorage is a plain cache now (Firestore is the source of truth,
+// localStorage is a plain cache now (Realtime DB is the source of truth,
 // gated by Firebase Auth). encryptStr keeps its name so call sites stay
 // untouched; decryptStr still decodes values written by old builds,
 // which RC4-encrypted them with the hardcoded PIN.
@@ -300,7 +305,7 @@ function save(){
 }
 // The baked-in HISTORICAL_DATA is Anshul's log. With per-user cloud
 // accounts, seeding it into another user's fresh browser would push it
-// to THEIR Firestore doc — so only seed for the owner (or standalone
+// to THEIR cloud doc — so only seed for the owner (or standalone
 // builds with no backend); everyone else starts from their cloud doc.
 function canSeedHistorical(){
   const fb=fbCfg();
@@ -727,20 +732,11 @@ function removeFriendEntry(id){
   try{localStorage.setItem(FCK,JSON.stringify(c));}catch(_){}
 }
 
-/* ── Progress Codes — offline friend sync ─────────────────── */
-/* A progress code is the last 8 weeks of workouts as gzip+base64
-   (prefix ASCAGYM2) or plain base64 where CompressionStream is
-   unavailable (prefix ASCAGYM1). Sent over any chat app; importing
-   stores it as the friend cache — no server involved. */
-async function gzipB64(str){
-  const cs=new CompressionStream('gzip');
-  const stream=new Blob([new TextEncoder().encode(str)]).stream().pipeThrough(cs);
-  const ab=await new Response(stream).arrayBuffer();
-  const bytes=new Uint8Array(ab);
-  let bin='';
-  for(let i=0;i<bytes.length;i+=0x8000)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));
-  return btoa(bin);
-}
+/* ── Progress Codes — legacy decode ───────────────────────── */
+/* Progress codes were workouts as gzip+base64 (prefix ASCAGYM2) or
+   plain base64 (prefix ASCAGYM1). Nothing encodes them anymore —
+   RTDB stores workouts structured — but the decoder stays so old
+   blob-format cloud docs still restore/sync. */
 async function gunzipB64(b64){
   const bin=atob(b64);
   const bytes=new Uint8Array(bin.length);
@@ -761,29 +757,33 @@ async function decodeProgressCode(code){
   return payload;
 }
 
-/* ── Firebase Cloud Sync — backup + friend sync over Firestore ── */
+/* ── Firebase Cloud Sync — backup + friend sync over RTDB ── */
 /* FirebaseSync (firebase-sync.js) is the transport and handles auth;
-   access is gated by Firebase sign-in and ownership rules, so blobs
-   are stored as plain compressed progress codes. My doc carries the
-   FULL history (it doubles as the cloud backup); the friend's doc is
-   pulled into the friend cache like every other friend-sync source. */
+   access is gated by Firebase sign-in and ownership rules. My node
+   at gym/{userId} carries the FULL history structured day-wise
+   (workouts/{date}/…, it doubles as the cloud backup); a friend's
+   node is pulled into the friend cache like every other source. */
 function fbCfg(){return (typeof FirebaseSync!=='undefined')?FirebaseSync.getConfig():{};}
 
-async function buildFullProgressCode(){
-  const cfg=fbCfg();
-  const json=JSON.stringify({
-    v:2,
-    ts:Date.now(),
-    name:cfg.displayName||cfg.userId||'',
-    avatar:cfg.avatar||'',
-    github:cfg.github||'',
-    following:(cfg.following||[]).map(f=>f.id),
-    workouts:W
-  });
-  try{
-    if(typeof CompressionStream!=='undefined')return 'ASCAGYM2.'+await gzipB64(json);
-  }catch(_){}
-  return 'ASCAGYM1.'+btoa(unescape(encodeURIComponent(json)));
+/* Resolve a normalized cloud doc into {ts,name,avatar,github,
+   following,workouts} — direct for structured docs, decoding the
+   compressed blob for docs written by pre-RTDB builds. */
+async function cloudPayload(doc){
+  if(!doc)return null;
+  if(Array.isArray(doc.workouts))return doc;
+  if(doc.blob){
+    const p=await decodeProgressCode(doc.blob);
+    return {
+      ts:doc.ts||p.ts||0,
+      name:p.name||doc.name||'',
+      avatar:p.avatar||'',
+      bio:p.bio||'',
+      github:p.github||'',
+      following:Array.isArray(p.following)?p.following:[],
+      workouts:p.workouts
+    };
+  }
+  return null;
 }
 
 async function fbPush(interactive=true){
@@ -793,9 +793,8 @@ async function fbPush(interactive=true){
     return false;
   }
   try{
-    const code=await buildFullProgressCode();
     const ts=lastLocalWrite||Date.now();
-    await FirebaseSync.writeDoc({ts,blob:code});
+    await FirebaseSync.writeDoc({ts,workouts:W});
     lastLocalWrite=ts;
     localStorage.setItem('asca_gym_last_write_ts',String(ts));
     if(interactive)toast('Backed up to Firebase','success');
@@ -826,9 +825,12 @@ function startRealtimeSync(){
   const cfg=fbCfg();
   if(!cfg.connected)return;
 
+  listenToDirectory();
+
   listenToDoc(cfg.userId,data=>{
-    if(data&&data.ts>lastLocalWrite){
-      decodeProgressCode(data.blob).then(payload=>{
+    const doc=FirebaseSync.normalizeDocData(data);
+    if(doc&&doc.ts>lastLocalWrite){
+      cloudPayload(doc).then(payload=>{
         if(payload&&Array.isArray(payload.workouts)){
           W=payload.workouts;
           try{
@@ -839,6 +841,7 @@ function startRealtimeSync(){
           const up={};
           if(payload.name)up.displayName=payload.name;
           if(payload.avatar)up.avatar=payload.avatar;
+          if(payload.bio)up.bio=payload.bio;
           if(payload.github)up.github=payload.github;
           if(Object.keys(up).length>0)FirebaseSync.updateConfig(up);
           refreshAllUI();
@@ -849,19 +852,22 @@ function startRealtimeSync(){
 
   cfg.following.forEach(f=>{
     listenToDoc(f.id,data=>{
-      if(data&&data.blob){
-        decodeProgressCode(data.blob).then(p=>{
-          saveFriendEntry(f.id,{
-            ts:data.ts||p.ts||Date.now(),
-            name:f.name||p.name||f.id,
-            avatar:p.avatar||'',
-            github:p.github||'',
-            following:Array.isArray(p.following)?p.following:[],
-            workouts:p.workouts
-          });
-          renderFriendsCard();
-        }).catch(console.warn);
-      }
+      const doc=FirebaseSync.normalizeDocData(data);
+      if(!doc)return;
+      cloudPayload(doc).then(p=>{
+        if(!p||!Array.isArray(p.workouts))return;
+        saveFriendEntry(f.id,{
+          ts:doc.ts||p.ts||Date.now(),
+          name:p.name||f.name||f.id,
+          avatar:p.avatar||'',
+          bio:p.bio||'',
+          github:p.github||'',
+          following:Array.isArray(p.following)?p.following:[],
+          workouts:p.workouts
+        });
+        updateFollowName(f.id,p.name);
+        renderFriendsCard();
+      }).catch(console.warn);
     });
   });
 }
@@ -903,6 +909,66 @@ function stopRealtimeSync(){
   activeStreams={};
 }
 
+function stopStream(id){
+  if(!activeStreams[id])return;
+  try{activeStreams[id].close();}catch(_){}
+  delete activeStreams[id];
+}
+
+// Live directory stream — one EventSource over directory.json keeps every
+// athlete's metadata (name, avatar, bio, following) current, so renames,
+// new profile pictures and follower counts update in realtime for everyone.
+function listenToDirectory(){
+  if(activeStreams._directory)return;
+  const cfg=fbCfg();
+  if(!cfg.projectId)return;
+  const baseUrl=`https://${cfg.projectId}-default-rtdb.firebaseio.com`;
+  FirebaseSync.getIdToken().then(token=>{
+    const source=new EventSource(`${baseUrl}/directory.json?auth=${token}`);
+    activeStreams._directory=source;
+    let dir={};
+    const setPath=(path,data,merge)=>{
+      const parts=path.split('/').filter(Boolean);
+      if(!parts.length){dir=merge?{...dir,...(data||{})}:(data||{});return;}
+      const id=parts[0];
+      if(parts.length===1){
+        if(data===null)delete dir[id];
+        else if(merge)dir[id]={...(dir[id]||{}),...data};
+        else dir[id]=data;
+      }else{
+        dir[id]={...(dir[id]||{})};
+        dir[id][parts[1]]=data;
+      }
+    };
+    const publish=()=>{
+      const users=Object.entries(dir).map(([id,u])=>({
+        id,
+        name:(u&&u.name)||id,
+        ts:(u&&u.ts)||0,
+        avatar:(u&&u.avatar)||'',
+        bio:(u&&u.bio)||'',
+        following:(u&&u.following)?(Array.isArray(u.following)?u.following:Object.values(u.following)).map(String):[]
+      }));
+      saveDirectoryCache(users);
+      // Directory name is canonical (displayName||userId at their last
+      // push) — mirror renames into my follow list
+      (fbCfg().following||[]).forEach(f=>{
+        const d=users.find(u=>u.id===f.id);
+        if(d)updateFollowName(f.id,d.name);
+      });
+      renderFriendsCard();
+      if(dirChangedHook)dirChangedHook(users);
+    };
+    source.addEventListener('put',e=>{try{const k=JSON.parse(e.data);setPath(k.path,k.data,false);publish();}catch(err){console.warn('[Dir stream]',err);}});
+    source.addEventListener('patch',e=>{try{const k=JSON.parse(e.data);setPath(k.path,k.data,true);publish();}catch(err){console.warn('[Dir stream]',err);}});
+    source.onerror=err=>{
+      console.warn('[Dir stream err]',err);
+      try{source.close();}catch(_){}
+      delete activeStreams._directory;
+    };
+  }).catch(console.warn);
+}
+
 // Pull every followed user's doc in parallel and refresh the cache
 async function fbPullFollowing(interactive=true){
   const cfg=fbCfg();
@@ -912,16 +978,18 @@ async function fbPullFollowing(interactive=true){
   }
   const results=await Promise.allSettled(cfg.following.map(async f=>{
     const doc=await FirebaseSync.readDoc(f.id);
-    if(!doc||!doc.blob)throw new Error('no data for @'+f.id);
-    const p=await decodeProgressCode(doc.blob);
+    const p=await cloudPayload(doc);
+    if(!p||!Array.isArray(p.workouts))throw new Error('no data for @'+f.id);
     saveFriendEntry(f.id,{
       ts:doc.ts||p.ts||Date.now(),
-      name:f.name||p.name||f.id,
+      name:p.name||f.name||f.id,
       avatar:p.avatar||'',
+      bio:p.bio||'',
       github:p.github||'',
       following:Array.isArray(p.following)?p.following:[],
       workouts:p.workouts
     });
+    updateFollowName(f.id,p.name);
   }));
   const ok=results.filter(r=>r.status==='fulfilled').length;
   results.forEach((r,i)=>{if(r.status==='rejected')console.warn('[Sync]',cfg.following[i]?.id,r.reason?.message||r.reason);});
@@ -948,11 +1016,11 @@ async function fbRestore(interactive=true){
   }
   try{
     const doc=await FirebaseSync.readDoc(cfg.userId);
-    if(!doc||!doc.blob){
+    const payload=await cloudPayload(doc);
+    if(!payload||!Array.isArray(payload.workouts)){
       if(interactive)toast('No cloud backup found yet — tap Backup Now first','error');
       return 0;
     }
-    const payload=await decodeProgressCode(doc.blob);
     let added=0;
     payload.workouts.forEach(wo=>{
       if(wo&&wo.date&&!W.find(w=>w.date===wo.date)){W.push(wo);added++;}
@@ -964,8 +1032,12 @@ async function fbRestore(interactive=true){
     const up={};
     if(payload.name)up.displayName=payload.name;
     if(payload.avatar)up.avatar=payload.avatar;
+    if(payload.bio)up.bio=payload.bio;
     if(payload.github)up.github=payload.github;
     if(Object.keys(up).length>0)FirebaseSync.updateConfig(up);
+    // Legacy blob doc → rewrite it structured so the RTDB console shows
+    // plain day-wise JSON from now on
+    if(doc.blob&&!Array.isArray(doc.workouts))fbPush(false);
     refreshAllUI();
     if(interactive)toast(added?`Restored ${added} sessions from cloud`:'Already up to date','success');
     return added;
@@ -1011,6 +1083,46 @@ function avatarGrad(id){
 }
 function initialOf(s){return esc((String(s||'?').trim()[0]||'?'));}
 
+// Directory cache — the last known directory/{id} metadata for every
+// athlete (name, avatar, following ids). Filled by listUsers() searches
+// and kept live by the directory EventSource stream; lets us show
+// photos in search results and count followers who we don't follow back.
+const DIRK='asca_gym_directory_cache';
+function getDirectoryCache(){
+  try{const d=JSON.parse(localStorage.getItem(DIRK)||'null');if(d&&Array.isArray(d.users))return d.users;}catch(_){}
+  return [];
+}
+function saveDirectoryCache(users){
+  try{localStorage.setItem(DIRK,JSON.stringify({ts:Date.now(),users}));}catch(_){}
+}
+let dirChangedHook=null; // set by bindSettings so the Find Friends UI re-renders on live directory updates
+
+// One lookup for anyone's profile photo: me → config, followed → friends
+// cache, everyone else → directory cache. Empty string means "no photo,
+// fall back to the gradient initial".
+function avatarOf(id){
+  const cfg=fbCfg();
+  if(id===cfg.userId)return cfg.avatar||'';
+  const f=getFriendsCache().friends[id];
+  if(f&&f.avatar)return f.avatar;
+  const d=getDirectoryCache().find(u=>u.id===id);
+  return (d&&d.avatar)||'';
+}
+function avatarHtmlOf(id,name){
+  const av=avatarOf(id);
+  return av?`<img src="${av}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:initialOf(name);
+}
+function avatarBgOf(id){return avatarOf(id)?'none':avatarGrad(id);}
+
+// A followed athlete renamed themselves → mirror it into config.following
+// so the follow list / leaderboard show the new name everywhere.
+function updateFollowName(id,name){
+  if(!name)return;
+  const c=fbCfg();
+  const f=(c.following||[]).find(x=>x.id===id);
+  if(f&&f.name!==name)FirebaseSync.updateConfig({following:c.following.map(x=>x.id===id?{...x,name}:x)});
+}
+
 // Relative day label for feed items ('2026-07-18' → Today / Yesterday / 3d ago)
 function dayAgo(dateStr){
   const d=new Date(dateStr+'T00:00:00');
@@ -1027,10 +1139,17 @@ function dayAgo(dateStr){
 function getFollowers(){
   const cfg=fbCfg();
   if(!cfg.userId)return [];
-  const cache=getFriendsCache();
-  return Object.entries(cache.friends)
+  // Union of the friends cache (rich, only people I follow) and the
+  // directory cache (everyone) — followers I don't follow back only
+  // appear in the latter.
+  const map={};
+  Object.entries(getFriendsCache().friends)
     .filter(([id,f])=>Array.isArray(f.following)&&f.following.includes(cfg.userId))
-    .map(([id,f])=>({id,name:f.name||id}));
+    .forEach(([id,f])=>{map[id]=f.name||id;});
+  getDirectoryCache().forEach(u=>{
+    if(u.id!==cfg.userId&&Array.isArray(u.following)&&u.following.includes(cfg.userId))map[u.id]=map[u.id]||u.name||u.id;
+  });
+  return Object.entries(map).map(([id,name])=>({id,name}));
 }
 
 function renderProfile(){
@@ -1050,7 +1169,9 @@ function renderProfile(){
 
   document.getElementById('profName').textContent=name;
   document.getElementById('profUser').textContent=username?'@'+username:'@—';
-  
+  const bioEl=document.getElementById('profBio');
+  if(bioEl){bioEl.textContent=cfg.bio||'';bioEl.style.display=cfg.bio?'':'none';}
+
   const githubLink=document.getElementById('profGithubLink');
   if(githubLink){
     if(cfg.github){
@@ -1069,9 +1190,11 @@ function renderProfile(){
     const fbMyId=document.getElementById('fbMyId');
     const fbDisplayName=document.getElementById('fbDisplayName');
     const fbGithub=document.getElementById('fbGithub');
+    const fbBio=document.getElementById('fbBio');
     if(fbMyId)fbMyId.value=cfg.userId||'';
     if(fbDisplayName)fbDisplayName.value=cfg.displayName||'';
     if(fbGithub)fbGithub.value=cfg.github||'';
+    if(fbBio)fbBio.value=cfg.bio||'';
   }
 
   const sessions=W.filter(w=>w&&w.dayType!=='Rest Day');
@@ -1155,7 +1278,7 @@ function renderPodium(rows,metric){
   podium.innerHTML=order.map(r=>{
     const origIdx=top3.indexOf(r);const rank=origIdx+1;const v=metricVal(r.stats,metric);
     return `<div class="podium-item rank-${rank}" data-uid="${esc(r.id)}">
-      <div class="podium-avatar" style="background:${avatarGrad(r.id)}">${initialOf(r.name)}<div class="podium-medal">${medals[origIdx]||''}</div></div>
+      <div class="podium-avatar" style="background:${avatarBgOf(r.id)}">${avatarHtmlOf(r.id,r.name)}<div class="podium-medal">${medals[origIdx]||''}</div></div>
       <div class="podium-name">${esc(r.name)}${r.me?' <span class="lb-you">You</span>':''}</div>
       <div class="podium-val">${fmtStatNum(v)} <span>${metricLabel(metric)}</span></div>
       <div class="podium-pedestal"></div></div>`;
@@ -1175,7 +1298,7 @@ function renderLeaderboardRows(rows,metric){
     const rank=startRank+i;const v=metricVal(r.stats,metric);
     return `<div class="lb-row${r.me?' lb-me':''}" data-uid="${esc(r.id)}">
       <div class="lb-rank">${rank}</div>
-      <div class="lb-avatar" style="background:${avatarGrad(r.id)}">${initialOf(r.name)}</div>
+      <div class="lb-avatar" style="background:${avatarBgOf(r.id)}">${avatarHtmlOf(r.id,r.name)}</div>
       <div class="lb-main">
         <div class="lb-name">${esc(r.name)}${r.me?'<span class="lb-you">You</span>':''}${sparklineSvg(r.stats.spark,r.me?'#FF6B00':'#3A7BD5')}</div>
         <div class="lb-bar"><div class="lb-fill" style="width:${Math.max((v/maxV)*100,2)}%"></div></div>
@@ -1201,7 +1324,7 @@ function gymHeatmapHtml(id,name,workouts){
     if(v>0){const r=v/maxV;lvl=r>0.7?'g-4':r>0.4?'g-3':r>0.15?'g-2':'g-1';}
     dots+=`<div class="gym-heatmap-dot ${lvl}" title="${ds}"></div>`;}
   return `<div class="gym-activity-section"><div class="gym-activity-header">
-    <div class="gym-activity-avatar" style="background:${avatarGrad(id)}">${initialOf(name)}</div>
+    <div class="gym-activity-avatar" style="background:${avatarBgOf(id)}">${avatarHtmlOf(id,name)}</div>
     <div class="gym-activity-name">${esc(name)}</div>
     <div class="gym-activity-streak">${streak?'🔥 '+streak+' day streak':''}</div></div>
     <div class="gym-heatmap-wrap"><div class="gym-heatmap-grid">${dots}</div></div>
@@ -1262,7 +1385,7 @@ function renderActivityFeed(allRows){
     const sets=w.exercises.reduce((s,e)=>s+e.sets.length,0);
     const vol=w.exercises.reduce((s,e)=>s+e.sets.reduce((ss,x)=>ss+((getSetWeightVal(x))*(x.reps||0)),0),0);
     let top=null;w.exercises.forEach(e=>e.sets.forEach(s=>{const wv=getSetWeightVal(s);if(wv&&(!top||wv>top.w))top={name:e.name,w:wv};}));
-    return `<div class="feed-item" data-uid="${esc(id)}"><div class="feed-head"><div class="feed-avatar" style="background:${avatarGrad(id)}">${initialOf(name)}</div><div class="feed-who"><span class="feed-name">${esc(name)}</span><span class="feed-when">${dayAgo(w.date)} · ${esc(w.dayType||'Workout')}</span></div><div class="feed-vol">${fmtStatNum(vol)}<span>kg</span></div></div><div class="feed-chips"><span class="feed-chip">${w.exercises.length} exercise${w.exercises.length===1?'':'s'}</span><span class="feed-chip">${sets} sets</span>${top?`<span class="feed-chip feed-chip-top">${esc(top.name)} ${top.w} kg</span>`:''}</div></div>`;
+    return `<div class="feed-item" data-uid="${esc(id)}"><div class="feed-head"><div class="feed-avatar" style="background:${avatarBgOf(id)}">${avatarHtmlOf(id,name)}</div><div class="feed-who"><span class="feed-name">${esc(name)}</span><span class="feed-when">${dayAgo(w.date)} · ${esc(w.dayType||'Workout')}</span></div><div class="feed-vol">${fmtStatNum(vol)}<span>kg</span></div></div><div class="feed-chips"><span class="feed-chip">${w.exercises.length} exercise${w.exercises.length===1?'':'s'}</span><span class="feed-chip">${sets} sets</span>${top?`<span class="feed-chip feed-chip-top">${esc(top.name)} ${top.w} kg</span>`:''}</div></div>`;
   }).join('');
   recent.querySelectorAll('.feed-item').forEach(el=>el.addEventListener('click',()=>showMiniProfile(el.dataset.uid)));
 }
@@ -1279,13 +1402,17 @@ function showMiniProfile(userId){
   const iAmFollowing=cfg.following.some(f=>f.id===userId);
   const sessions=workouts.filter(w=>w&&w.dayType!=='Rest Day');
   let vol=0;sessions.forEach(w=>(w.exercises||[]).forEach(e=>e.sets.forEach(s=>{const wv=getSetWeightVal(s);if(wv&&s.reps)vol+=wv*s.reps;})));
-  content.innerHTML=`<div class="mini-profile-hero"><div class="mini-profile-avatar" style="background:${avatarGrad(userId)}">${initialOf(name)}</div><div class="mini-profile-name">${esc(name)}${isMe?' <span class="lb-you">You</span>':''}</div><div class="mini-profile-user">@${esc(userId)}</div>${followsMe?'<div class="mini-profile-mutual"><span class="mutual-chip">Follows you</span></div>':''}</div>
+  const dirEntry=getDirectoryCache().find(u=>u.id===userId);
+  const bio=isMe?(cfg.bio||''):((friendData&&friendData.bio)||(dirEntry&&dirEntry.bio)||'');
+  const theirFollowing=isMe?cfg.following.map(f=>f.id):(friendData&&Array.isArray(friendData.following)?friendData.following:(dirEntry?dirEntry.following:[]));
+  const theirFollowers=isMe?getFollowers().length:getDirectoryCache().filter(u=>u.id!==userId&&Array.isArray(u.following)&&u.following.includes(userId)).length;
+  content.innerHTML=`<div class="mini-profile-hero"><div class="mini-profile-avatar" style="background:${avatarBgOf(userId)}">${avatarHtmlOf(userId,name)}</div><div class="mini-profile-name">${esc(name)}${isMe?' <span class="lb-you">You</span>':''}</div><div class="mini-profile-user">@${esc(userId)}</div>${bio?`<div class="mini-profile-bio">${esc(bio)}</div>`:''}<div class="mini-profile-follows"><span><b>${(theirFollowing||[]).length}</b> Following</span><span><b>${theirFollowers}</b> Followers</span></div>${followsMe?'<div class="mini-profile-mutual"><span class="mutual-chip">Follows you</span></div>':''}</div>
     <div class="mini-profile-stats"><div class="mini-profile-stat"><div class="mini-profile-stat-val">${sessions.length}</div><div class="mini-profile-stat-label">Workouts</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${fmtStatNum(vol)}</div><div class="mini-profile-stat-label">Volume (kg)</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${stats.week}</div><div class="mini-profile-stat-label">This Week</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${stats.streak}</div><div class="mini-profile-stat-label">Streak 🔥</div></div></div>
     ${!isMe?`<div class="mini-profile-actions">${iAmFollowing?`<button class="btn btn-secondary btn-full" id="mpUnfollow">Following</button>`:`<button class="btn btn-primary btn-full" id="mpFollow">Follow</button>`}</div>`:''}
     <div class="mini-profile-heatmap"><div class="mini-profile-heatmap-title">Activity — Last 16 Weeks</div>${gymHeatmapHtml(userId,name,workouts)}</div>`;
   const followBtn=document.getElementById('mpFollow');const unfollowBtn=document.getElementById('mpUnfollow');
-  if(followBtn)followBtn.addEventListener('click',()=>{const c=FirebaseSync.getConfig();if(!c.following.some(f=>f.id===userId)){FirebaseSync.updateConfig({following:[...c.following,{id:userId,name:name}]});toast('Following @'+userId,'success');closeMiniProfile();renderFriendsCard();}});
-  if(unfollowBtn)unfollowBtn.addEventListener('click',()=>{const c=FirebaseSync.getConfig();FirebaseSync.updateConfig({following:c.following.filter(f=>f.id!==userId)});removeFriendEntry(userId);toast('Unfollowed @'+userId);closeMiniProfile();renderFriendsCard();});
+  if(followBtn)followBtn.addEventListener('click',()=>{const c=FirebaseSync.getConfig();if(!c.following.some(f=>f.id===userId)){FirebaseSync.updateConfig({following:[...c.following,{id:userId,name:name}]});toast('Following @'+userId,'success');closeMiniProfile();renderFriendsCard();fbPush(false);startRealtimeSync();fbPullFollowing(false);}});
+  if(unfollowBtn)unfollowBtn.addEventListener('click',()=>{const c=FirebaseSync.getConfig();FirebaseSync.updateConfig({following:c.following.filter(f=>f.id!==userId)});stopStream(userId);removeFriendEntry(userId);toast('Unfollowed @'+userId);closeMiniProfile();renderFriendsCard();fbPush(false);});
   bg.classList.add('open');bg.addEventListener('click',e=>{if(e.target===bg)closeMiniProfile();},{once:true});
 }
 function closeMiniProfile(){const bg=document.getElementById('miniProfileBg');if(bg)bg.classList.remove('open');}
@@ -2295,9 +2422,11 @@ function bindSettings(){
     });
 
     bFbSave.addEventListener('click',async()=>{
+      const fbBioIn=document.getElementById('fbBio');
       const updateObj={
         userId:fbMyId.value.trim().toLowerCase(),
         displayName:fbDisplayName?fbDisplayName.value.trim():'',
+        bio:fbBioIn?fbBioIn.value.trim().slice(0,120):'',
         github:fbGithub?fbGithub.value.trim():''
       };
       const cfg=FirebaseSync.updateConfig(updateObj);
@@ -2331,15 +2460,19 @@ function bindSettings(){
       FirebaseSync.updateConfig({following:[...cfg.following,{id,name:name||''}]});
       renderFollowList();renderSearchResults();renderFriendsCard();
       toast(`Following @${id}`,'success');
+      fbPush(false);            // publish my new following list (their follower count)
+      startRealtimeSync();      // open a live stream on the new friend
       fbPullFollowing(false).then(()=>{renderFollowList();});
     }
 
     function unfollow(id){
       const cfg=FirebaseSync.getConfig();
       FirebaseSync.updateConfig({following:cfg.following.filter(f=>f.id!==id)});
+      stopStream(id);           // or their stream re-adds them to the cache
       removeFriendEntry(id);
       renderFollowList();renderSearchResults();renderFriendsCard();
       toast(`Unfollowed @${id}`);
+      fbPush(false);
     }
 
     function userRow(u,extra){
@@ -2355,8 +2488,8 @@ function bindSettings(){
           ?`<button class="btn btn-secondary btn-sm" data-unfollow="${esc(u.id)}">Following</button>`
           :`<button class="btn btn-primary btn-sm" data-follow="${esc(u.id)}" data-fname="${esc(u.name||'')}">Follow</button>`;
       
-      const av=me?cfg.avatar:(cached?cached.avatar:'');
-      const avatarHtml=av?`<img src="${av}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:initialOf(u.name||u.id);
+      const av=avatarOf(u.id)||u.avatar||'';
+      const avatarHtml=av?`<img src="${av}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`:initialOf(u.name||u.id);
       const avatarBg=av?'none':avatarGrad(u.id);
 
       return `<div class="user-row">
@@ -2457,6 +2590,30 @@ function bindSettings(){
     }
 
     renderFollowList();
+
+    // Live directory updates (EventSource in listenToDirectory) land here:
+    // refresh the search results + follow/follower lists with fresh
+    // names, photos and counts.
+    dirChangedHook=users=>{
+      userDirectory=users;
+      renderFollowList();
+      renderFollowerList();
+      renderSearchResults();
+    };
+
+    // Strava-style: tapping the hero's Followers / Following stats jumps
+    // to the matching tab of the Find Friends card.
+    const jumpToFollowTab=tab=>{
+      const t=followTabs&&followTabs.querySelector(`.seg-tab[data-tab="${tab}"]`);
+      if(t)t.click();
+      const card=followTabs&&followTabs.closest('.card');
+      if(card)card.scrollIntoView({behavior:'smooth',block:'start'});
+    };
+    [['profFollowers','followers'],['profFollowing','following']].forEach(([id,tab])=>{
+      const el=document.getElementById(id);
+      const stat=el&&el.parentElement;
+      if(stat){stat.style.cursor='pointer';stat.addEventListener('click',()=>jumpToFollowTab(tab));}
+    });
 
     const bFbBackup=document.getElementById('bFbBackup');
     if(bFbBackup)bFbBackup.addEventListener('click',()=>fbPush(true));

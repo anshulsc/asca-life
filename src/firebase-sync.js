@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════
-   ASCA GYM TRACKER — Firebase Backend Module (Auth + Firestore)
+   ASCA GYM TRACKER — Firebase Backend Module (Auth + Realtime DB)
 
    The app's single backend, spoken to over plain REST — no SDK
    and no external <script>, so it works from the static GitHub
@@ -11,12 +11,16 @@
    the old PIN + salt scheme is gone. Sign-in state persists in
    localStorage and tokens are refreshed automatically.
 
-   Each user owns one Firestore document at gym/{syncId} holding
-   { uid, ts, blob } where blob is a compressed progress code
-   (built in app.js). Security rules require sign-in to read and
-   ownership (uid) to write, so the blob no longer needs client-
-   side encryption. Firestore is the source of truth; browser
-   localStorage is only a cache.
+   Each user owns one Realtime Database node at gym/{syncId}:
+     { uid, ts, name, avatar, github, following: [ids],
+       workouts: { "YYYY-MM-DD": { dayType, exercises: [...] } } }
+   Workouts are stored day-wise (date-keyed), so the data is
+   directly browsable in the RTDB console. Old docs that still
+   hold a compressed `blob` progress code are decoded by app.js
+   on read. Security rules require sign-in to read and ownership
+   (uid) to write. RTDB is the source of truth; browser
+   localStorage is only a cache. A parallel directory/{syncId}
+   node holds { name, ts } for lightweight user listings.
    ═══════════════════════════════════════════════════════════════ */
 
 const FirebaseSync = (() => {
@@ -48,8 +52,11 @@ const FirebaseSync = (() => {
   const AUTH_KEY = 'asca_gym_auth';               // tokens + user info
 
   let config = {
-    userId: '',        // my document id under gym/, e.g. "anshul"
+    userId: '',        // my node id under gym/, e.g. "anshul"
     displayName: '',   // shown to followers; defaults to userId
+    avatar: '',        // small base64 data-URI profile photo
+    bio: '',           // short profile tagline
+    github: '',        // optional GitHub username
     following: []      // Strava-style follow list: [{ id, name }]
   };
 
@@ -64,6 +71,9 @@ const FirebaseSync = (() => {
         const s = JSON.parse(saved);
         config.userId = s.userId || '';
         config.displayName = s.displayName || '';
+        config.avatar = s.avatar || '';
+        config.bio = s.bio || '';
+        config.github = s.github || '';
         if (Array.isArray(s.following)) {
           config.following = s.following
             .filter(f => f && f.id)
@@ -233,22 +243,70 @@ const FirebaseSync = (() => {
     return `${baseUrl}/${path}`;
   }
 
-  // Read a user's doc; returns { uid, ts, blob } or null when missing.
+  // RTDB has no real arrays: they round-trip as objects with numeric
+  // keys when sparse, and empty ones vanish entirely.
+  function toArr(v) {
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === 'object') {
+      return Object.keys(v).sort((a, b) => (+a) - (+b)).map(k => v[k]);
+    }
+    return [];
+  }
+
+  // workouts array [{date, dayType, exercises}] ⇄ date-keyed map
+  // { "YYYY-MM-DD": { dayType, exercises } } as stored in RTDB.
+  function workoutsToMap(list) {
+    const map = {};
+    (list || []).forEach(w => {
+      if (!w || !w.date) return;
+      const { date, ...rest } = w;
+      map[date] = rest;
+    });
+    return map;
+  }
+
+  function workoutsToArray(map) {
+    if (!map || typeof map !== 'object') return null;
+    return Object.entries(map)
+      .map(([date, w]) => ({
+        date,
+        ...(w || {}),
+        exercises: toArr(w && w.exercises).map(e => ({ ...e, sets: toArr(e && e.sets) }))
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  // Shape a raw gym/{id} node (from readDoc or an EventSource packet)
+  // into { uid, ts, name, avatar, github, following, workouts, blob }.
+  // `workouts` is an array (or null for legacy blob-only docs, whose
+  // `blob` app.js still knows how to decode).
+  function normalizeDocData(data) {
+    if (!data) return null;
+    return {
+      uid: data.uid || '',
+      ts: data.ts || 0,
+      name: data.name || '',
+      avatar: data.avatar || '',
+      bio: data.bio || '',
+      github: data.github || '',
+      following: toArr(data.following).map(String),
+      workouts: workoutsToArray(data.workouts),
+      blob: data.blob || ''
+    };
+  }
+
+  // Read a user's node; returns the normalized doc or null when missing.
   async function readDoc(docId) {
     if (!hasBackend() || !docId) return null;
     const token = await getIdToken();
     const res = await fetch(dbUrl(`gym/${encodeURIComponent(docId)}.json?auth=${token}`));
     if (!res.ok) throw new Error('Database responded ' + res.status);
-    const data = await res.json();
-    if (!data) return null;
-    return {
-      uid: data.uid || '',
-      ts: data.ts || 0,
-      blob: data.blob || ''
-    };
+    return normalizeDocData(await res.json());
   }
 
-  // Create-or-overwrite gym/{userId} with { uid, ts, blob, name } & directory metadata.
+  // Create-or-overwrite gym/{userId} with the structured day-wise doc
+  // ({ ts, workouts: [...] } in; profile fields come from config) and
+  // refresh the directory metadata.
   async function writeDoc(payload) {
     loadConfig();
     if (!isConnected()) throw new Error('Firebase not configured');
@@ -257,8 +315,12 @@ const FirebaseSync = (() => {
     const data = {
       uid: auth.uid,
       ts: payload.ts || Date.now(),
-      blob: payload.blob || '',
-      name: (config.displayName || config.userId || '').slice(0, 60)
+      name: (config.displayName || config.userId || '').slice(0, 60),
+      avatar: config.avatar || '',
+      bio: (config.bio || '').slice(0, 120),
+      github: config.github || '',
+      following: (config.following || []).map(f => f.id),
+      workouts: workoutsToMap(payload.workouts)
     };
 
     const res1 = await fetch(dbUrl(`gym/${encodeURIComponent(config.userId)}.json?auth=${token}`), {
@@ -274,10 +336,15 @@ const FirebaseSync = (() => {
     }
     if (!res1.ok) throw new Error('Database responded ' + res1.status);
 
-    // Save directory metadata for lightweight listings
+    // Save directory metadata for lightweight listings: name + avatar
+    // for search results, following ids so anyone can compute follower
+    // counts without downloading workout data.
     const meta = {
       name: data.name,
-      ts: data.ts
+      ts: data.ts,
+      avatar: data.avatar,
+      bio: data.bio,
+      following: data.following
     };
     await fetch(dbUrl(`directory/${encodeURIComponent(config.userId)}.json?auth=${token}`), {
       method: 'PUT',
@@ -302,8 +369,11 @@ const FirebaseSync = (() => {
     Object.entries(data).forEach(([id, u]) => {
       users.push({
         id,
-        name: u.name || id,
-        ts: u.ts || 0
+        name: (u && u.name) || id,
+        ts: (u && u.ts) || 0,
+        avatar: (u && u.avatar) || '',
+        bio: (u && u.bio) || '',
+        following: toArr(u && u.following).map(String)
       });
     });
     return users;
@@ -340,6 +410,7 @@ const FirebaseSync = (() => {
     getIdToken,
     readDoc,
     writeDoc,
+    normalizeDocData,
     listUsers,
     isConnected,
     getConfig
