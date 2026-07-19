@@ -2675,7 +2675,7 @@ canvas { width: 100%; height: 100%; }
   transition: max-height 0.3s var(--spring, ease), opacity 0.25s ease, margin 0.3s ease;
   text-align: left;
 }
-.profile-edit.open { max-height: 240px; opacity: 1; margin-top: 18px; }
+.profile-edit.open { max-height: 480px; opacity: 1; margin-top: 18px; }
 
 .follow-header {
   display: flex; align-items: baseline; gap: 6px;
