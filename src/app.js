@@ -32,7 +32,9 @@ function startApp() {
     // fresh doc + directory entry from their first session — otherwise
     // new accounts are invisible in search and suggestions until they
     // save something.
-    fbRestore(false).then(()=>fbPush(false)).catch(()=>{});
+    fbRestore(false).then(()=>fbPush(false))
+      .then(ok=>{if(!ok)setTimeout(()=>fbPush(false),8000);}) // flaky network at open — try once more
+      .catch(()=>{});
     fbPullFollowing(false);
   }
   
