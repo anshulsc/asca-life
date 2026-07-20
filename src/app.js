@@ -26,6 +26,10 @@ function startApp() {
   // doc and pull every followed athlete immediately, then the EventSource
   // streams keep everything live — localStorage is only the offline
   // fallback that painted the first frame.
+  // Repair days duplicated by the old double-append before anything renders
+  // or syncs; the boot fbPush below carries the cleaned day-map up.
+  if(dedupeWorkouts(W))save();
+
   if(fbCfg().connected){
     startRealtimeSync();
     // Push after the restore settles so every signed-in user has a
@@ -1171,7 +1175,10 @@ async function fbRestore(interactive=true){
     payload.workouts.forEach(wo=>{
       if(wo&&wo.date&&!W.find(w=>w.date===wo.date)){W.push(wo);added++;}
     });
-    if(added){
+    // Sessions pulled from an old dirty doc carry the duplicates with them,
+    // so clean after merging too — not just at boot off localStorage.
+    const cleaned=dedupeWorkouts(W);
+    if(added||cleaned){
       W.sort((a,b)=>b.date.localeCompare(a.date));save();
       renderRecent();renderHeatmapCalendar();renderVolWidget();
     }
@@ -2138,20 +2145,70 @@ function bindActs(){
   });
 }
 
+// Guards against a second Finish landing while the first is still awaiting
+// fbPush — that race used to append the whole session twice.
+let finishing=false;
+
 async function finish(){
+  if(finishing)return;
   const d=document.getElementById('wDate').value,t=document.getElementById('wType').value;
   if(!d){toast('Pick a date','error');return;}
   if(!t){toast('Pick a split focus','error');return;}
   if(t!=='Rest Day'&&!SE.length){toast('Add at least one exercise','error');return;}
-  const wo={date:d,dayType:t,exercises:t==='Rest Day'?[]:[...SE]};
-  const idx=W.findIndex(w=>w.date===d);
-  if(idx>=0){wo.exercises=[...W[idx].exercises,...wo.exercises];W[idx]=wo;}else W.unshift(wo);
-  W.sort((a,b)=>b.date.localeCompare(a.date));save();
-  const synced=fbCfg().connected?await fbPush(false):false;
-  toast(synced?'Saved & Synced':'Saved locally','success');
-  SE=[];eEx=null;eSets=[];persistSE();document.getElementById('se').style.display='none';
-  document.getElementById('acts').style.display='none';renderLogged();
-  renderHeatmapCalendar();renderVolWidget();renderProfile();
+  finishing=true;
+  const finBtn=document.getElementById('fin');if(finBtn)finBtn.disabled=true;
+  // Drain the session synchronously: even if something re-enters before the
+  // await below settles, there is no longer a batch left to double-log.
+  const batch=t==='Rest Day'?[]:SE;
+  SE=[];persistSE();
+  try{
+    const wo={date:d,dayType:t,exercises:batch};
+    const idx=W.findIndex(w=>w.date===d);
+    if(idx>=0){wo.exercises=mergeExercises(W[idx].exercises,batch);W[idx]=wo;}else W.unshift(wo);
+    W.sort((a,b)=>b.date.localeCompare(a.date));save();
+    const synced=fbCfg().connected?await fbPush(false):false;
+    toast(synced?'Saved & Synced':'Saved locally','success');
+    eEx=null;eSets=[];document.getElementById('se').style.display='none';
+    document.getElementById('acts').style.display='none';renderLogged();
+    renderHeatmapCalendar();renderVolWidget();renderProfile();
+  }finally{
+    finishing=false;if(finBtn)finBtn.disabled=false;
+  }
+}
+
+// Fold a newly logged batch into an existing day. Repeating an exercise on
+// the same date extends that exercise's sets instead of creating a second
+// entry with the same name — which is what made a day read as duplicated.
+function mergeExercises(existing,batch){
+  const out=(existing||[]).map(ex=>({...ex,sets:[...(ex.sets||[])]}));
+  (batch||[]).forEach(ex=>{
+    if(!ex||!ex.name)return;
+    const hit=out.find(e=>e.name===ex.name);
+    if(hit)hit.sets=[...hit.sets,...(ex.sets||[])];
+    else out.push({...ex,sets:[...(ex.sets||[])]});
+  });
+  return out;
+}
+
+// One-time repair for days already corrupted by the old double-append: an
+// exercise entry whose name AND full set list exactly repeat an earlier
+// entry in the same day can only have come from a duplicated write, so drop
+// it. Genuine repeat sets inside a single exercise are untouched.
+function setSig(s){return s?`${s.weight??''}|${s.reps??''}|${s.notes||''}|${s.isLevel?1:0}`:'';}
+function dedupeWorkouts(list){
+  let removed=0;
+  (list||[]).forEach(w=>{
+    if(!w||!Array.isArray(w.exercises))return;
+    const seen=new Set(),keep=[];let dropped=0;
+    w.exercises.forEach(ex=>{
+      if(!ex||!ex.name){keep.push(ex);return;}
+      const sig=ex.name+'::'+(ex.sets||[]).map(setSig).join(';');
+      if(seen.has(sig)){dropped++;return;}
+      seen.add(sig);keep.push(ex);
+    });
+    if(dropped){w.exercises=keep;removed+=dropped;}
+  });
+  return removed;
 }
 
 /* ── Elite Timeline History ────────────────────────────────── */
