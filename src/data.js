@@ -48,8 +48,31 @@ const EXERCISE_LIBRARY = {
     "Leg Raises",
     "Knee Raises",
     "Wrist Curl"
+  ],
+  "Cardio": [
+    "Treadmill Run",
+    "Incline Treadmill Walk",
+    "Stationary Bike",
+    "Elliptical",
+    "Stair Climber",
+    "Rowing Machine",
+    "Jump Rope",
+    "Outdoor Run",
+    "Outdoor Walk",
+    "Swimming",
+    "HIIT Circuit"
   ]
 };
+
+// Cardio exercises log duration/distance/calories instead of weight × reps.
+// Word-bounded match so e.g. "Crunch" doesn't hit "run".
+const CARDIO_KEYWORDS = ["treadmill", "run", "running", "walk", "bike", "cycling", "elliptical", "stair", "stairs", "rowing", "jump rope", "swim", "swimming", "hiit", "cardio", "sprint", "sprints", "jog"];
+function isCardioExercise(name) {
+  const cn = canonicalName(name || '').toLowerCase();
+  if ((EXERCISE_LIBRARY["Cardio"] || []).some(e => e.toLowerCase() === cn)) return true;
+  const words = cn.split(/[^a-z]+/);
+  return CARDIO_KEYWORDS.some(k => k.includes(' ') ? cn.includes(k) : words.includes(k));
+}
 
 // Alias map: maps old/variant names → canonical name (backward compat)
 const EXERCISE_ALIASES = {
@@ -128,6 +151,25 @@ const EXERCISE_ALIASES = {
   "calves raises": "Calf Raises",
   "calf raises": "Calf Raises",
 
+  // Cardio aliases
+  "treadmill": "Treadmill Run",
+  "running": "Treadmill Run",
+  "run": "Treadmill Run",
+  "incline walk": "Incline Treadmill Walk",
+  "treadmill walk": "Incline Treadmill Walk",
+  "walking": "Incline Treadmill Walk",
+  "cycling": "Stationary Bike",
+  "bike": "Stationary Bike",
+  "spin bike": "Stationary Bike",
+  "stairmaster": "Stair Climber",
+  "stairs": "Stair Climber",
+  "rower": "Rowing Machine",
+  "rowing": "Rowing Machine",
+  "skipping": "Jump Rope",
+  "skipping rope": "Jump Rope",
+  "swim": "Swimming",
+  "hiit": "HIIT Circuit",
+
   // Core aliases
   "ab crunches": "Machine Crunch",
   "abs crunches vertical": "Machine Crunch",
@@ -148,7 +190,7 @@ const DAY_TYPES = [
   "Pull", "Push", "Legs", "Shoulders", "Upper",
   "Pull + Shoulders", "Push + Shoulders",
   "Legs + Shoulders", "Shoulders + Lower",
-  "Full Body", "Rest Day"
+  "Full Body", "Cardio", "Rest Day"
 ];
 
 // Workout Routines Config (for Dropset-style routine cards)

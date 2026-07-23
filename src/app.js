@@ -572,17 +572,22 @@ function renderHeatmapCalendar(){
     const vol=w.exercises.reduce((s,e)=>s+e.sets.reduce((ss,x)=>ss+((getSetWeightVal(x))*(x.reps||0)),0),0);
     const setsCount=w.exercises.reduce((s,e)=>s+e.sets.length,0);
     const exCount=w.exercises.length;
-    
+    const cardio=workoutCardio(w);
+
     dateWorkouts[w.date] = {
       dayType: w.dayType,
       volume: vol,
       sets: setsCount,
-      exercises: exCount
+      exercises: exCount,
+      cardioMins: cardio.mins,
+      cardioKm: cardio.km,
+      cardioKcal: cardio.kcal
     };
   });
-  
-  // Find max volume for scaling
+
+  // Find max volume / cardio minutes for scaling
   const maxVol = Math.max(...Object.values(dateWorkouts).map(info => info.volume), 1);
+  const maxCardio = Math.max(...Object.values(dateWorkouts).map(info => info.cardioMins), 1);
   
   // Generate grid (7 rows x 24 cols, starting on Sunday) as one HTML
   // string with a single delegated click listener — much cheaper than
@@ -608,10 +613,14 @@ function renderHeatmapCalendar(){
       const dateStr=`${y}-${mOffset}-${dOffset}`;
       const info=dateWorkouts[dateStr];
       const vol=info?info.volume:0;
+      const cMins=info?info.cardioMins:0;
 
+      // Any logged activity lights the dot: intensity is whichever of
+      // lifted-volume or cardio-minutes ratio is stronger, so a pure
+      // cardio day still shows up in the daily-progress grid.
       let lvl='';
-      if(vol>0){
-        const ratio=vol/maxVol;
+      if(vol>0||cMins>0||(info&&info.dayType!=='Rest Day'&&info.exercises>0)){
+        const ratio=Math.max(vol/maxVol,cMins/maxCardio);
         if(ratio>0.6)lvl='lvl-3';
         else if(ratio>0.3)lvl='lvl-2';
         else lvl='lvl-1';
@@ -623,7 +632,10 @@ function renderHeatmapCalendar(){
 
       let tooltip;
       if(info && info.dayType !== 'Rest Day') {
-        tooltip = `${formattedDate}\n${info.dayType} Day\n• Volume: ${Math.round(info.volume)} kg\n• Exercises: ${info.exercises}\n• Sets: ${info.sets}`;
+        tooltip = `${formattedDate}\n${info.dayType} Day`;
+        if(info.volume>0)tooltip+=`\n• Volume: ${Math.round(info.volume)} kg`;
+        if(info.cardioMins>0)tooltip+=`\n• Cardio: ${info.cardioMins} min${info.cardioKm?` · ${info.cardioKm} km`:''}${info.cardioKcal?` · ${info.cardioKcal} kcal`:''}`;
+        tooltip+=`\n• Exercises: ${info.exercises}\n• Sets: ${info.sets}`;
       } else {
         tooltip = `${formattedDate}\nRest Day`;
       }
@@ -654,10 +666,14 @@ function renderHeatmapCalendar(){
 
     const {info,formattedDate}=meta;
     if (info && info.dayType !== 'Rest Day') {
+      const bits=[];
+      if(info.volume>0)bits.push(`${Math.round(info.volume)} kg volume`);
+      if(info.cardioMins>0)bits.push(`${info.cardioMins} min cardio${info.cardioKm?` · ${info.cardioKm} km`:''}`);
+      bits.push(`${info.exercises} ex`,`${info.sets} sets`);
       detailsEl.innerHTML = `
-        <div style="display:flex; justify-content:space-between; width:100%; align-items:center">
+        <div style="display:flex; justify-content:space-between; width:100%; align-items:center; gap:8px; flex-wrap:wrap">
           <span><strong>${formattedDate}</strong>: <span style="color:var(--accent); font-weight:700">${info.dayType} Day</span></span>
-          <span style="color:var(--t-4)">${Math.round(info.volume)} kg volume • ${info.exercises} ex • ${info.sets} sets</span>
+          <span style="color:var(--t-4)">${bits.join(' • ')}</span>
         </div>
       `;
     } else {
@@ -682,6 +698,19 @@ function renderHeatmapCalendar(){
     const detailsEl = document.getElementById('heatmapDayDetails');
     if (detailsEl) detailsEl.textContent = 'Tap a cell to view workout details & stats';
   }
+
+  // On narrow screens the grid scrolls — land on the newest weeks so
+  // today's progress is what greets you, not 6-month-old dots.
+  const scroller=grid.closest('.heatmap-main');
+  if(scroller)requestAnimationFrame(()=>{scroller.scrollLeft=scroller.scrollWidth;});
+}
+
+// Snap every GitHub-style heatmap inside `root` to its newest (right) edge.
+function scrollHeatmapsToLatest(root){
+  if(!root)return;
+  requestAnimationFrame(()=>{
+    root.querySelectorAll('.gym-heatmap-wrap').forEach(w=>{w.scrollLeft=w.scrollWidth;});
+  });
 }
 
 /* ── Volume Widget ────────────────────────────────────────── */
@@ -1290,6 +1319,7 @@ function updateFollowName(id,name){
 // gets a consistent hue everywhere it appears (feed rail + chip).
 function dayTypeColor(dt){
   const s=String(dt||'').toLowerCase();
+  if(s.includes('cardio'))return '#FF375F';
   if(s.includes('push'))return '#FF7600';
   if(s.includes('pull'))return '#0A84FF';
   if(s.includes('leg')||s.includes('lower'))return '#BF5AF2';
@@ -1401,6 +1431,14 @@ function renderProfile(){
   const el=document.getElementById('profFollowers');
   if(el)el.textContent=getFollowers().length;
   document.getElementById('profFollowing').textContent=cfg.following.length;
+
+  // Same GitHub-style activity monitor as Social/mini-profile, always
+  // rebuilt from live local workouts so today's session shows instantly.
+  const hm=document.getElementById('profHeatmap');
+  if(hm){
+    hm.innerHTML=gymHeatmapHtml(cfg.userId||'me',name,W,score,true);
+    scrollHeatmapsToLatest(hm);
+  }
 }
 
 /* ── ASCA Score — relative strength ───────────────────────── */
@@ -1424,6 +1462,7 @@ function periodStatsExtended(list, timeframe='week'){
     startDate=new Date(today.getTime()-30*24*60*60*1000);
   }
   let workouts=0,vol=0,sets=0,exNames=new Set(),heaviest=0,dailyVol={};
+  let cardioMins=0,cardioKm=0,cardioKcal=0;
   let streak=0,checkDate=new Date();checkDate.setHours(0,0,0,0);
   const dateSet=new Set((list||[]).filter(w=>w&&w.dayType!=='Rest Day').map(w=>w.date));
   while(true){
@@ -1444,6 +1483,7 @@ function periodStatsExtended(list, timeframe='week'){
           e.sets.forEach(s=>{const wv=getSetWeightVal(s);if(wv&&s.reps){vol+=wv*s.reps;dv+=wv*s.reps;}if(wv>heaviest)heaviest=wv;});
         });
         dailyVol[w.date]=(dailyVol[w.date]||0)+dv;
+        const c=workoutCardio(w);cardioMins+=c.mins;cardioKm+=c.km;cardioKcal+=c.kcal;
       }
     }
   });
@@ -1453,7 +1493,8 @@ function periodStatsExtended(list, timeframe='week'){
     const d=new Date(today);d.setDate(d.getDate()-i);
     spark.push(dailyVol[d.toISOString().slice(0,10)]||0);
   }
-  return {workouts,volume:vol,sets,heaviest,variety:exNames.size,streak,spark};
+  return {workouts,volume:vol,sets,heaviest,variety:exNames.size,streak,spark,
+    cardioMins:Math.round(cardioMins),cardioKm:Math.round(cardioKm*10)/10,cardioKcal:Math.round(cardioKcal)};
 }
 
 function sparklineSvg(data,color){
@@ -1476,10 +1517,10 @@ function buildLBRows(){
     ...ids.map(id=>mk(id,cache.friends[id].name||id,false,cache.friends[id].workouts||[],cache.friends[id].bw||0))];
 }
 function metricVal(stats,m){
-  const v={score:stats.score,vol7:stats.volume,week:stats.workouts,sets7:stats.sets,consistency:stats.streak}[m];
+  const v={score:stats.score,vol7:stats.volume,week:stats.workouts,sets7:stats.sets,cardio:stats.cardioMins,consistency:stats.streak}[m];
   return v===undefined?stats.volume:v; // 0 is a real value (e.g. 0-day streak), not a miss
 }
-function metricLabel(m){return {score:'score',vol7:'kg',week:'workouts',sets7:'sets',consistency:'day streak'}[m]||'';}
+function metricLabel(m){return {score:'score',vol7:'kg',week:'workouts',sets7:'sets',cardio:'min cardio',consistency:'day streak'}[m]||'';}
 
 
 function renderPodium(rows,metric){
@@ -1522,26 +1563,34 @@ function renderLeaderboardRows(rows,metric){
   cmp.querySelectorAll('.lb-row').forEach(el=>el.addEventListener('click',()=>showMiniProfile(el.dataset.uid)));
 }
 
-function gymHeatmapHtml(id,name,workouts,score){
+function gymHeatmapHtml(id,name,workouts,score,bare){
   const today=new Date();today.setHours(0,0,0,0);const weeks=16,days=weeks*7;
-  const volMap={};
+  const volMap={},cardioMap={};
   (workouts||[]).forEach(w=>{if(!w||!w.date||w.dayType==='Rest Day')return;let v=0;
-    (w.exercises||[]).forEach(e=>e.sets.forEach(s=>{const wv=getSetWeightVal(s);if(wv&&s.reps)v+=wv*s.reps;}));volMap[w.date]=(volMap[w.date]||0)+v;});
+    (w.exercises||[]).forEach(e=>e.sets.forEach(s=>{const wv=getSetWeightVal(s);if(wv&&s.reps)v+=wv*s.reps;}));
+    volMap[w.date]=(volMap[w.date]||0)+v;
+    const c=workoutCardio(w);if(c.mins)cardioMap[w.date]=(cardioMap[w.date]||0)+c.mins;});
   const maxV=Math.max(...Object.values(volMap),1);
+  const maxC=Math.max(...Object.values(cardioMap),1);
   let streak=0,d=new Date(today);
   const dateSet=new Set((workouts||[]).filter(w=>w&&w.dayType!=='Rest Day').map(w=>w.date));
   while(dateSet.has(d.toISOString().slice(0,10))){streak++;d.setDate(d.getDate()-1);}
   let dots='';const startDate=new Date(today);startDate.setDate(today.getDate()-(days-1));startDate.setDate(startDate.getDate()-startDate.getDay());
   for(let i=0;i<days;i++){const dd=new Date(startDate);dd.setDate(startDate.getDate()+i);
     if(dd>today){dots+='<div class="gym-heatmap-dot" style="visibility:hidden"></div>';continue;}
-    const ds=dd.toISOString().slice(0,10);const v=volMap[ds]||0;let lvl='';
-    if(v>0){const r=v/maxV;lvl=r>0.7?'g-4':r>0.4?'g-3':r>0.15?'g-2':'g-1';}
-    dots+=`<div class="gym-heatmap-dot ${lvl}" title="${ds}"></div>`;}
-  return `<div class="gym-activity-section"><div class="gym-activity-header">
+    const ds=dd.toISOString().slice(0,10);const v=volMap[ds]||0;const cm=cardioMap[ds]||0;let lvl='';
+    // Cardio-only days count too — intensity is the stronger of the two ratios
+    if(v>0||cm>0||dateSet.has(ds)){const r=Math.max(v/maxV,cm/maxC);lvl=r>0.7?'g-4':r>0.4?'g-3':r>0.15?'g-2':'g-1';}
+    const tip=cm>0?`${ds} · ${cm} min cardio${v>0?` · ${Math.round(v)} kg`:''}`:v>0?`${ds} · ${Math.round(v)} kg`:ds;
+    dots+=`<div class="gym-heatmap-dot ${lvl}${cm>0?' g-cardio':''}" title="${tip}"></div>`;}
+  const header=bare===true
+    ?`<div class="gym-activity-header gym-activity-header-bare"><div class="gym-activity-streak">${streak?'🔥 '+streak+' day streak':''}</div></div>`
+    :`<div class="gym-activity-header">
     <div class="gym-activity-avatar" style="background:${avatarBgOf(id)}">${avatarHtmlOf(id,name)}</div>
     <div class="gym-activity-name">${esc(name)}</div>
     ${score?`<div class="gym-activity-score">${score}<span>score</span></div>`:''}
-    <div class="gym-activity-streak">${streak?'🔥 '+streak+' day streak':''}</div></div>
+    <div class="gym-activity-streak">${streak?'🔥 '+streak+' day streak':''}</div></div>`;
+  return `<div class="gym-activity-section">${header}
     <div class="gym-heatmap-wrap"><div class="gym-heatmap-grid">${dots}</div></div>
     <div class="gym-heatmap-legend">Less <div class="gym-heatmap-legend-dot" style="background:rgba(255,255,255,0.04)"></div>
     <div class="gym-heatmap-legend-dot" style="background:rgba(255,107,0,0.2)"></div>
@@ -1556,6 +1605,7 @@ function renderGymActivity(allRows){
   if(!allRows.length){label.style.display='none';card.style.display='none';return;}
   label.style.display='block';card.style.display='block';
   grids.innerHTML=allRows.map(r=>gymHeatmapHtml(r.id,r.name,r.workouts,r.stats.score)).join('');
+  scrollHeatmapsToLatest(grids);
 }
 
 let _h2hOpp=null; // survives re-renders so timeframe switches keep the matchup
@@ -1582,6 +1632,7 @@ function renderH2HBody(a,b){
     {label:'Volume',aVal:a.stats.volume,bVal:b.stats.volume,unit:'kg'},
     {label:'Workouts',aVal:a.stats.workouts,bVal:b.stats.workouts,unit:''},
     {label:'Sets',aVal:a.stats.sets,bVal:b.stats.sets,unit:''},
+    {label:'Cardio',aVal:a.stats.cardioMins||0,bVal:b.stats.cardioMins||0,unit:'min'},
     {label:'Heaviest',aVal:a.stats.heaviest,bVal:b.stats.heaviest,unit:'kg'},
     {label:'Streak',aVal:a.stats.streak,bVal:b.stats.streak,unit:'days'}
   ];
@@ -1655,14 +1706,16 @@ function renderActivityFeed(allRows){
   recent.innerHTML=feed.slice(0,12).map(({id,name,w})=>{
     const sets=w.exercises.reduce((s,e)=>s+e.sets.length,0);
     const vol=w.exercises.reduce((s,e)=>s+e.sets.reduce((ss,x)=>ss+((getSetWeightVal(x))*(x.reps||0)),0),0);
+    const cd=workoutCardio(w);
     const dtc=dayTypeColor(w.dayType);
     const maxes=maxById[id]||{};
     let prName='';w.exercises.forEach(e=>e.sets.forEach(s=>{const wv=getSetWeightVal(s);if(wv&&maxes[e.name]&&wv>=maxes[e.name]&&!prName)prName=e.name;}));
     const story=trainedRecently(woById[id])?' has-story':'';
     const route=w.exercises.map(e=>e.name).slice(0,3).join(' · ');
     const detail=w.exercises.map(e=>{
-      const setsH=(e.sets||[]).map((s,i)=>`<div class="fd-set"><span class="fd-set-idx">${i+1}</span><span class="fd-set-wr">${formatWeightVal(s)} × ${s.reps!=null&&s.reps!==''?s.reps:'—'}</span>${s.notes?`<span class="fd-set-note">${esc(s.notes)}</span>`:''}</div>`).join('');
-      return `<div class="fd-ex"><div class="fd-ex-head"><span class="fd-ex-name">${esc(e.name)}</span><span class="fd-ex-sets">${(e.sets||[]).length} set${(e.sets||[]).length===1?'':'s'}</span></div><div class="fd-sets">${setsH}</div></div>`;
+      const setsH=(e.sets||[]).map((s,i)=>`<div class="fd-set"><span class="fd-set-idx">${i+1}</span><span class="fd-set-wr">${isCardioSet(s)?cardioSetLabel(s):`${formatWeightVal(s)} × ${s.reps!=null&&s.reps!==''?s.reps:'—'}`}</span>${s.notes?`<span class="fd-set-note">${esc(s.notes)}</span>`:''}</div>`).join('');
+      const isCardioEx=(e.sets||[]).some(isCardioSet);
+      return `<div class="fd-ex"><div class="fd-ex-head"><span class="fd-ex-name">${esc(e.name)}</span><span class="fd-ex-sets">${(e.sets||[]).length} ${isCardioEx?'interval':'set'}${(e.sets||[]).length===1?'':'s'}</span></div><div class="fd-sets">${setsH}</div></div>`;
     }).join('');
     return `<article class="feed-card" data-uid="${esc(id)}" style="--dt:${dtc};--dt-bg:${dtc}22">
       <div class="feed-card-bar"></div>
@@ -1673,7 +1726,10 @@ function renderActivityFeed(allRows){
           <span class="feed-type" style="background:${dtc}22;color:${dtc}">${esc(w.dayType||'Workout')}</span>
         </div>
         <div class="feed-stats">
-          <div class="feed-stat"><b>${fmtStatNum(vol)}</b><span>kg volume</span></div>
+          ${vol>0||cd.mins===0?`<div class="feed-stat"><b>${fmtStatNum(vol)}</b><span>kg volume</span></div>`:''}
+          ${cd.mins>0?`<div class="feed-stat feed-stat-cardio"><b>🏃 ${cd.mins}</b><span>min cardio</span></div>`:''}
+          ${cd.km>0?`<div class="feed-stat feed-stat-cardio"><b>${cd.km}</b><span>km</span></div>`:''}
+          ${cd.kcal>0?`<div class="feed-stat feed-stat-cardio"><b>${cd.kcal}</b><span>kcal</span></div>`:''}
           <div class="feed-stat"><b>${sets}</b><span>sets</span></div>
           <div class="feed-stat"><b>${w.exercises.length}</b><span>exercise${w.exercises.length===1?'':'s'}</span></div>
           ${prName?`<div class="feed-stat feed-stat-pr"><b>🏆 PR</b><span>${esc(prName)}</span></div>`:''}
@@ -1782,14 +1838,16 @@ function showMiniProfile(userId){
   const bio=isMe?(cfg.bio||''):((friendData&&friendData.bio)||(dirEntry&&dirEntry.bio)||'');
   const theirFollowing=isMe?cfg.following.map(f=>f.id):(friendData&&Array.isArray(friendData.following)?friendData.following:(dirEntry?dirEntry.following:[]));
   const theirFollowers=isMe?getFollowers().length:getDirectoryCache().filter(u=>u.id!==userId&&Array.isArray(u.following)&&u.following.includes(userId)).length;
-  const mpScore=ascaScore(periodStatsExtended(workouts,'week').volume,isMe?myBW():((friendData&&friendData.bw)||(dirEntry&&dirEntry.bw)||0));
+  const mpWeek=periodStatsExtended(workouts,'week');
+  const mpScore=ascaScore(mpWeek.volume,isMe?myBW():((friendData&&friendData.bw)||(dirEntry&&dirEntry.bw)||0));
   const mpStory=trainedRecently(workouts)?' has-story':'';
-  const mpTiles=sessions.slice(0,6).map(w=>{const dtc=dayTypeColor(w.dayType);const v=(w.exercises||[]).reduce((s,e)=>s+e.sets.reduce((ss,x)=>ss+(getSetWeightVal(x)*(x.reps||0)),0),0);return `<div class="mp-tile" style="--dt:${dtc}"><span class="mp-tile-type">${esc(w.dayType||'Workout')}</span><span class="mp-tile-vol">${fmtStatNum(v)}<em>kg</em></span><span class="mp-tile-date">${dayAgo(w.date)}</span></div>`;}).join('');
+  const mpTiles=sessions.slice(0,6).map(w=>{const dtc=dayTypeColor(w.dayType);const v=(w.exercises||[]).reduce((s,e)=>s+e.sets.reduce((ss,x)=>ss+(getSetWeightVal(x)*(x.reps||0)),0),0);const c=workoutCardio(w);const valHtml=(v===0&&c.mins>0)?`${c.mins}<em>min</em>`:`${fmtStatNum(v)}<em>kg</em>`;return `<div class="mp-tile" style="--dt:${dtc}"><span class="mp-tile-type">${esc(w.dayType||'Workout')}</span><span class="mp-tile-vol">${valHtml}</span><span class="mp-tile-date">${dayAgo(w.date)}</span></div>`;}).join('');
   content.innerHTML=`<div class="mini-profile-hero"><div class="avatar-ring mp-avatar-ring${mpStory}"><div class="mini-profile-avatar" style="background:${avatarBgOf(userId)}">${avatarHtmlOf(userId,name)}</div></div><div class="mini-profile-name">${esc(name)}${isMe?' <span class="lb-you">You</span>':''}</div><div class="mini-profile-user">@${esc(userId)}</div>${bio?`<div class="mini-profile-bio">${esc(bio)}</div>`:''}<div class="mini-profile-follows"><span><b>${(theirFollowing||[]).length}</b> Following</span><span><b>${theirFollowers}</b> Followers</span></div>${followsMe?'<div class="mini-profile-mutual"><span class="mutual-chip">Follows you</span></div>':''}</div>
-    <div class="mini-profile-stats"><div class="mini-profile-stat"><div class="mini-profile-stat-val mini-profile-score">${mpScore}</div><div class="mini-profile-stat-label">Score</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${sessions.length}</div><div class="mini-profile-stat-label">Workouts</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${fmtStatNum(vol)}</div><div class="mini-profile-stat-label">Volume (kg)</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${stats.streak}</div><div class="mini-profile-stat-label">Streak 🔥</div></div></div>
+    <div class="mini-profile-stats"><div class="mini-profile-stat"><div class="mini-profile-stat-val mini-profile-score">${mpScore}</div><div class="mini-profile-stat-label">Score</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${sessions.length}</div><div class="mini-profile-stat-label">Workouts</div></div><div class="mini-profile-stat"><div class="mini-profile-stat-val">${fmtStatNum(vol)}</div><div class="mini-profile-stat-label">Volume (kg)</div></div>${mpWeek.cardioMins>0?`<div class="mini-profile-stat"><div class="mini-profile-stat-val" style="color:#FF375F">${mpWeek.cardioMins}</div><div class="mini-profile-stat-label">Cardio (min/wk)</div></div>`:''}<div class="mini-profile-stat"><div class="mini-profile-stat-val">${stats.streak}</div><div class="mini-profile-stat-label">Streak 🔥</div></div></div>
     ${!isMe?`<div class="mini-profile-actions">${iAmFollowing?`<button class="btn btn-secondary btn-full" id="mpUnfollow">Following</button>`:`<button class="btn btn-primary btn-full" id="mpFollow">Follow</button>`}</div>`:''}
     ${mpTiles?`<div class="mini-profile-tiles-wrap"><div class="mini-profile-heatmap-title">Recent sessions</div><div class="mini-profile-tiles">${mpTiles}</div></div>`:''}
     <div class="mini-profile-heatmap"><div class="mini-profile-heatmap-title">Activity — Last 16 Weeks</div>${gymHeatmapHtml(userId,name,workouts,mpScore)}</div>`;
+  scrollHeatmapsToLatest(content);
   const followBtn=document.getElementById('mpFollow');const unfollowBtn=document.getElementById('mpUnfollow');
   if(followBtn)followBtn.addEventListener('click',()=>{const c=FirebaseSync.getConfig();if(!c.following.some(f=>f.id===userId)){FirebaseSync.updateConfig({following:[...c.following,{id:userId,name:name}]});toast('Following @'+userId,'success');closeMiniProfile();renderFriendsCard();fbPush(false);startRealtimeSync();fbPullFollowing(false);}});
   if(unfollowBtn)unfollowBtn.addEventListener('click',()=>{const c=FirebaseSync.getConfig();FirebaseSync.updateConfig({following:c.following.filter(f=>f.id!==userId)});stopStream(userId);removeFriendEntry(userId);toast('Unfollowed @'+userId);closeMiniProfile();renderFriendsCard();fbPush(false);});
@@ -1904,12 +1962,13 @@ function selEx(name){
   const levelKeywords = ["assisted", "cable", "extension", "curl", "flexion", "raises", "deck", "butterfly", "dips", "lat cable", "pushdown", "pec deck", "machine"];
   const nameLower = eEx.toLowerCase();
   const isLevelDefault = levelKeywords.some(keyword => nameLower.includes(keyword)) && !nameLower.includes("db") && !nameLower.includes("dumbbell");
-  eMode = isLevelDefault ? 'level' : 'weight';
-  
-  for (const w of W) {
+  eMode = isCardioExercise(eEx) ? 'cardio' : isLevelDefault ? 'level' : 'weight';
+
+  if (eMode !== 'cardio') for (const w of W) {
     let found = false;
     for (const e of w.exercises) {
       if (canonicalName(e.name) === eEx) {
+        if (e.sets.some(isCardioSet)) { eMode = 'cardio'; found = true; break; }
         const s = e.sets.find(s => s.weight !== null);
         if (s) {
           if (s.isLevel !== undefined) {
@@ -1925,8 +1984,14 @@ function selEx(name){
     if (found) break;
   }
 
-  const lw=lastW(eEx);
-  eSets=[{weight:lw,reps:'',notes:'',completed:false},{weight:lw,reps:'',notes:'',completed:false},{weight:lw,reps:'',notes:'',completed:false}];
+  if (eMode === 'cardio') {
+    // One session row, pre-filled from the last time this cardio was logged
+    const lc = lastCardio(eEx);
+    eSets = [{cardio:true, mins:lc.mins, km:lc.km, kcal:lc.kcal, speed:lc.speed, incline:lc.incline, hr:lc.hr, notes:'', completed:false}];
+  } else {
+    const lw=lastW(eEx);
+    eSets=[{weight:lw,reps:'',notes:'',completed:false},{weight:lw,reps:'',notes:'',completed:false},{weight:lw,reps:'',notes:'',completed:false}];
+  }
   
   renderSets();
   renderSegmentToggle();
@@ -1949,16 +2014,36 @@ function renderSegmentToggle() {
   tog.innerHTML = `
     <button type="button" class="segment-btn ${eMode==='weight'?'active':''}" data-mode="weight">Weight (kg)</button>
     <button type="button" class="segment-btn ${eMode==='level'?'active':''}" data-mode="level">Machine Level</button>
+    <button type="button" class="segment-btn ${eMode==='cardio'?'active':''}" data-mode="cardio">Cardio</button>
   `;
   parent.appendChild(tog);
-  
+
   tog.querySelectorAll('.segment-btn').forEach(btn => {
     btn.addEventListener('click', e => {
+      const prev = eMode;
       eMode = e.currentTarget.dataset.mode;
       tog.querySelectorAll('.segment-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === eMode));
+      // Switching to/from cardio changes the row shape — reset the rows
+      if ((prev === 'cardio') !== (eMode === 'cardio')) {
+        eSets = eMode === 'cardio'
+          ? [{cardio:true, mins:'', km:'', kcal:'', speed:'', incline:'', hr:'', notes:'', completed:false}]
+          : [{weight:'',reps:'',notes:'',completed:false},{weight:'',reps:'',notes:'',completed:false},{weight:'',reps:'',notes:'',completed:false}];
+      }
       renderSets();
     });
   });
+}
+
+function lastCardio(n){
+  for(const w of W){
+    for(const e of (w.exercises||[])){
+      if(canonicalName(e.name)===n){
+        const s=(e.sets||[]).find(isCardioSet);
+        if(s)return {mins:s.mins||'',km:s.km||'',kcal:s.kcal||'',speed:s.speed||'',incline:s.incline||'',hr:s.hr||''};
+      }
+    }
+  }
+  return {mins:'',km:'',kcal:'',speed:'',incline:'',hr:''};
 }
 
 function lastW(n){
@@ -1983,8 +2068,13 @@ function renderRecent(){}
 /* ── Elite Editor ──────────────────────────────────────────── */
 function bindSets(){
   document.getElementById('addS').addEventListener('click',()=>{
-    const lw=eSets.length?eSets[eSets.length-1].weight:'';
-    eSets.push({weight:lw,reps:'',notes:'',completed:false});renderSets();
+    if(eMode==='cardio'){
+      eSets.push({cardio:true,mins:'',km:'',kcal:'',speed:'',incline:'',hr:'',notes:'',completed:false});
+    }else{
+      const lw=eSets.length?eSets[eSets.length-1].weight:'';
+      eSets.push({weight:lw,reps:'',notes:'',completed:false});
+    }
+    renderSets();
   });
   document.getElementById('seCl').addEventListener('click',()=>{eEx=null;eSets=[];document.getElementById('se').style.display='none';});
   document.getElementById('svEx').addEventListener('click',saveEx);
@@ -1993,6 +2083,7 @@ function bindSets(){
 function renderSets(){
   const g=document.getElementById('seG');
   const isL = eMode === 'level';
+  if (eMode === 'cardio') { renderCardioSets(g); return; }
   g.innerHTML=`
     <div style="display:grid;grid-template-columns:30px 1.3fr 1fr 28px;gap:8px;margin-bottom:6px;align-items:center">
       <div class="set-label" style="text-align:center;color:var(--accent);font-size:0.75rem">Done</div>
@@ -2000,7 +2091,7 @@ function renderSets(){
       <div class="set-label">Reps</div>
       <div></div>
     </div>`;
-    
+
   eSets.forEach((s,i)=>{
     const r=document.createElement('div');r.className=`set-row-container ${s.completed?'completed':''}`;
     const stepVal = isL ? 1 : 2.5;
@@ -2080,13 +2171,99 @@ function renderSets(){
   });
 }
 
+/* Cardio editor rows: one row = one session/interval logging
+   duration · distance · calories instead of weight × reps. */
+function renderCardioSets(g){
+  g.innerHTML=`
+    <div style="display:grid;grid-template-columns:30px 1fr 1fr 1fr 28px;gap:8px;margin-bottom:6px;align-items:center">
+      <div class="set-label" style="text-align:center;color:var(--accent);font-size:0.75rem">Done</div>
+      <div class="set-label">Min</div>
+      <div class="set-label">Km</div>
+      <div class="set-label">Kcal</div>
+      <div></div>
+    </div>`;
+  const tags=["Zone 2","Intervals","Steady pace","Fasted","All-out"];
+  eSets.forEach((s,i)=>{
+    const r=document.createElement('div');r.className=`set-row-container cardio-row ${s.completed?'completed':''}`;
+    const tagsHtml=tags.map(t=>`<button type="button" class="note-tag" data-i="${i}" data-val="${t}">${t}</button>`).join('');
+    const pace=cardioPace(s);
+    r.innerHTML=`
+      <div class="set-grid-main cardio-grid-main">
+        <button class="btn-set-check ${s.completed?'completed':''}" data-i="${i}" aria-label="Toggle interval completion">
+          ${s.completed?`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><polyline points="20 6 9 17 4 12"/></svg>`:i+1}
+        </button>
+        <input type="number" class="set-input" data-i="${i}" data-f="mins" value="${s.mins||''}" placeholder="min" min="0" step="1" inputmode="decimal" ${s.completed?'disabled':''}>
+        <input type="number" class="set-input" data-i="${i}" data-f="km" value="${s.km||''}" placeholder="km" min="0" step="0.1" inputmode="decimal" ${s.completed?'disabled':''}>
+        <input type="number" class="set-input" data-i="${i}" data-f="kcal" value="${s.kcal||''}" placeholder="kcal" min="0" step="1" inputmode="numeric" ${s.completed?'disabled':''}>
+        <button class="set-del" data-i="${i}" aria-label="Delete interval">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="cardio-extra-row">
+        <div class="cardio-extra-field"><span>Speed</span><input type="number" class="set-input" data-i="${i}" data-f="speed" value="${s.speed||''}" placeholder="km/h" min="0" step="0.1" inputmode="decimal" ${s.completed?'disabled':''}></div>
+        <div class="cardio-extra-field"><span>Incline</span><input type="number" class="set-input" data-i="${i}" data-f="incline" value="${s.incline||''}" placeholder="%" min="0" step="0.5" inputmode="decimal" ${s.completed?'disabled':''}></div>
+        <div class="cardio-extra-field"><span>Avg HR</span><input type="number" class="set-input" data-i="${i}" data-f="hr" value="${s.hr||''}" placeholder="bpm" min="0" step="1" inputmode="numeric" ${s.completed?'disabled':''}></div>
+        <div class="cardio-pace-badge">${pace?`⏱ ${pace}`:''}</div>
+      </div>
+      <div class="set-notes-wrap cardio-notes-wrap">
+        <input type="text" class="set-input set-notes-input" data-i="${i}" data-f="notes" value="${s.notes||''}" placeholder="Add note for this interval..." ${s.completed?'disabled':''}>
+        <div class="note-tags-row">${tagsHtml}</div>
+      </div>`;
+    g.appendChild(r);
+  });
+  g.querySelectorAll('.set-input').forEach(inp=>{
+    inp.addEventListener('input',e=>{
+      const idx=+e.target.dataset.i,f=e.target.dataset.f;
+      let v=e.target.value;
+      if(f!=='notes')v=v?parseFloat(v):'';
+      eSets[idx][f]=v;
+      if(f==='mins'||f==='km'){ // live-derived pace
+        const badge=e.target.closest('.set-row-container').querySelector('.cardio-pace-badge');
+        if(badge){const p=cardioPace(eSets[idx]);badge.textContent=p?`⏱ ${p}`:'';}
+      }
+    });
+  });
+  g.querySelectorAll('.note-tag').forEach(btn=>{
+    btn.addEventListener('click',e=>{
+      const idx=+e.currentTarget.dataset.i;
+      const val=e.currentTarget.dataset.val;
+      const cur=eSets[idx].notes||'';
+      if(cur.includes(val))return;
+      eSets[idx].notes=cur?`${cur}, ${val}`:val;
+      renderSets();
+    });
+  });
+  g.querySelectorAll('.set-del').forEach(b=>b.addEventListener('click',e=>{eSets.splice(+e.currentTarget.dataset.i,1);renderSets();}));
+  g.querySelectorAll('.btn-set-check').forEach(btn=>{
+    btn.addEventListener('click',e=>{
+      const idx=+e.currentTarget.dataset.i;
+      eSets[idx].completed=!eSets[idx].completed;
+      renderSets();
+    });
+  });
+}
+
 function saveEx(){
   if(!eEx)return;
-  const v=eSets.filter(s=>s.weight||s.reps||s.notes);
-  if(!v.length){toast('Enter at least one set','error');return;}
+  const isCardio=eMode==='cardio';
+  const v=eSets.filter(s=>isCardio?(s.mins||s.km||s.kcal||s.speed||s.incline||s.hr||s.notes):(s.weight||s.reps||s.notes));
+  if(!v.length){toast(isCardio?'Enter at least one interval':'Enter at least one set','error');return;}
   SE.push({
     name:eEx,
-    sets:v.map(s=>({
+    sets:v.map(s=>isCardio?({
+      cardio:true,
+      mins:s.mins||null,
+      km:s.km||null,
+      kcal:s.kcal||null,
+      speed:s.speed||null,
+      incline:s.incline||null,
+      hr:s.hr||null,
+      weight:null,
+      reps:null,
+      notes:s.notes||''
+    }):({
       weight:s.weight||null,
       reps:s.reps||null,
       notes:s.notes||'',
@@ -2117,10 +2294,16 @@ function renderLogged(){
   if(!SE.length){el.innerHTML='<p style="color:var(--t-3);font-size:0.85rem">No exercises logged yet.</p>';return;}
   SE.forEach((ex,idx)=>{
     const c=document.createElement('div');c.className='logged-card';
-    const isL=ex.sets.length>0&&ex.sets[0].isLevel;
+    const isCardio=ex.sets.length>0&&isCardioSet(ex.sets[0]);
+    const isL=!isCardio&&ex.sets.length>0&&ex.sets[0].isLevel;
     const modeLabel=isL?'Level':'kg';
-    const sh=ex.sets.map(s=>`<div class="chip"><span class="chip-w">${formatWeightVal(s)}</span><span class="chip-x">×</span><span class="chip-r">${s.reps!=null?s.reps:'—'}</span></div>`).join('');
-    c.innerHTML=`<div class="logged-header"><div class="logged-name">${esc(ex.name)}</div><div class="logged-actions"><button class="btn-toggle-mode" data-tog="${idx}" title="Switch between kg and Level"><svg class="toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>${modeLabel}</button><button class="btn btn-ghost btn-sm" data-rm="${idx}">Remove</button></div></div><div class="set-chips">${sh}</div>`;
+    const sh=ex.sets.map(s=>isCardioSet(s)
+      ?`<div class="chip chip-cardio"><span class="chip-w">${cardioSetLabelShort(s)}</span></div>`
+      :`<div class="chip"><span class="chip-w">${formatWeightVal(s)}</span><span class="chip-x">×</span><span class="chip-r">${s.reps!=null?s.reps:'—'}</span></div>`).join('');
+    const togBtn=isCardio
+      ?`<span class="btn-toggle-mode" style="pointer-events:none">Cardio</span>`
+      :`<button class="btn-toggle-mode" data-tog="${idx}" title="Switch between kg and Level"><svg class="toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>${modeLabel}</button>`;
+    c.innerHTML=`<div class="logged-header"><div class="logged-name">${esc(ex.name)}</div><div class="logged-actions">${togBtn}<button class="btn btn-ghost btn-sm" data-rm="${idx}">Remove</button></div></div><div class="set-chips">${sh}</div>`;
     el.appendChild(c);
   });
   el.querySelectorAll('[data-rm]').forEach(b=>b.addEventListener('click',e=>{
@@ -2194,7 +2377,7 @@ function mergeExercises(existing,batch){
 // exercise entry whose name AND full set list exactly repeat an earlier
 // entry in the same day can only have come from a duplicated write, so drop
 // it. Genuine repeat sets inside a single exercise are untouched.
-function setSig(s){return s?`${s.weight??''}|${s.reps??''}|${s.notes||''}|${s.isLevel?1:0}`:'';}
+function setSig(s){return s?`${s.weight??''}|${s.reps??''}|${s.notes||''}|${s.isLevel?1:0}|${s.mins??''}|${s.km??''}|${s.kcal??''}|${s.speed??''}|${s.incline??''}|${s.hr??''}`:'';}
 function dedupeWorkouts(list){
   let removed=0;
   (list||[]).forEach(w=>{
@@ -2227,6 +2410,9 @@ function buildExpandedHtml(wo){
   const exExpandedHtml = wo.exercises.map(ex => {
     const setsHtml = ex.sets.map((s, idx) => {
       const noteStr = s.notes ? `<span class="tl-set-note">${esc(s.notes)}</span>` : '';
+      if (isCardioSet(s)) {
+        return `<div class="tl-set-row"><span class="tl-set-idx">Int ${idx+1}</span><span class="tl-set-weight-reps">${cardioSetLabel(s)}</span>${noteStr}</div>`;
+      }
       return `<div class="tl-set-row"><span class="tl-set-idx">Set ${idx+1}</span><span class="tl-set-weight-reps">${formatWeightVal(s)} × ${s.reps ?? '—'}</span>${noteStr}</div>`;
     }).join('');
 
@@ -2269,7 +2455,8 @@ function buildExpandedHtml(wo){
 function renderHist(){
   const el=document.getElementById('hList');el.innerHTML='';
   let data=W;
-  if(filt!=='all')data=W.filter(w=>w.dayType.toLowerCase().includes(filt.toLowerCase()));
+  if(filt==='Cardio')data=W.filter(w=>w.dayType.toLowerCase().includes('cardio')||(w.exercises||[]).some(e=>(e.sets||[]).some(isCardioSet)));
+  else if(filt!=='all')data=W.filter(w=>w.dayType.toLowerCase().includes(filt.toLowerCase()));
   if(!data.length){el.innerHTML='<p style="color:var(--t-3);padding:24px 0;font-size:0.9rem">No sessions found.</p>';return;}
   const frag=document.createDocumentFragment();
 
@@ -2340,14 +2527,19 @@ function renderHist(){
 
     const ns=wo.exercises.reduce((s,e)=>s+e.sets.length,0);
     const vol=wo.exercises.reduce((s,e)=>s+e.sets.reduce((ss,x)=>ss+((getSetWeightVal(x))*(x.reps||0)),0),0);
-    
-    const mD={Pull:0,Push:0,Legs:0,Shoulders:0,Core:0,Other:0};
-    wo.exercises.forEach(e=>{mD[findG(e.name)]+=e.sets.length;});
-    const cL={Pull:'var(--c-blue)',Push:'var(--c-red)',Legs:'var(--c-green)',Shoulders:'var(--c-orange)',Core:'var(--c-purple)',Other:'var(--c-cyan)'};
+    const cd=workoutCardio(wo);
+
+    const mD={Pull:0,Push:0,Legs:0,Shoulders:0,Core:0,Cardio:0,Other:0};
+    wo.exercises.forEach(e=>{const g=findG(e.name);mD[g in mD?g:'Other']+=e.sets.length;});
+    const cL={Pull:'var(--c-blue)',Push:'var(--c-red)',Legs:'var(--c-green)',Shoulders:'var(--c-orange)',Core:'var(--c-purple)',Cardio:'#FF375F',Other:'var(--c-cyan)'};
     let mbHtml='';
     Object.entries(mD).forEach(([g,c])=>{if(c>0)mbHtml+=`<div class="tl-m-seg" style="width:${(c/ns)*100}%;background:${cL[g]}"></div>`;});
 
     const exH=wo.exercises.map(ex=>{
+      const cardioBest=(ex.sets||[]).filter(isCardioSet).sort((a,b)=>cardioNum(b.mins)-cardioNum(a.mins))[0];
+      if(cardioBest){
+        return `<div class="tl-ex"><div><div class="tl-ex-name">${esc(ex.name)}</div><div class="tl-ex-sets">${ex.sets.length} interval${ex.sets.length===1?'':'s'}</div></div><div class="tl-ex-best"><div class="tl-best-icon tl-cardio-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><span class="tl-best-val">${cardioSetLabelShort(cardioBest)}</span></div></div>`;
+      }
       let bestS=null,maxV=0;
       ex.sets.forEach(s=>{const v=(getSetWeightVal(s))*(s.reps||0);if(v>maxV){maxV=v;bestS=s;}});
       return `<div class="tl-ex"><div><div class="tl-ex-name">${esc(ex.name)}</div><div class="tl-ex-sets">${ex.sets.length} sets</div></div>${bestS ? `<div class="tl-ex-best"><div class="tl-best-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.45 1-1 1H4v2h16v-2h-5c-.55 0-1-.45-1-1v-2.34"/><path d="M12 2a5 5 0 0 0-5 5v3c0 2.76 2.24 5 5 5s5-2.24 5-5V7a5 5 0 0 0-5-5z"/></svg></div><span class="tl-best-val">${formatWeightVal(bestS)} × ${bestS.reps||'—'}</span></div>` : ''}</div>`;
@@ -2371,7 +2563,8 @@ function renderHist(){
             </div>
           </div>
           <div class="tl-stats">
-            <div class="tl-stat"><span class="tl-stat-v">${vol>=1000?(vol/1000).toFixed(1)+'k':vol}</span><span class="tl-stat-l">Volume</span></div>
+            ${cd.mins>0?`<div class="tl-stat"><span class="tl-stat-v tl-stat-cardio">${cd.mins}m</span><span class="tl-stat-l">Cardio</span></div>`:''}
+            ${(vol>0||cd.mins===0)?`<div class="tl-stat"><span class="tl-stat-v">${vol>=1000?(vol/1000).toFixed(1)+'k':vol}</span><span class="tl-stat-l">Volume</span></div>`:''}
             <div class="tl-stat"><span class="tl-stat-v">${wo.exercises.length}</span><span class="tl-stat-l">Exercises</span></div>
           </div>
         </div>
@@ -2453,9 +2646,10 @@ function copyWorkoutToClipboard(wo){
   } else {
     wo.exercises.forEach(ex => {
       const setsStr = ex.sets.map(s => {
+        const noteStr = s.notes ? ` (${s.notes})` : '';
+        if (isCardioSet(s)) return `${cardioSetLabel(s)}${noteStr}`;
         const wVal = formatWeightVal(s);
         const repVal = s.reps ?? '—';
-        const noteStr = s.notes ? ` (${s.notes})` : '';
         return `${wVal} × ${repVal}${noteStr}`;
       }).join(' | ');
       txt += `• ${ex.name} : ${setsStr}\n`;
@@ -2465,11 +2659,12 @@ function copyWorkoutToClipboard(wo){
   navigator.clipboard.writeText(txt).then(()=>{toast('Copied!','success');}).catch(()=>{toast('Failed to copy','error');});
 }
 
-function dayC(t){t=t.toLowerCase();if(t.includes('pull'))return'pull';if(t.includes('push'))return'push';if(t.includes('leg'))return'legs';if(t.includes('shoulder'))return'shoulders';if(t.includes('upper')||t.includes('core'))return'core';return'other';}
+function dayC(t){t=t.toLowerCase();if(t.includes('cardio'))return'cardio';if(t.includes('pull'))return'pull';if(t.includes('push'))return'push';if(t.includes('leg'))return'legs';if(t.includes('shoulder'))return'shoulders';if(t.includes('upper')||t.includes('core'))return'core';return'other';}
 
 function findG(name){
   const cn=canonicalName(name);const L=lib();
   for(const[g,exs]of Object.entries(L)){if(exs.some(e=>e===cn))return g;}
+  if(isCardioExercise(cn))return'Cardio';
   const n=cn.toLowerCase();
   if(n.includes('lat')||n.includes('row')||n.includes('pull')||n.includes('curl')||n.includes('bicep')||n.includes('hammer')||n.includes('shrug'))return'Pull';
   if(n.includes('press')||n.includes('fly')||n.includes('dip')||n.includes('tricep')||n.includes('incline')||n.includes('pec'))return'Push';
@@ -2480,9 +2675,65 @@ function findG(name){
 }
 
 function getSetWeightVal(s) {
+  if (isCardioSet(s)) return 0; // cardio never contributes to lifted volume
   if (s.weight !== null && s.weight !== undefined && s.weight !== '') return parseFloat(s.weight);
   if (s.notes) { const m = s.notes.match(/level\s*(\d+)/i); if (m) return parseFloat(m[1]); }
   return 0;
+}
+
+/* ── Cardio sets ────────────────────────────────────────────
+   A cardio "set" is one session/interval: {cardio:true, mins, km, kcal,
+   incline, speed, hr, notes}. weight/reps stay null so every volume
+   computation degrades to 0. Pace (min/km) is derived from mins ÷ km. */
+function isCardioSet(s){return !!s&&(s.cardio===true||s.mins!=null||s.km!=null||s.kcal!=null||s.incline!=null||s.speed!=null||s.hr!=null);}
+function cardioNum(v){const n=parseFloat(v);return isNaN(n)?0:n;}
+// "5'30"/km" from minutes and distance
+function cardioPace(s){
+  const m=cardioNum(s.mins),k=cardioNum(s.km);
+  if(!m||!k)return '';
+  const pace=m/k,pm=Math.floor(pace),ps=Math.round((pace-pm)*60);
+  return `${pm}'${String(ps).padStart(2,'0')}"/km`;
+}
+function workoutCardio(w){
+  let mins=0,km=0,kcal=0;
+  ((w&&w.exercises)||[]).forEach(e=>((e&&e.sets)||[]).forEach(s=>{
+    if(isCardioSet(s)){mins+=cardioNum(s.mins);km+=cardioNum(s.km);kcal+=cardioNum(s.kcal);}
+  }));
+  return {mins:Math.round(mins),km:Math.round(km*10)/10,kcal:Math.round(kcal)};
+}
+function cardioSetLabel(s){
+  const p=[];
+  if(cardioNum(s.mins))p.push(`${cardioNum(s.mins)} min`);
+  if(cardioNum(s.km))p.push(`${cardioNum(s.km)} km`);
+  const pace=cardioPace(s);if(pace)p.push(pace);
+  if(cardioNum(s.speed))p.push(`${cardioNum(s.speed)} km/h`);
+  if(cardioNum(s.incline))p.push(`${cardioNum(s.incline)}% incline`);
+  if(cardioNum(s.hr))p.push(`${cardioNum(s.hr)} bpm`);
+  if(cardioNum(s.kcal))p.push(`${cardioNum(s.kcal)} kcal`);
+  return p.length?p.join(' · '):'—';
+}
+// Compact variant for tight rows (chips, history best-set)
+function cardioSetLabelShort(s){
+  const p=[];
+  if(cardioNum(s.mins))p.push(`${cardioNum(s.mins)} min`);
+  if(cardioNum(s.km))p.push(`${cardioNum(s.km)} km`);
+  if(cardioNum(s.kcal))p.push(`${cardioNum(s.kcal)} kcal`);
+  return p.length?p.join(' · '):cardioSetLabel(s);
+}
+// Cardio minutes over a timeframe — the Social tab's cardio currency
+function cardioMinsInPeriod(list,timeframe){
+  const today=new Date();today.setHours(23,59,59,999);
+  let start=new Date(0);
+  if(timeframe==='week')start=new Date(today.getTime()-7*86400000);
+  else if(timeframe==='month')start=new Date(today.getTime()-30*86400000);
+  let mins=0,km=0,kcal=0;
+  (list||[]).forEach(w=>{
+    if(!w||!w.date)return;
+    const d=new Date(w.date+'T00:00:00');
+    if(isNaN(d)||d<start||d>today)return;
+    const c=workoutCardio(w);mins+=c.mins;km+=c.km;kcal+=c.kcal;
+  });
+  return {mins:Math.round(mins),km:Math.round(km*10)/10,kcal:Math.round(kcal)};
 }
 
 function formatWeightVal(s) {
@@ -3759,7 +4010,7 @@ function renderHeatmapInsights(period) {
 function updateSetupHeatmap(dayType) {
   const container = document.getElementById('setupHeatmap');
   if (!container) return;
-  if (!dayType || dayType === 'Choose Split...') {container.style.display = 'none';return;}
+  if (!dayType || dayType === 'Choose Split...' || dayType === 'Cardio') {container.style.display = 'none';return;}
   container.style.display = 'flex';
   const muscles = {};
   if (dayType === 'Pull' || dayType.includes('Pull')) {muscles['back'] = 3; muscles['biceps'] = 3;}
@@ -3775,6 +4026,7 @@ function updateSetupHeatmap(dayType) {
 function updateEditorHeatmap(exName) {
   const container = document.getElementById('editorHeatmap');
   if (!container) return;
+  if (isCardioExercise(exName)) { container.innerHTML = ''; return; }
   const dayType = document.getElementById('wType').value;
   const ms = getMusclesForExercise(exName, dayType);
   const muscles = {};

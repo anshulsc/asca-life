@@ -479,7 +479,19 @@ body {
   align-items: flex-end;
   margin: 0 auto;
   width: max-content;
+  /* On narrow screens the grid is wider than the card: cap the row and
+     let .heatmap-main scroll horizontally (auto-scrolled to today in JS)
+     while the weekday labels stay pinned. */
+  max-width: 100%;
 }
+
+.heatmap-main {
+  overflow-x: auto;
+  min-width: 0;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.heatmap-main::-webkit-scrollbar { display: none; }
 
 .heatmap-days-labels {
   display: grid;
@@ -818,6 +830,7 @@ select.input-field {
 .badge-shoulders { background: var(--c-orange-bg); color: var(--c-orange); }
 .badge-core { background: var(--c-purple-bg); color: var(--c-purple); }
 .badge-other { background: var(--c-cyan-bg); color: var(--c-cyan); }
+.badge-cardio { background: rgba(255, 55, 95, 0.14); color: #FF375F; }
 .badge-new { background: var(--glass-2); border: 1px dashed var(--t-3); color: var(--t-2); }
 
 /* ── Active Set Editor — iOS 27 Glass ──────────────────── */
@@ -1163,6 +1176,34 @@ select.input-field {
 .chip-w { color: var(--t-1); font-weight: 600; }
 .chip-x { color: var(--t-4); font-size: 0.7rem; }
 .chip-r { color: var(--accent); font-weight: 700; }
+.chip-cardio { border-color: rgba(255, 55, 95, 0.3); }
+.chip-cardio .chip-w { color: #FF375F; }
+
+/* Cardio editor rows: min · km · kcal instead of weight × reps */
+.cardio-grid-main {
+  display: grid;
+  grid-template-columns: 30px 1fr 1fr 1fr 28px;
+  gap: 8px; align-items: center;
+}
+
+/* Secondary cardio metrics: speed · incline · avg HR (+ derived pace) */
+.cardio-extra-row {
+  display: flex; align-items: flex-end; gap: 8px;
+  padding-left: 38px; padding-right: 38px; margin-top: 6px;
+  flex-wrap: wrap;
+}
+.cardio-extra-field { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 62px; }
+.cardio-extra-field span {
+  font-size: 0.52rem; font-weight: 800; color: var(--t-4);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.cardio-extra-field .set-input { width: 100%; font-size: 0.78rem; padding: 6px 4px; }
+.cardio-pace-badge {
+  margin-left: auto; align-self: center;
+  font-family: var(--ff-mono); font-size: 0.66rem; font-weight: 700;
+  color: #FF375F; white-space: nowrap; min-height: 1em;
+}
+.set-row-container.completed .cardio-extra-row { opacity: 0.45; pointer-events: none; }
 
 .action-row { display: flex; gap: 10px; margin-top: 10px; }
 .action-row .btn { flex: 1; }
@@ -1293,7 +1334,12 @@ select.input-field {
   color: var(--accent);
 }
 
-.tl-ex-detail-sets { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.tl-ex-detail-sets {
+  display: flex; flex-direction: column; gap: 6px; margin-top: 8px;
+  /* Long set/notes logs scroll instead of stretching the card forever */
+  max-height: 300px; overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
 
 .tl-set-row {
   display: flex; justify-content: space-between; align-items: center;
@@ -1307,7 +1353,9 @@ select.input-field {
 .tl-set-note {
   font-family: var(--ff-sans);
   color: var(--c-orange); font-style: italic; font-size: 0.7rem;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  /* Notes wrap instead of being truncated to a single clipped line */
+  white-space: normal; overflow-wrap: anywhere;
+  max-width: 46%; text-align: right;
 }
 
 .tl-date-group { display: flex; flex-direction: column; gap: 3px; }
@@ -1325,6 +1373,7 @@ select.input-field {
 .tl-stats { display: flex; gap: 12px; text-align: right; }
 .tl-stat { display: flex; flex-direction: column; }
 .tl-stat-v { font-family: var(--ff-mono); font-weight: 700; font-size: 0.88rem; color: var(--c-green); }
+.tl-stat-v.tl-stat-cardio { color: #FF375F; }
 .tl-stat-l { font-size: 0.58rem; font-weight: 700; text-transform: uppercase; color: var(--t-3); letter-spacing: 0.03em; }
 
 .tl-muscles { display: flex; height: 4px; background: var(--glass-2); width: 100%; }
@@ -1341,6 +1390,7 @@ select.input-field {
 
 .tl-ex-best { display: flex; align-items: center; gap: 5px; font-family: var(--ff-mono); }
 .tl-best-icon { color: var(--c-orange); width: 14px; height: 14px; display: flex; align-items: center; }
+.tl-best-icon.tl-cardio-icon { color: #FF375F; }
 .tl-best-val { font-size: 0.88rem; font-weight: 700; }
 
 /* ── Analytics Dashboard ──────────────────────────────────── */
@@ -1685,6 +1735,8 @@ canvas { width: 100%; height: 100%; }
 .feed-stat span { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--t-3); margin-top: 3px; }
 .feed-stat-pr b { color: #FFB25A; }
 .feed-stat-pr span { color: var(--accent); }
+.feed-stat-cardio b { color: #FF375F; }
+.feed-stat-cardio span { color: rgba(255, 55, 95, 0.7); }
 
 .feed-route { display: flex; align-items: center; gap: 7px; margin-top: 11px; font-size: 0.72rem; font-weight: 600; color: var(--t-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .feed-route-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
@@ -1750,7 +1802,9 @@ canvas { width: 100%; height: 100%; }
   background: var(--dt, var(--accent)); color: #fff; font-size: 0.58rem; font-weight: 800; flex-shrink: 0;
 }
 .fd-set-wr { font-family: var(--ff-mono); font-weight: 700; color: var(--t-1); }
-.fd-set-note { font-size: 0.64rem; color: var(--t-3); font-style: italic; }
+.fd-set-note { font-size: 0.64rem; color: var(--t-3); font-style: italic; white-space: normal; overflow-wrap: anywhere; }
+.fd-set { flex-wrap: wrap; }
+.fd-sets { max-height: 260px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .feed-expand .fd-caret { width: 13px; height: 13px; transition: transform 0.2s var(--spring); }
 .feed-expand.on { background: var(--dt-bg, rgba(255,118,0,0.13)); color: var(--dt, var(--accent)); border-color: var(--dt, rgba(255,118,0,0.3)); }
 .feed-expand.on .fd-caret { transform: rotate(180deg); }
@@ -2093,6 +2147,11 @@ canvas { width: 100%; height: 100%; }
 .gym-heatmap-dot.g-2 { background: rgba(255,107,0,0.45); }
 .gym-heatmap-dot.g-3 { background: rgba(255,107,0,0.7); }
 .gym-heatmap-dot.g-4 { background: #FF6B00; }
+/* Days that included cardio get a pink tint per intensity level */
+.gym-heatmap-dot.g-cardio.g-1 { background: rgba(255,55,95,0.25); }
+.gym-heatmap-dot.g-cardio.g-2 { background: rgba(255,55,95,0.45); }
+.gym-heatmap-dot.g-cardio.g-3 { background: rgba(255,55,95,0.7); }
+.gym-heatmap-dot.g-cardio.g-4 { background: #FF375F; }
 .gym-heatmap-legend {
   display: flex; align-items: center; gap: 4px;
   justify-content: flex-end; margin-top: 6px;
@@ -2101,6 +2160,13 @@ canvas { width: 100%; height: 100%; }
 .gym-heatmap-legend-dot {
   width: 10px; height: 10px; border-radius: 2px;
 }
+
+/* Bare variant (profile hero): no avatar/name — the hero already has them */
+.gym-activity-header-bare { justify-content: flex-end; min-height: 0; }
+
+/* Profile-hero activity monitor */
+.profile-heatmap { margin: 0 0 14px; text-align: left; }
+.profile-heatmap .gym-activity-section { margin-bottom: 0; }
 
 /* ── Head-to-Head Comparison ─────────────────────────────── */
 .h2h-picker {
@@ -2489,11 +2555,17 @@ canvas { width: 100%; height: 100%; }
 /* Note tags */
 .note-tags-row {
   display: flex; gap: 6px; margin-top: 0;
-  overflow-x: auto; scrollbar-width: none;
+  scrollbar-width: none;
   max-height: 0; opacity: 0; overflow: hidden;
   transition: max-height 0.25s var(--spring), opacity 0.2s ease, margin-top 0.2s ease;
 }
-.set-notes-wrap:focus-within .note-tags-row { max-height: 30px; opacity: 1; margin-top: 5px; }
+/* overflow-x must be re-declared here: the collapsed state's `overflow:
+   hidden` shorthand would otherwise keep the open row unscrollable. */
+.set-notes-wrap:focus-within .note-tags-row {
+  max-height: 30px; opacity: 1; margin-top: 5px;
+  overflow-x: auto; overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
 .note-tags-row::-webkit-scrollbar { display: none; }
 
 .note-tag {
@@ -3284,7 +3356,11 @@ canvas { width: 100%; height: 100%; }
   flex-direction: column;
   position: relative;
   width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
+.lock-heatmap-main::-webkit-scrollbar { display: none; }
 
 .lock-heatmap-months {
   display: block;
@@ -3542,6 +3618,10 @@ canvas { width: 100%; height: 100%; }
     gap: 14px !important;
     margin-bottom: 14px !important;
   }
+
+  /* Cardio metrics: tighter gutters so speed/incline/HR fit one row */
+  .cardio-extra-row { padding-left: 0; padding-right: 0; }
+  .cardio-notes-wrap { padding-left: 0; padding-right: 0; }
 }
 
 .github-profile-link {

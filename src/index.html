@@ -364,6 +364,7 @@
         <button class="filter-chip" data-f="Push">Push</button>
         <button class="filter-chip" data-f="Legs">Legs</button>
         <button class="filter-chip" data-f="Shoulder">Shoulders</button>
+        <button class="filter-chip" data-f="Cardio">Cardio</button>
       </div>
 
       <!-- History Feed -->
@@ -504,6 +505,7 @@
           <button class="lb-metric-tab" data-metric="vol7">Volume</button>
           <button class="lb-metric-tab" data-metric="week">Workouts</button>
           <button class="lb-metric-tab" data-metric="sets7">Sets</button>
+          <button class="lb-metric-tab" data-metric="cardio">Cardio</button>
           <button class="lb-metric-tab" data-metric="consistency">Streak</button>
         </div>
         <!-- Timeframe Tabs -->
@@ -565,6 +567,9 @@
           <div class="profile-stat"><div class="profile-stat-val" id="profFollowers">0</div><div class="profile-stat-label">Followers</div></div>
           <div class="profile-stat"><div class="profile-stat-val" id="profFollowing">0</div><div class="profile-stat-label">Following</div></div>
         </div>
+
+        <!-- GitHub-style activity monitor — same grid as Social & mini-profile -->
+        <div class="profile-heatmap" id="profHeatmap"></div>
 
         <button class="profile-edit-toggle" id="bEditProfile">Edit profile</button>
         <div class="profile-edit" id="profileEdit">
