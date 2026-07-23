@@ -2080,6 +2080,10 @@ function bindSets(){
   document.getElementById('svEx').addEventListener('click',saveEx);
 }
 
+// Notes are auto-growing textareas: the box expands with the text so
+// nothing you type scrolls out of view (matters most on mobile).
+function autoGrowNote(el){el.style.height='auto';el.style.height=el.scrollHeight+'px';}
+
 function renderSets(){
   const g=document.getElementById('seG');
   const isL = eMode === 'level';
@@ -2119,13 +2123,14 @@ function renderSets(){
         </button>
       </div>
       <div class="set-notes-wrap">
-        <input type="text" class="set-input set-notes-input" data-i="${i}" data-f="notes" value="${s.notes||''}" placeholder="Add note for set ${i+1}..." ${s.completed?'disabled':''}>
+        <textarea class="set-input set-notes-input" data-i="${i}" data-f="notes" rows="1" placeholder="Add note for set ${i+1}..." ${s.completed?'disabled':''}>${esc(s.notes||'')}</textarea>
         <div class="note-tags-row">
           ${tagsHtml}
         </div>
       </div>`;
     g.appendChild(r);
   });
+  g.querySelectorAll('.set-notes-input').forEach(autoGrowNote);
 
   g.querySelectorAll('.stepper-btn').forEach(b=>b.addEventListener('click',e=>{
     const idx=+e.currentTarget.dataset.i,d=parseFloat(e.currentTarget.dataset.d);
@@ -2140,6 +2145,7 @@ function renderSets(){
       if(f==='weight')v=v?parseFloat(v):'';
       else if(f==='reps')v=v?parseInt(v):'';
       eSets[idx][f]=v;
+      if(f==='notes')autoGrowNote(e.target);
     });
   });
 
@@ -2208,17 +2214,19 @@ function renderCardioSets(g){
         <div class="cardio-pace-badge">${pace?`⏱ ${pace}`:''}</div>
       </div>
       <div class="set-notes-wrap cardio-notes-wrap">
-        <input type="text" class="set-input set-notes-input" data-i="${i}" data-f="notes" value="${s.notes||''}" placeholder="Add note for this interval..." ${s.completed?'disabled':''}>
+        <textarea class="set-input set-notes-input" data-i="${i}" data-f="notes" rows="1" placeholder="Add note for this interval..." ${s.completed?'disabled':''}>${esc(s.notes||'')}</textarea>
         <div class="note-tags-row">${tagsHtml}</div>
       </div>`;
     g.appendChild(r);
   });
+  g.querySelectorAll('.set-notes-input').forEach(autoGrowNote);
   g.querySelectorAll('.set-input').forEach(inp=>{
     inp.addEventListener('input',e=>{
       const idx=+e.target.dataset.i,f=e.target.dataset.f;
       let v=e.target.value;
       if(f!=='notes')v=v?parseFloat(v):'';
       eSets[idx][f]=v;
+      if(f==='notes')autoGrowNote(e.target);
       if(f==='mins'||f==='km'){ // live-derived pace
         const badge=e.target.closest('.set-row-container').querySelector('.cardio-pace-badge');
         if(badge){const p=cardioPace(eSets[idx]);badge.textContent=p?`⏱ ${p}`:'';}

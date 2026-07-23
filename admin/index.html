@@ -896,16 +896,20 @@ select.input-field {
 .set-notes-wrap { padding-left: 38px; padding-right: 38px; margin-top: 4px; }
 
 .set-notes-input {
-  width: 100%; background: transparent;
+  display: block; width: 100%; background: transparent;
   border: none; border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
   border-radius: 0;
-  padding: 1px 0; color: var(--t-3);
-  font-size: 0.65rem; font-weight: 500;
+  padding: 3px 0; color: var(--t-3);
+  font-size: 0.78rem; font-weight: 500;
+  font-family: inherit; line-height: 1.5;
   text-align: left; outline: none;
-  transition: all 0.2s;
+  transition: border-color 0.2s, color 0.2s;
+  /* auto-growing textarea: JS sets height, no manual resize/scrollbar */
+  resize: none; overflow: hidden;
+  min-height: 26px;
 }
 .set-notes-input:focus { border-bottom-color: var(--accent); color: var(--t-1); background: transparent; box-shadow: none; }
-.set-notes-input::placeholder { font-size: 0.62rem; color: var(--t-3); opacity: 0.65; }
+.set-notes-input::placeholder { font-size: 0.72rem; color: var(--t-3); opacity: 0.65; }
 
 .set-label {
   font-size: 0.62rem; font-weight: 800;
@@ -3622,7 +3626,12 @@ canvas { width: 100%; height: 100%; }
 
   /* Cardio metrics: tighter gutters so speed/incline/HR fit one row */
   .cardio-extra-row { padding-left: 0; padding-right: 0; }
-  .cardio-notes-wrap { padding-left: 0; padding-right: 0; }
+
+  /* Notes on mobile: full width, and 16px font — anything smaller makes
+     iOS Safari auto-zoom on focus, which is what hid the text while typing */
+  .set-notes-wrap { padding-left: 0; padding-right: 0; }
+  .set-notes-input { font-size: 16px; min-height: 30px; }
+  .set-notes-input::placeholder { font-size: 0.85rem; }
 }
 
 .github-profile-link {
