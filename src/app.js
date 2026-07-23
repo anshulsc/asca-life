@@ -557,13 +557,26 @@ function timeAgo(ts){
 }
 
 /* ── Workout Heatmap Calendar ─────────────────────────────── */
+// Grids start at the week of the athlete's first logged workout (capped
+// at maxWeeks) — no empty pre-history columns padding out the left edge.
+function heatmapWeeks(list,maxWeeks){
+  let earliest=null;
+  (list||[]).forEach(w=>{if(w&&w.date&&(!earliest||w.date<earliest))earliest=w.date;});
+  if(!earliest)return maxWeeks;
+  const ed=new Date(earliest+'T00:00:00');
+  if(isNaN(ed))return maxWeeks;
+  const ws=d=>{const x=new Date(d);x.setHours(0,0,0,0);x.setDate(x.getDate()-x.getDay());return x;};
+  const wks=Math.round((ws(new Date())-ws(ed))/(7*86400000))+1;
+  return Math.max(1,Math.min(maxWeeks,wks));
+}
+
 function renderHeatmapCalendar(){
   const grid=document.getElementById('heatmapCalGrid');
   const monthsEl=document.getElementById('heatmapMonths');
   if(!grid||!monthsEl)return;
-  
+
   const today=new Date();
-  const weeks=24;
+  const weeks=heatmapWeeks(W,24);
   const days=weeks*7;
   
   // Build date->workout stats map
@@ -1564,7 +1577,8 @@ function renderLeaderboardRows(rows,metric){
 }
 
 function gymHeatmapHtml(id,name,workouts,score,bare){
-  const today=new Date();today.setHours(0,0,0,0);const weeks=16,days=weeks*7;
+  const today=new Date();today.setHours(0,0,0,0);
+  const weeks=heatmapWeeks(workouts,16),days=weeks*7;
   const volMap={},cardioMap={};
   (workouts||[]).forEach(w=>{if(!w||!w.date||w.dayType==='Rest Day')return;let v=0;
     (w.exercises||[]).forEach(e=>e.sets.forEach(s=>{const wv=getSetWeightVal(s);if(wv&&s.reps)v+=wv*s.reps;}));

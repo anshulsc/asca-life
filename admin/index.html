@@ -528,7 +528,8 @@ body {
 
 .heatmap-cal-grid {
   display: grid;
-  grid-template-columns: repeat(24, 10px);
+  /* column count follows the data (grid starts at first workout week) */
+  grid-auto-columns: 10px;
   grid-template-rows: repeat(7, 10px);
   grid-auto-flow: column;
   gap: 3px;
@@ -3382,7 +3383,7 @@ canvas { width: 100%; height: 100%; }
 
 .lock-heatmap-grid {
   display: grid;
-  grid-template-columns: repeat(24, 6px);
+  grid-auto-columns: 6px;
   grid-template-rows: repeat(7, 6px);
   grid-auto-flow: column;
   gap: 2px;

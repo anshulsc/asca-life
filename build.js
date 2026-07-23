@@ -85,7 +85,18 @@ const historicalData = dataContext.HISTORICAL_DATA || [];
 // Generate preview dots and months HTML
 function generateHeatmapPreview(historicalData) {
   const today = new Date();
-  const weeks = 24;
+  // Start at the week of the earliest workout (capped at 24 weeks) —
+  // mirrors heatmapWeeks() in app.js so there are no empty lead-in columns
+  let weeks = 24;
+  const dates = historicalData.map(w => w && w.date).filter(Boolean).sort();
+  if (dates.length) {
+    const ed = new Date(dates[0] + 'T00:00:00');
+    if (!isNaN(ed)) {
+      const ws = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - x.getDay()); return x; };
+      const wks = Math.round((ws(new Date()) - ws(ed)) / (7 * 86400000)) + 1;
+      weeks = Math.max(1, Math.min(24, wks));
+    }
+  }
   const days = weeks * 7;
 
   const dateWorkouts = {};
