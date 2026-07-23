@@ -480,6 +480,8 @@ body {
   min-width: 0;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+  /* last column breathing room so it never sits on the clipped edge */
+  padding-right: 6px;
 }
 .heatmap-main::-webkit-scrollbar { display: none; }
 
@@ -2131,6 +2133,11 @@ canvas { width: 100%; height: 100%; }
   grid-auto-flow: column;
   grid-auto-columns: 10px;
   gap: 2px;
+  /* max-content so the scroller measures every column (otherwise the
+     grid box stops at the container edge and the last column clips);
+     right padding keeps the final week off the clipped edge. */
+  width: max-content;
+  padding-right: 6px;
 }
 .gym-heatmap-dot {
   width: 10px; height: 10px;
