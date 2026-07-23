@@ -46,6 +46,10 @@ function startApp() {
     if(!document.hidden){
       stopRealtimeSync();
       startRealtimeSync();
+      // Repaint from cache on return: heatmaps/leaderboards are computed
+      // relative to "today", so a backgrounded tab (or day rollover)
+      // otherwise keeps showing stale grids until a manual tab switch.
+      refreshAllUI();
     }else{
       stopRealtimeSync();
     }
@@ -426,7 +430,7 @@ function bindTabs(){
       if(tgt==='Hist')renderHist();
       if(tgt==='Ana')refreshAna();
       if(tgt==='Soc')renderFriendsCard();
-      if(tgt==='Set')renderProgressPics();
+      if(tgt==='Set'){renderProfile();renderProgressPics();} // keep the account heatmap/stats live
       if(tgt==='Log'){renderBodyWeight();renderHeatmapCalendar();renderVolWidget();}
       
       const container = document.querySelector('.views-container');
@@ -557,17 +561,22 @@ function timeAgo(ts){
 }
 
 /* ── Workout Heatmap Calendar ─────────────────────────────── */
-// Grids start at the week of the athlete's first logged workout (capped
-// at maxWeeks) — no empty pre-history columns padding out the left edge.
-function heatmapWeeks(list,maxWeeks){
+// Grids open on the 1st of the month of the athlete's first logged
+// workout (capped at maxWeeks) — e.g. history starting May 22 renders
+// from May 1, and days before the 1st are hidden entirely.
+function heatmapRange(list,maxWeeks){
   let earliest=null;
   (list||[]).forEach(w=>{if(w&&w.date&&(!earliest||w.date<earliest))earliest=w.date;});
-  if(!earliest)return maxWeeks;
-  const ed=new Date(earliest+'T00:00:00');
-  if(isNaN(ed))return maxWeeks;
   const ws=d=>{const x=new Date(d);x.setHours(0,0,0,0);x.setDate(x.getDate()-x.getDay());return x;};
-  const wks=Math.round((ws(new Date())-ws(ed))/(7*86400000))+1;
-  return Math.max(1,Math.min(maxWeeks,wks));
+  if(earliest){
+    const ed=new Date(earliest+'T00:00:00');
+    if(!isNaN(ed)){
+      const monthStart=new Date(ed.getFullYear(),ed.getMonth(),1);
+      const wks=Math.round((ws(new Date())-ws(monthStart))/(7*86400000))+1;
+      return {weeks:Math.max(1,Math.min(maxWeeks,wks)),rangeStart:monthStart};
+    }
+  }
+  return {weeks:maxWeeks,rangeStart:null};
 }
 
 function renderHeatmapCalendar(){
@@ -576,7 +585,7 @@ function renderHeatmapCalendar(){
   if(!grid||!monthsEl)return;
 
   const today=new Date();
-  const weeks=heatmapWeeks(W,24);
+  const {weeks,rangeStart}=heatmapRange(W,24);
   const days=weeks*7;
   
   // Build date->workout stats map
@@ -653,12 +662,12 @@ function renderHeatmapCalendar(){
         tooltip = `${formattedDate}\nRest Day`;
       }
 
-      const hiddenStyle = d > today ? ' style="visibility:hidden;pointer-events:none"' : '';
+      const hiddenStyle = (d > today || (rangeStart && d < rangeStart)) ? ' style="visibility:hidden;pointer-events:none"' : '';
       dotsHtml += `<div class="heatmap-dot ${lvl}" data-date="${dateStr}" title="${tooltip}"${hiddenStyle}></div>`;
 
-      // Track months
+      // Track months (skip hidden lead-in days before the range start)
       const monthKey=d.getFullYear()+'-'+d.getMonth();
-      if(!seenMonths.has(monthKey)&&row===0){
+      if(!seenMonths.has(monthKey)&&row===0&&(!rangeStart||d>=rangeStart)){
         seenMonths.add(monthKey);
         monthLabels.push({name:monthNames[d.getMonth()],col: col + 1});
       }
@@ -1578,7 +1587,7 @@ function renderLeaderboardRows(rows,metric){
 
 function gymHeatmapHtml(id,name,workouts,score,bare){
   const today=new Date();today.setHours(0,0,0,0);
-  const weeks=heatmapWeeks(workouts,16),days=weeks*7;
+  const {weeks,rangeStart}=heatmapRange(workouts,16);const days=weeks*7;
   const volMap={},cardioMap={};
   (workouts||[]).forEach(w=>{if(!w||!w.date||w.dayType==='Rest Day')return;let v=0;
     (w.exercises||[]).forEach(e=>e.sets.forEach(s=>{const wv=getSetWeightVal(s);if(wv&&s.reps)v+=wv*s.reps;}));
@@ -1591,7 +1600,7 @@ function gymHeatmapHtml(id,name,workouts,score,bare){
   while(dateSet.has(d.toISOString().slice(0,10))){streak++;d.setDate(d.getDate()-1);}
   let dots='';const startDate=new Date(today);startDate.setDate(today.getDate()-(days-1));startDate.setDate(startDate.getDate()-startDate.getDay());
   for(let i=0;i<days;i++){const dd=new Date(startDate);dd.setDate(startDate.getDate()+i);
-    if(dd>today){dots+='<div class="gym-heatmap-dot" style="visibility:hidden"></div>';continue;}
+    if(dd>today||(rangeStart&&dd<rangeStart)){dots+='<div class="gym-heatmap-dot" style="visibility:hidden"></div>';continue;}
     const ds=dd.toISOString().slice(0,10);const v=volMap[ds]||0;const cm=cardioMap[ds]||0;let lvl='';
     // Cardio-only days count too — intensity is the stronger of the two ratios
     if(v>0||cm>0||dateSet.has(ds)){const r=Math.max(v/maxV,cm/maxC);lvl=r>0.7?'g-4':r>0.4?'g-3':r>0.15?'g-2':'g-1';}
@@ -2375,7 +2384,9 @@ async function finish(){
     toast(synced?'Saved & Synced':'Saved locally','success');
     eEx=null;eSets=[];document.getElementById('se').style.display='none';
     document.getElementById('acts').style.display='none';renderLogged();
-    renderHeatmapCalendar();renderVolWidget();renderProfile();
+    // renderFriendsCard covers the profile + Social leaderboard/activity
+    // grids so every monitor reflects the new session immediately.
+    renderHeatmapCalendar();renderVolWidget();renderFriendsCard();
   }finally{
     finishing=false;if(finBtn)finBtn.disabled=false;
   }

@@ -85,15 +85,16 @@ const historicalData = dataContext.HISTORICAL_DATA || [];
 // Generate preview dots and months HTML
 function generateHeatmapPreview(historicalData) {
   const today = new Date();
-  // Start at the week of the earliest workout (capped at 24 weeks) —
-  // mirrors heatmapWeeks() in app.js so there are no empty lead-in columns
-  let weeks = 24;
+  // Open on the 1st of the earliest workout's month (capped at 24 weeks)
+  // — mirrors heatmapRange() in app.js; days before the 1st are hidden
+  let weeks = 24, rangeStart = null;
   const dates = historicalData.map(w => w && w.date).filter(Boolean).sort();
   if (dates.length) {
     const ed = new Date(dates[0] + 'T00:00:00');
     if (!isNaN(ed)) {
+      rangeStart = new Date(ed.getFullYear(), ed.getMonth(), 1);
       const ws = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - x.getDay()); return x; };
-      const wks = Math.round((ws(new Date()) - ws(ed)) / (7 * 86400000)) + 1;
+      const wks = Math.round((ws(new Date()) - ws(rangeStart)) / (7 * 86400000)) + 1;
       weeks = Math.max(1, Math.min(24, wks));
     }
   }
@@ -146,7 +147,8 @@ function generateHeatmapPreview(historicalData) {
       }
 
       const isFuture = d > today;
-      const style = isFuture ? 'visibility: hidden; pointer-events: none;' : '';
+      const isBeforeRange = rangeStart && d < rangeStart;
+      const style = (isFuture || isBeforeRange) ? 'visibility: hidden; pointer-events: none;' : '';
 
       const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
       const formattedDate = d.toLocaleDateString('en-US', options);
@@ -154,9 +156,9 @@ function generateHeatmapPreview(historicalData) {
 
       dotsHtml += `<div class="lock-heatmap-dot ${lvl}" style="${style}" title="${tooltip}"></div>`;
 
-      // Track months
+      // Track months (skip hidden lead-in days before the range start)
       const monthKey = d.getFullYear() + '-' + d.getMonth();
-      if (!seenMonths.has(monthKey) && row === 0) {
+      if (!seenMonths.has(monthKey) && row === 0 && !isBeforeRange) {
         seenMonths.add(monthKey);
         monthLabels.push({ name: monthNames[d.getMonth()], col: col + 1 });
       }
