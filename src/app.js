@@ -3621,6 +3621,18 @@ function bindSettings(){
               ".write": "auth != null && root.child('gym').child($ownerId).child('uid').val() === auth.uid && (!newData.exists() || newData.child('uid').val() === auth.uid)",
               ".validate": "!newData.exists() || (newData.hasChildren(['uid','img','ts']) && newData.child('uid').val() === auth.uid && newData.child('img').isString() && newData.child('img').val().length <= 900000 && newData.child('ts').isNumber())"
             } }
+          },
+          budget: {
+            // Asca Budget app (separate site, same accounts): one private
+            // doc per user at budget/{userId}. Unlike gym data budgets are
+            // NOT social — only the owning account may read its node (a
+            // missing node stays readable so first sync can see it's empty).
+            $userId: {
+              ".read": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)",
+              ".write": "auth != null && (data.exists() ? data.child('uid').val() === auth.uid : newData.child('uid').val() === auth.uid)",
+              ".validate": "newData.hasChildren(['uid','ts']) && newData.child('uid').val() === auth.uid && newData.child('ts').isNumber()",
+              name: { ".validate": "newData.isString() && newData.val().length <= 60" }
+            }
           }
         }
       }, null, 2);
