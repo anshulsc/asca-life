@@ -8,6 +8,9 @@ const indexHtml = fs.readFileSync(path.join(srcDir, 'index.html'), 'utf8');
 const styleCss = fs.readFileSync(path.join(srcDir, 'style.css'), 'utf8');
 const dataJs = fs.readFileSync(path.join(srcDir, 'data.js'), 'utf8');
 const firebaseSyncJs = fs.readFileSync(path.join(srcDir, 'firebase-sync.js'), 'utf8');
+const arcSyncJs = fs.readFileSync(path.join(srcDir, 'arc-sync.js'), 'utf8');
+const winterJs = fs.readFileSync(path.join(srcDir, 'winter.js'), 'utf8');
+const challengesJs = fs.readFileSync(path.join(srcDir, 'challenges.js'), 'utf8');
 const appJs = fs.readFileSync(path.join(srcDir, 'app.js'), 'utf8');
 
 // Access control is Firebase Authentication now (see firebase-sync.js) —
@@ -30,9 +33,14 @@ headContent = headContent.replace(/<link[^>]*href=["']style\.css[^"']*["'][^>]*>
 const fontImportMatch = styleCss.match(/@import\s+url\([^)]+\);/);
 const fontImport = fontImportMatch ? fontImportMatch[0] : '';
 
+// Slice the whole token region — ':root' plus every theme block after it —
+// up to an explicit sentinel. The old boundary was "the next '}'", which
+// captured only the first block and would have silently dropped the winter
+// tokens from the login screen (and truncated on any nested brace).
+const TOKENS_END = '/* ── THEME TOKENS END ── */';
 const rootStartIndex = styleCss.indexOf(':root {');
-const rootEndIndex = styleCss.indexOf('}', rootStartIndex);
-const rootCss = rootStartIndex !== -1 && rootEndIndex !== -1 ? styleCss.substring(rootStartIndex, rootEndIndex + 1) : '';
+const rootEndIndex = styleCss.indexOf(TOKENS_END, rootStartIndex);
+const rootCss = rootStartIndex !== -1 && rootEndIndex !== -1 ? styleCss.substring(rootStartIndex, rootEndIndex) : '';
 
 const resetStartIndex = styleCss.indexOf('/* ── Reset & Base');
 const resetEndIndex = styleCss.indexOf('/* ── Animated Gradient Mesh');
@@ -42,6 +50,34 @@ const lockStartIndex = styleCss.indexOf('/* ── Lock Screen Overlay');
 const lockCss = lockStartIndex !== -1 ? styleCss.substring(lockStartIndex) : '';
 
 const inlineLockCss = `${fontImport}\n\n${rootCss}\n\n${resetCss}\n\n${lockCss}`;
+
+// ── Build integrity assertions ────────────────────────────────────
+// Every slice above is taken by literal string search against comment
+// markers in style.css. Renaming one of those comments does not throw —
+// it yields an empty string, and the login screen silently ships
+// unstyled. These turn each of those into a loud failure instead.
+function assertSlice(name, value, marker, mustContain) {
+  if (!value) {
+    throw new Error(
+      `build: the "${name}" CSS slice came back EMPTY.\n` +
+      `  This almost always means the marker ${JSON.stringify(marker)} was renamed or removed in src/style.css.\n` +
+      `  That marker is load-bearing for the inline login-screen stylesheet — restore it or update build.js.`
+    );
+  }
+  (mustContain || []).forEach(needle => {
+    if (!value.includes(needle)) {
+      throw new Error(
+        `build: the "${name}" CSS slice is missing ${JSON.stringify(needle)}.\n` +
+        `  The slice was found but looks truncated — check the boundaries around ${JSON.stringify(marker)} in src/style.css.`
+      );
+    }
+  });
+}
+
+assertSlice('font import', fontImport, '@import url(...)');
+assertSlice('root tokens', rootCss, ":root { … " + TOKENS_END, ['--accent', '--bg', '--wht', 'data-theme="winter"']);
+assertSlice('reset & base', resetCss, '/* ── Reset & Base');
+assertSlice('lock screen', lockCss, '/* ── Lock Screen Overlay', ['.lock-screen']);
 
 // Extract body content
 const bodyMatch = indexHtml.match(/<body>([\s\S]*?)<\/body>/);
@@ -173,6 +209,19 @@ function generateHeatmapPreview(historicalData) {
 }
 
 const previewData = generateHeatmapPreview(historicalData);
+// Both placeholders are substituted by literal string match. Assert they are
+// actually PRESENT first — a renamed placeholder would otherwise no-op the
+// replace and silently ship a login screen with an empty heatmap.
+['<!-- PRE_RENDERED_HEATMAP_DOTS -->', '<!-- PRE_RENDERED_HEATMAP_MONTHS -->'].forEach(ph => {
+  if (!lockScreenHtml.includes(ph)) {
+    throw new Error(
+      `build: ${ph} was not found inside the lock screen in src/index.html.\n` +
+      '  It is substituted literally at build time, so a rename or a move outside\n' +
+      '  <div class="lock-screen" id="lockScreen"> silently empties the login heatmap.'
+    );
+  }
+});
+
 let lockScreenHtmlWithPreview = lockScreenHtml.replace('<!-- PRE_RENDERED_HEATMAP_DOTS -->', previewData.dotsHtml);
 lockScreenHtmlWithPreview = lockScreenHtmlWithPreview.replace('<!-- PRE_RENDERED_HEATMAP_MONTHS -->', previewData.monthsHtml);
 
@@ -186,7 +235,10 @@ const payload = {
   css: styleCss,
   html: appLayoutHtml,
   data: dataJs,
+  winter: winterJs,
+  challenges: challengesJs,
   fsync: firebaseSyncJs,
+  arcSync: arcSyncJs,
   app: appJs
 };
 
@@ -232,7 +284,10 @@ ${lockScreenHtmlWithPreview.trim()}
     }
 
     injectScript(payload.data);
+    if (payload.winter) injectScript(payload.winter);
+    if (payload.challenges) injectScript(payload.challenges);
     if (payload.fsync) injectScript(payload.fsync);
+    if (payload.arcSync) injectScript(payload.arcSync);
     injectScript(payload.app);
   }
 
@@ -247,8 +302,26 @@ ${lockScreenHtmlWithPreview.trim()}
 </html>
 `;
 
+if (lockScreenHtmlWithPreview.includes('PRE_RENDERED_')) {
+  throw new Error('build: a PRE_RENDERED_* placeholder survived unsubstituted into the output.');
+}
+if (!lockScreenHtmlWithPreview.includes('lock-heatmap-dot')) {
+  throw new Error(
+    'build: the login-screen heatmap rendered no dots.\n' +
+    '  generateHeatmapPreview() reads HISTORICAL_DATA out of src/data.js via vm —\n' +
+    '  check that HISTORICAL_DATA is still exported and non-empty.'
+  );
+}
+
 fs.writeFileSync(path.join(__dirname, 'index.html'), distHtml, 'utf8');
-console.log('Successfully compiled index.html (login-gated, no payload encryption)!');
+
+// The payload is base64 and only grows. 639KB at the time this budget was
+// set; past ~800KB the next feature should pay for minification first.
+const builtKb = Math.round(Buffer.byteLength(distHtml, 'utf8') / 1024);
+console.log(`Successfully compiled index.html (login-gated, no payload encryption)! [${builtKb} KB]`);
+if (builtKb > 800) {
+  console.warn('\x1b[33m%s\x1b[0m', `WARNING: index.html is ${builtKb} KB (budget 800 KB) — consider minifying style.css in build.js.`);
+}
 
 // ── Admin console (admin/index.html) ──────────────────────────────
 // A standalone maintainer-only dashboard served at /asca-life/admin/.

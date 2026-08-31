@@ -37,7 +37,30 @@ Hard-refresh the page (Cmd+Shift+R) to pick up the new code.
 **Copy Database Rules** → paste into the same Rules tab → **Publish**.
 
 Both produce identical rules (nodes: `gym`, `directory`, `kudos`, `comments`,
-`progress`).
+`progress`, `budget`, `arc`, `arcPublic`, `challenges`, `challengeMembers`,
+`invites`).
+
+> **The rules document is shared and publishing REPLACES it whole.** The
+> `budget` node belongs to the Asca Budget (Vault) app, which lives in a
+> separate repo but uses this same Firebase project and the same accounts.
+> A ruleset missing `budget` silently breaks Vault's sync. There are three
+> copies of this ruleset that must be edited together:
+>   1. `database.rules.json` (this repo)
+>   2. the `copyFbRules` literal in `src/app.js`
+>   3. the `#fb-rules` literal in the budget repo's `src/app.js`
+>
+> **After editing `database.rules.json`, regenerate the other two rather
+> than hand-editing them:**
+> ```bash
+> python3 tools/gen-rules-literal.py database.rules.json > /tmp/rules_body.txt
+> ```
+> Paste the output as the value of the `rules:` key in both button
+> literals, then run `node test/rules.js` — it `eval()`s all three copies
+> and diffs the resulting trees (not just the rule text), so it catches
+> a divergence a visual diff would miss. It expects the budget repo
+> checked out as a sibling of this repo's parent (`Project_Asca/budget`);
+> if it isn't, that half of the check is skipped with a warning, not a
+> silent pass.
 
 ---
 

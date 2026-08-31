@@ -8,6 +8,24 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Asca Gym</title>
+  <script>
+  /* Pre-paint theme. build.js copies the head verbatim into the built
+     artifact and emits it ahead of the inlined stylesheet, so this runs
+     before a single pixel of the login screen is painted — no flash of the
+     wrong theme while the base64 payload is still unpacking. It only ever
+     READS the key; applyTheme() in winter.js is the sole writer.
+
+     Winter Arc is the default: anything other than an EXPLICIT 'classic'
+     in storage renders winter — this mirrors WinterArc.getTheme()'s
+     default exactly, so a fresh browser never flashes classic first. */
+  (function(){try{
+    if(localStorage.getItem('asca_gym_theme')!=='classic'){
+      document.documentElement.setAttribute('data-theme','winter');
+      var m=document.querySelector('meta[name="theme-color"]');
+      if(m)m.setAttribute('content','#020407');
+    }
+  }catch(e){}})();
+  </script>
   <link rel="stylesheet" href="style.css?v=2.4">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230A84FF' stroke-width='2'><path d='M6 3h12l4 6-10 13L2 9z'/></svg>">
 </head>
@@ -205,11 +223,129 @@
   <!-- Scrollable Views Area -->
   <main class="views-container">
 
+    <!-- ═══ WINTER ARC VIEW ═══ -->
+    <section class="view" id="vArc">
+
+      <!-- Not enrolled — the season pitch + goal setup, one screen. -->
+      <div class="card glass-card arc-onboard-card" id="arcOnboardCard">
+        <div class="arc-onboard-icon">❄️</div>
+        <div class="arc-onboard-title" id="arcOnboardTitle">Winter Arc</div>
+        <div class="arc-onboard-sub" id="arcOnboardSub">Ninety days. Keep the fire lit.</div>
+        <div class="arc-goal-grid" id="arcGoalGrid"></div>
+        <div class="arc-manifesto">
+          <div class="arc-manifesto-line"><b>Discipline</b> leads to habits.</div>
+          <div class="arc-manifesto-line"><b>Habits</b> lead to consistency.</div>
+          <div class="arc-manifesto-line"><b>Consistency</b> leads to growth.</div>
+        </div>
+        <div class="arc-tagline-strong">Consistency beats motivation.</div>
+        <button class="btn btn-primary btn-full arc-num" id="arcJoinBtn">Start the Arc</button>
+      </div>
+
+      <!-- Enrolled dashboard. -->
+      <div id="arcDash" style="display:none">
+
+        <div class="card glass-card arc-hero-card">
+          <div class="arc-hero-top">
+            <div>
+              <div class="arc-hero-day arc-num" id="arcDayLabel">Day 1</div>
+              <div class="arc-hero-date" id="arcDateLabel"></div>
+            </div>
+            <button class="arc-lockin-btn" id="arcLockInBtn" title="Lock In — full-focus mode">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+              <span>Lock In</span>
+            </button>
+            <div class="arc-hero-days-left" id="arcDaysLeft"></div>
+          </div>
+          <div class="arc-hero-progress-track"><div class="arc-hero-progress-fill" id="arcSeasonFill"></div></div>
+          <div class="arc-hero-tag" id="arcTagline"></div>
+          <div class="arc-hero-bottom">
+            <div class="arc-level-chip" id="arcLevelChip">
+              <span class="arc-num" id="arcLevelNum">1</span><em id="arcLevelName">Frostling</em>
+            </div>
+            <div class="arc-xp-wrap">
+              <div class="arc-xp-track"><div class="arc-xp-fill" id="arcXpFill"></div></div>
+              <div class="arc-xp-label arc-num" id="arcXpLabel">0 / 500 XP</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card glass-card arc-streak-card" id="arcStreakCard">
+          <div class="arc-streak-flame" id="arcStreakFlame">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-1 4-5 5-5 10a5 5 0 0 0 10 0c0-1.5-.5-2.5-1-3.5.5 2-1 3-2 2 1-2-.5-4-2-4 .5 2-1 2.5-2 1.5-1-1-.5-3 2-6z"/></svg>
+          </div>
+          <div class="arc-streak-info">
+            <div class="arc-streak-num arc-num" id="arcStreakNum">0</div>
+            <div class="arc-streak-label">day streak</div>
+          </div>
+          <div class="arc-streak-meta">
+            <div class="arc-streak-best">Best <b class="arc-num" id="arcStreakBest">0</b></div>
+            <div class="arc-streak-freezes" id="arcFreezes" title="Freezes left this month"></div>
+          </div>
+          <div class="arc-streak-risk" id="arcStreakRisk" style="display:none">At risk — log something today</div>
+        </div>
+
+        <div class="label">Today's Objectives</div>
+        <div class="card glass-card arc-obj-card">
+          <div class="arc-obj-list" id="arcObjList"></div>
+        </div>
+
+        <div class="label">Daily Check-In</div>
+        <div class="card glass-card arc-checkin-card">
+          <div class="arc-checkin-daypicker" id="arcCheckinDay"></div>
+          <div class="arc-checkin-rows" id="arcCheckinRows"></div>
+
+          <!-- Lock In: one uncomfortable thing, written down, every day.
+               A free-text row rather than another numeric habit — it's a
+               journal entry, not a target to hit. -->
+          <div class="arc-note-row">
+            <div class="arc-note-label">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c-1 4-5 5-5 10a5 5 0 0 0 10 0c0-1.5-.5-2.5-1-3.5.5 2-1 3-2 2 1-2-.5-4-2-4 .5 2-1 2.5-2 1.5-1-1-.5-3 2-6z"/></svg>
+              <span class="arc-note-label-text">Lock In — today's uncomfortable thing</span>
+            </div>
+            <textarea class="arc-note-input" id="arcNoteInput" maxlength="140" rows="2" placeholder="What did you do today that you didn't want to do?"></textarea>
+            <div class="arc-note-count" id="arcNoteCount">0 / 140</div>
+          </div>
+        </div>
+
+        <div class="arc-section-head">
+          <div class="label" style="flex:1">Challenges</div>
+          <button class="arc-seeall-btn" id="arcSeeAllChallenges">See all</button>
+        </div>
+        <div class="arc-challenge-scroll" id="arcChallengeScroll"></div>
+
+        <div class="arc-section-head">
+          <div class="label" style="flex:1">Season</div>
+          <button class="arc-seeall-btn" id="arcOpenCalendar">Calendar</button>
+        </div>
+        <div class="card glass-card arc-cal-preview" id="arcCalPreview"></div>
+
+        <div class="label" id="arcBadgesLabel" style="display:none">Badges</div>
+        <div class="arc-badges-strip" id="arcBadgesStrip"></div>
+
+      </div>
+    </section>
+
     <!-- ═══ LOG SESSION VIEW ═══ -->
     <section class="view on" id="vLog">
       <div class="view-header">
         <h2 class="view-title">Workouts</h2>
         <p class="view-subtitle">Track your daily progress</p>
+      </div>
+
+      <!-- One-time discovery card — the Arc tab is hidden until the
+           Winter theme is on (see .arc-tab-btn in style.css), so without
+           this there is no way to find the feature at all. Dismisses
+           itself permanently once tapped through or closed. -->
+      <div class="card glass-card arc-promo-card" id="arcPromoCard" style="display:none">
+        <button class="arc-promo-close" id="arcPromoClose" aria-label="Dismiss">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <div class="arc-promo-icon">❄️</div>
+        <div class="arc-promo-body">
+          <div class="arc-promo-title">Winter Arc is here</div>
+          <div class="arc-promo-sub">A focused season mode — daily objectives, streaks, challenges, and a stripped-down Locked In screen.</div>
+        </div>
+        <button class="btn btn-primary btn-sm" id="arcPromoBtn">Try it →</button>
       </div>
 
       <!-- Body Weight Widget -->
@@ -473,6 +609,22 @@
         <p class="view-subtitle">Leaderboard & activity feed</p>
       </div>
 
+      <!-- Winter Arc leaderboard — only ever shows what arcPublic/ carries
+           (streak, level, xp, this-week workout count): never sleep,
+           protein, water, steps or body weight. Visible only while
+           enrolled; a friend who hasn't joined the season just doesn't
+           appear here, same as the empty state below for zero friends. -->
+      <div class="label" id="arcLbLabel" style="display:none">Winter Arc</div>
+      <div class="card glass-card arc-lb-card" id="arcLbCard" style="display:none">
+        <div class="seg-tabs arc-lb-tabs" id="arcLbTabs">
+          <div class="seg-tab on" data-arc-metric="streak">Streak</div>
+          <div class="seg-tab" data-arc-metric="level">Level</div>
+          <div class="seg-tab" data-arc-metric="week">This Week</div>
+        </div>
+        <div class="arc-lb-rows" id="arcLbRows"></div>
+        <div class="arc-lb-updated" id="arcLbUpdated"></div>
+      </div>
+
       <!-- Empty state: shown until the athlete follows someone -->
       <div class="card glass-card soc-empty-card" id="socEmptyCard" style="display:none">
         <div class="soc-empty-icon">🏆</div>
@@ -633,6 +785,47 @@
       </div>
 
       <!-- SECTION 1: ACCOUNT CONNECTION -->
+      <!-- SECTION 0: APPEARANCE & SEASON -->
+      <div class="settings-section-header">Appearance &amp; Season</div>
+      <div class="card glass-card settings-list-card" style="margin-bottom: 16px;">
+        <div class="settings-list-item" id="themeRow">
+          <div class="settings-list-icon" style="background: linear-gradient(135deg, #5FD3FF, #8A7CFF); color: #fff;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/>
+            </svg>
+          </div>
+          <div class="settings-list-content">
+            <span class="settings-list-title">Winter Arc theme</span>
+            <span class="settings-list-desc" id="themeDesc">Cold, frosted skin for the season</span>
+          </div>
+          <div class="settings-list-right-group">
+            <button class="toggle-switch" id="themeToggle" role="switch" aria-checked="false" aria-label="Winter Arc theme">
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+        </div>
+        <!-- Only shown once enrolled — goals are set during onboarding and
+             otherwise have no way to be revisited. -->
+        <div class="settings-list-item" id="arcGoalsRow" style="display:none">
+          <div class="settings-list-icon" style="background: linear-gradient(135deg, #5FD3FF, #8A7CFF); color: #fff;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+            </svg>
+          </div>
+          <div class="settings-list-content">
+            <span class="settings-list-title">Season goals</span>
+            <span class="settings-list-desc">Sleep, water, protein, steps, mobility, workouts/week</span>
+          </div>
+          <div class="settings-list-right-group">
+            <div class="settings-list-chevron">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="settings-section-header">Account Connection</div>
       <div class="card glass-card settings-list-card" style="margin-bottom: 16px;">
         <!-- Account Status Row -->
@@ -849,6 +1042,18 @@
   <!-- Navigation Tab Bar -->
   <nav class="bottom-bar" id="bot-nav">
     <div class="nav-lens" id="navLens"></div>
+    <!-- Hidden until the athlete enrolls in a season — gated on
+         [data-arc="on"] on <html>, never on the theme. A user who joins
+         the season but keeps the Classic skin must still reach their
+         own season data. -->
+    <button class="bot-btn arc-tab-btn" data-v="Arc">
+      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 21h8"/>
+        <path d="M12 17v4"/>
+        <path d="M3 4l5 12h8l5-12-6 5-4-7-4 7-6-5z"/>
+      </svg>
+      <span>Arc</span>
+    </button>
     <button class="bot-btn on" data-v="Log">
       <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 20h9"/>
@@ -896,11 +1101,85 @@
     </div>
   </div>
 
+  <!-- Challenges Browser Sheet -->
+  <div class="mini-profile-bg" id="chBg">
+    <div class="mini-profile-sheet ch-sheet" id="chSheet">
+      <div class="mini-profile-handle"></div>
+      <div class="ch-sheet-head">
+        <div class="ch-sheet-title">Challenges</div>
+        <button class="btn-close" id="chClose" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="seg-tabs ch-seg-tabs" id="chTabs">
+        <div class="seg-tab on" data-ch-tab="active">Active</div>
+        <div class="seg-tab" data-ch-tab="available">Available</div>
+        <div class="seg-tab" data-ch-tab="done">Completed</div>
+      </div>
+      <div class="ch-list" id="chList"></div>
+    </div>
+  </div>
+
+  <!-- Season Goals Sheet -->
+  <div class="mini-profile-bg" id="goalsBg">
+    <div class="mini-profile-sheet ch-sheet" id="goalsSheet">
+      <div class="mini-profile-handle"></div>
+      <div class="ch-sheet-head">
+        <div class="ch-sheet-title">Season Goals</div>
+        <button class="btn-close" id="goalsClose" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="arc-goal-item" style="margin-bottom:10px">
+        <div class="arc-goal-item-label">Workouts / week</div>
+        <input type="number" class="arc-num" inputmode="numeric" min="0" max="14" id="goalWorkoutsPerWeek" value="5">
+      </div>
+      <div class="arc-goal-grid" id="goalsEditGrid"></div>
+      <button class="btn btn-primary btn-full arc-num" id="goalsSaveBtn" style="margin-top:16px">Save Goals</button>
+    </div>
+  </div>
+
+  <!-- Season Calendar Sheet -->
+  <div class="mini-profile-bg" id="calBg">
+    <div class="mini-profile-sheet ch-sheet" id="calSheet">
+      <div class="mini-profile-handle"></div>
+      <div class="ch-sheet-head">
+        <div class="ch-sheet-title">Season Calendar</div>
+        <button class="btn-close" id="calClose" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="arc-cal-legend">
+        <span>Fewer</span>
+        <span class="arc-cal-dot lvl-0"></span>
+        <span class="arc-cal-dot lvl-1"></span>
+        <span class="arc-cal-dot lvl-2"></span>
+        <span class="arc-cal-dot lvl-3"></span>
+        <span class="arc-cal-dot lvl-4"></span>
+        <span>More</span>
+      </div>
+      <div class="arc-cal-months" id="calMonths"></div>
+      <div class="arc-cal-daydetail" id="calDayDetail"></div>
+    </div>
+  </div>
+
+  <!-- Locked In — full-focus mode. Outside .phone-frame like the modals,
+       so it can take over the whole viewport including the header + nav. -->
+  <div class="monk-overlay" id="monkOverlay">
+    <button class="monk-exit" id="monkExit" aria-label="Exit Locked In">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="monk-content" id="monkContent"></div>
+  </div>
+
 </div>
 
 <!-- Application Javascript files -->
 <script src="data.js?v=2.0"></script>
+<script src="winter.js?v=1.0"></script>
+<script src="challenges.js?v=1.0"></script>
 <script src="firebase-sync.js?v=1.0"></script>
+<script src="arc-sync.js?v=1.0"></script>
 <script src="app.js?v=2.0"></script>
 </body>
 </html>

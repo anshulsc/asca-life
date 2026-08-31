@@ -11,15 +11,25 @@ function persistSE(){try{localStorage.setItem(SEK,JSON.stringify(SE));}catch(e){
 function restoreSE(){try{const d=localStorage.getItem(SEK);if(d){SE=JSON.parse(d);if(SE.length){renderLogged();document.getElementById('acts').style.display='flex';}}}catch(e){SE=[];}}
 
 const WEEKLY_TARGET = 5;
+// Local day key — see winter.js. Never use toISOString() for a day key:
+// it is UTC, and every date in this app (workout.date, the RTDB workouts
+// map, every heatmap grid) is a LOCAL YYYY-MM-DD.
+const dayKey = d => WinterArc.dateStr(d);
 
 function init(){
+  bindTheme();
+  arcLoad();
+  if(arcEnrolled())document.documentElement.setAttribute('data-arc','on');
+  scheduleArcRollover();
+  window.addEventListener('online',()=>arcFlush());
+  window.addEventListener('pagehide',()=>arcFlush());
   bindLockScreen();
 }
 
 function startApp() {
   load();loadCX();fillTypes();bindTabs();bindSearch();bindSets();bindActs();
-  bindHist();bindAna();bindSettings();bindModal();bindLibraryModal();bindVolInsights();bindTimer();bindBodyWeight();bindFriend();bindProgressPics();
-  setToday();renderRecent();renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderProfile();
+  bindHist();bindAna();bindSettings();bindModal();bindLibraryModal();bindVolInsights();bindTimer();bindBodyWeight();bindFriend();bindProgressPics();bindArc();bindChallengesBrowser();bindMonkMode();bindArcPromo();bindArcLeaderboard();bindArcCalendar();bindArcGoals();
+  setToday();renderRecent();renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderProfile();renderArc();
   restoreSE();
   
   // Backend-first boot: the RTDB is the source of truth. Merge my cloud
@@ -40,6 +50,7 @@ function startApp() {
       .then(ok=>{if(!ok)setTimeout(()=>fbPush(false),8000);}) // flaky network at open — try once more
       .catch(()=>{});
     fbPullFollowing(false);
+    if(arcEnrolled()){arcFlush();arcPullFollowingPublic();}
   }
   
   document.addEventListener('visibilitychange',()=>{
@@ -52,6 +63,7 @@ function startApp() {
       refreshAllUI();
     }else{
       stopRealtimeSync();
+      arcFlush();
     }
   });
 
@@ -317,6 +329,13 @@ function save(){
   if(typeof fbPush==='function'&&fbCfg().connected){
     fbPush(false);
   }
+  // A workout changes streak/XP/objective state without touching arc/ at
+  // all (workouts live in gym/{id}, arc/ holds only check-ins + derived
+  // numbers) — recompute so the Arc dashboard is never stale after Finish.
+  if(arcEnrolled()){
+    arcRecompute();
+    if(typeof renderArc==='function')renderArc();
+  }
 }
 // The baked-in HISTORICAL_DATA is Anshul's log. With per-user cloud
 // accounts, seeding it into another user's fresh browser would push it
@@ -403,7 +422,12 @@ function positionNavLens(activeBtn, animate = true) {
   
   const activeLeft = activeBtn.offsetLeft;
   const activeWidth = activeBtn.offsetWidth;
-  const lensWidth = 54; // consistent size covering both icon and text
+  // Was a hardcoded 54px, sized for 5 tabs at 56px each. With Arc adding a
+  // 6th tab, ≤440px viewports narrow .bot-btn to fit — a fixed lens then
+  // either overhangs a 46/50px button or looks small on a 56px one. Track
+  // the real button width (minus a small inset so the lens reads as a
+  // highlight, not a duplicate outline) instead of a magic number.
+  const lensWidth = Math.max(38, activeWidth - 2);
   const leftPos = activeLeft + (activeWidth - lensWidth) / 2;
   
   if (animate) {
@@ -427,9 +451,10 @@ function bindTabs(){
       document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
       const v=document.getElementById('v'+tgt);
       if(v)v.classList.add('on');
+      if(tgt==='Arc')renderArc();
       if(tgt==='Hist')renderHist();
       if(tgt==='Ana')refreshAna();
-      if(tgt==='Soc')renderFriendsCard();
+      if(tgt==='Soc'){renderFriendsCard();renderArcLeaderboard();arcPullFollowingPublic();}
       if(tgt==='Set'){renderProfile();renderProgressPics();} // keep the account heatmap/stats live
       if(tgt==='Log'){renderBodyWeight();renderHeatmapCalendar();renderVolWidget();}
       
@@ -473,7 +498,1100 @@ function fillTypes(){
     }
   });
 }
-function setToday(){document.getElementById('wDate').value=new Date().toISOString().split('T')[0];}
+function setToday(){document.getElementById('wDate').value=dayKey(new Date());}
+
+/* ── Winter Arc: local state, rollover, sync glue ──────────── */
+/* One localStorage cache, shaped to mirror arc/{userId}/{seasonId} in
+   RTDB closely (minus uid/ts, added at write time). RTDB is the source
+   of truth once signed in; this cache is what paints instantly and
+   what the app runs on entirely offline.
+     asca_gym_arc = {
+       enrolled, seasonId, joinedAt,
+       goals: {...}, checkins: {"YYYY-MM-DD": {...}},
+       xp, level, streak: {current,best,lastDay,freezesLeft,freezeUsed:{}},
+       badges: {id: ts}, seenBadges: {id: true}   // seenBadges gates the toast
+     }
+   Writes to the cloud are always TARGETED SUBPATH PATCHES via ArcSync —
+   never FirebaseSync.writeDoc, which would replace the entire gym/{id}
+   node on a single water tap. See arc-sync.js. */
+const ARK='asca_gym_arc', ARK_DIRTY='asca_gym_arc_dirty';
+let ARC=null, arcDirtyCheckins={}, arcDirtyRoot=false, arcFlushTimer=null, arcRolloverTimer=null;
+
+// A new athlete starts with a curated subset lit up rather than either
+// all 12 or none — an empty Challenges tab reads as broken, and all 13
+// at once reads as noise. Mix of quick win (7-day streak), season-long
+// (no zero days), a weekly target (strength) and the whole-cohort
+// discipline challenge (Lock In) covers every scope.
+const ARC_STARTER_CHALLENGES=['wa_streak_7','wa_no_zero_30','wa_week_volume','wa_lockin_daily'];
+// Challenges everyone gets auto-joined to even if they enrolled BEFORE
+// this challenge existed — a subset of the starter pack, applied once
+// per id via arcLoad()'s migration below rather than re-running the
+// whole starter pack (which would silently re-add anything the athlete
+// deliberately left earlier).
+const ARC_FORCE_JOIN=['wa_lockin_daily'];
+
+function arcDefault(){
+  const s=WinterArc.season();
+  return {
+    enrolled:false, seasonId: s?s.id:null, joinedAt:0,
+    goals: WinterArc.defaultGoals(),
+    checkins:{},
+    xp:0, level:1,
+    streak:{current:0,best:0,lastDay:'',freezesLeft:2,freezeUsed:{}},
+    badges:{}, seenBadges:{},
+    joinedChallenges:{}, // {challengeId: joinedTs}
+    monkMode:false
+  };
+}
+
+function arcJoinChallenge(id){
+  if(!ARC)arcLoad();
+  if(!ARC.joinedChallenges[id]){
+    ARC.joinedChallenges[id]=Date.now();
+    arcSave();
+  }
+}
+function arcLeaveChallenge(id){
+  if(!ARC)arcLoad();
+  if(ARC.joinedChallenges[id]){
+    delete ARC.joinedChallenges[id];
+    arcSave();
+  }
+}
+
+function arcLoad(){
+  try{
+    const raw=localStorage.getItem(ARK);
+    ARC=raw?Object.assign(arcDefault(),JSON.parse(raw)):arcDefault();
+  }catch(_){ARC=arcDefault();}
+  try{
+    const d=localStorage.getItem(ARK_DIRTY);
+    arcDirtyCheckins=d?JSON.parse(d):{};
+  }catch(_){arcDirtyCheckins={};}
+
+  // One-time force-join for anyone already enrolled before a cohort-wide
+  // challenge (Lock In) existed. Applied once per id, tracked separately
+  // from joinedChallenges so a later deliberate Leave sticks — this only
+  // ever adds someone in, never re-adds after they've left.
+  if(ARC.enrolled){
+    ARC.forceJoinApplied=ARC.forceJoinApplied||{};
+    let changed=false;
+    ARC_FORCE_JOIN.forEach(id=>{
+      if(!ARC.forceJoinApplied[id]){
+        ARC.forceJoinApplied[id]=true;
+        ARC.joinedChallenges=ARC.joinedChallenges||{};
+        if(!ARC.joinedChallenges[id]){ARC.joinedChallenges[id]=Date.now();changed=true;}
+      }
+    });
+    if(changed)arcSave();
+  }
+  return ARC;
+}
+
+function arcSave(){
+  try{localStorage.setItem(ARK,JSON.stringify(ARC));}catch(_){}
+}
+function arcSaveDirty(){
+  try{localStorage.setItem(ARK_DIRTY,JSON.stringify(arcDirtyCheckins));}catch(_){}
+}
+
+// The single input builder every Arc render and every engine call goes
+// through — one place that assembles {workouts, checkins, goals, season,
+// freezeUsed, now} from live state, so the UI and the sync layer can never
+// silently see different data.
+function arcInput(){
+  return {
+    workouts:W, checkins:ARC.checkins, goals:ARC.goals,
+    season:WinterArc.season(ARC.seasonId), freezeUsed:(ARC.streak&&ARC.streak.freezeUsed)||{},
+    now:new Date(), challenges:ARC.customChallenges&&ARC.customChallenges.length?ARC.customChallenges:undefined
+  };
+}
+
+// Recompute from scratch (never incremented — see challenges.js) and fold
+// the derived numbers back into the persisted cache, so a reload shows the
+// same XP/streak/badges without waiting for a recompute.
+function arcRecompute(){
+  if(!ARC)arcLoad();
+  const sum=ChallengeEngine.summary(arcInput());
+  ARC.xp=sum.xp; ARC.level=sum.level.level;
+  ARC.streak.current=sum.streak.current; ARC.streak.best=sum.streak.best; ARC.streak.lastDay=sum.streak.lastDay;
+  sum.badges.forEach(id=>{if(!ARC.badges[id])ARC.badges[id]=Date.now();});
+  arcSave();
+  return sum;
+}
+
+function arcEnrolled(){return !!(ARC&&ARC.enrolled);}
+
+async function arcEnroll(goals){
+  if(!ARC)arcLoad();
+  const s=WinterArc.season();
+  ARC.enrolled=true; ARC.seasonId=s?s.id:null; ARC.joinedAt=Date.now();
+  ARC.goals=Object.assign(WinterArc.defaultGoals(),goals||{});
+  if(!Object.keys(ARC.joinedChallenges||{}).length){
+    ARC.joinedChallenges={};
+    ARC_STARTER_CHALLENGES.forEach(id=>{ARC.joinedChallenges[id]=Date.now();});
+  }
+  arcSave();
+  document.documentElement.setAttribute('data-arc','on');
+  arcRecompute();
+  if(fbCfg().connected){
+    try{await ArcSync.writeSeasonJoin(ARC.seasonId,ARC.goals);}catch(_){/* offline — local state is already correct, flush will retry */}
+  }
+  return ARC;
+}
+
+// Onboarding only ever runs once — this is the other half of "goals are
+// editable", called from the Settings > Season Goals sheet. Recomputes
+// immediately since a goal change can retroactively flip whether TODAY's
+// objectives read as met (e.g. lowering the water target below what's
+// already logged).
+async function arcUpdateGoals(goals){
+  if(!ARC)arcLoad();
+  ARC.goals=Object.assign({},ARC.goals,goals||{});
+  arcSave();
+  arcRecompute();
+  if(fbCfg().connected){
+    try{await ArcSync.writeGoals(ARC.seasonId,ARC.goals);}catch(_){/* flush will retry */}
+  }
+  return ARC;
+}
+
+// One habit day, merged rather than replaced — a second quick-add for
+// water the same day must not clobber sleep entered five minutes earlier.
+function arcCheckin(date,fields){
+  if(!ARC)arcLoad();
+  const prev=ARC.checkins[date]||WinterArc.emptyCheckin();
+  const next=Object.assign({},prev,fields,{ts:Date.now()});
+  ARC.checkins[date]=next;
+  arcSave();
+  arcDirtyCheckins[date]=true;
+  arcSaveDirty();
+  scheduleArcFlush();
+  return arcRecompute();
+}
+
+// Debounced network flush: a burst of quick-add taps becomes one write,
+// not one per tap. Forced immediately on backgrounding/offline transition
+// so nothing sits unsynced when the tab is about to be suspended.
+function scheduleArcFlush(delay=2500){
+  if(arcFlushTimer)clearTimeout(arcFlushTimer);
+  arcFlushTimer=setTimeout(arcFlush,delay);
+}
+
+async function arcFlush(){
+  if(arcFlushTimer){clearTimeout(arcFlushTimer);arcFlushTimer=null;}
+  if(!ARC||!ARC.enrolled||!fbCfg().connected)return;
+  const dates=Object.keys(arcDirtyCheckins);
+  for(const d of dates){
+    try{
+      await ArcSync.writeCheckinDay(ARC.seasonId,d,ARC.checkins[d]);
+      delete arcDirtyCheckins[d];
+      arcSaveDirty();
+    }catch(_){break;} // stop on first failure — offline or rules not published; retry next schedule
+  }
+  try{
+    await ArcSync.writeProgress(ARC.seasonId,{xp:ARC.xp,level:ARC.level,streak:ARC.streak,badges:ARC.badges});
+    const sum=ChallengeEngine.summary(arcInput());
+    await ArcSync.writeArcPublic(ARC.seasonId,arcPublicProjection(sum));
+  }catch(_){}
+}
+
+// Next local midnight, recomputed on backgrounding/return so a suspended
+// tab (mobile Safari especially) doesn't miss the boundary while asleep.
+function scheduleArcRollover(){
+  if(arcRolloverTimer)clearTimeout(arcRolloverTimer);
+  arcRolloverTimer=setTimeout(()=>{
+    if(arcEnrolled()){arcRecompute();if(typeof renderArc==='function')renderArc();}
+    scheduleArcRollover();
+  },WinterArc.msUntilMidnight());
+}
+
+/* ── Theme (Classic / Winter Arc) ──────────────────────────── */
+/* Deliberately per-device and NOT synced: it never touches
+   pushSignature() or writeDoc, so flipping a skin can never trigger a
+   rewrite of the whole workout history. The <head> script in index.html
+   stamps the attribute before first paint; this is the only writer. */
+/* ── Winter Arc: icons ─────────────────────────────────────── */
+/* Same 24x24 / stroke-2.5 / round-cap language as every other icon in
+   the app, so these read as native rather than bolted-on. */
+const ARC_ICONS = {
+  dumbbell: '<path d="M6 7v10M18 7v10M2 10v4M22 10v4M6 12h12"/>',
+  protein: '<path d="M8 3h8l-1 4H9L8 3z"/><path d="M9 7l-2 14h10L15 7"/>',
+  droplet: '<path d="M12 2s7 8 7 13a7 7 0 0 1-14 0c0-5 7-13 7-13z"/>',
+  moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/>',
+  steps: '<path d="M4 16l3-3 3 1 3-4 3 1 3-3"/><circle cx="4" cy="18" r="1.4"/><circle cx="20" cy="6" r="1.4"/>',
+  stretch: '<circle cx="12" cy="4" r="2"/><path d="M12 6v6M12 12l-5 6M12 12l5 6M7 9l5 3 5-3"/>',
+  flame: '<path d="M12 2c-1 4-5 5-5 10a5 5 0 0 0 10 0c0-1.5-.5-2.5-1-3.5.5 2-1 3-2 2 1-2-.5-4-2-4 .5 2-1 2.5-2 1.5-1-1-.5-3 2-6z"/>',
+  weight: '<circle cx="12" cy="12" r="3"/><path d="M4 9v6M20 9v6M7 6v12M17 6v12"/>',
+  heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/>',
+  star: '<path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 6.9L12 17.1 5.7 20.8l1.7-6.9L2 9.2l7.1-.6z"/>',
+  summit: '<path d="M3 4l5 12h8l5-12-6 5-4-7-4 7-6-5z"/><path d="M8 21h8M12 17v4"/>',
+  check: '<path d="M20 6L9 17l-5-5"/>',
+  trophy: '<path d="M8 4h8v4a4 4 0 0 1-8 0V4z"/><path d="M6 4H3v2a4 4 0 0 0 4 4M18 4h3v2a4 4 0 0 1-4 4"/><path d="M9 16h6M12 12v4M8 20h8"/>'
+};
+function arcIcon(key,size=18){
+  const d=ARC_ICONS[key]||ARC_ICONS.star;
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+}
+
+/* ── Winter Arc: rendering ────────────────────────────────── */
+let arcSelectedDay=null; // "YYYY-MM-DD" — which check-in day the card edits; null = today
+
+// Shared by onboarding (defaults) and the goals editor (current values) —
+// one markup generator so the two never drift.
+function arcGoalGridHtml(values){
+  const v=values||WinterArc.defaultGoals();
+  return WinterArc.HABITS.map(h=>`
+      <div class="arc-goal-item">
+        <div class="arc-goal-item-label">${esc(h.label)} ${h.unit?('('+esc(h.unit)+')'):''}</div>
+        <input type="number" class="arc-num" inputmode="decimal" step="${h.step}" min="0" data-goal="${h.key}" value="${v[h.key]!=null?v[h.key]:h.goal}">
+      </div>`).join('');
+}
+
+function bindArc(){
+  const goalGrid=document.getElementById('arcGoalGrid');
+  if(goalGrid)goalGrid.innerHTML=arcGoalGridHtml(WinterArc.defaultGoals());
+  const joinBtn=document.getElementById('arcJoinBtn');
+  if(joinBtn)joinBtn.addEventListener('click',async()=>{
+    const goals={};
+    document.querySelectorAll('#arcGoalGrid [data-goal]').forEach(inp=>{
+      goals[inp.dataset.goal]=parseFloat(inp.value)||0;
+    });
+    joinBtn.disabled=true;joinBtn.textContent='Starting…';
+    await arcEnroll(goals);
+    renderArc();
+    toast('Welcome to the Winter Arc','success');
+  });
+
+  // Delegated clicks inside the dashboard — objectives, day picker, quick-adds.
+  const dash=document.getElementById('arcDash');
+  if(dash)dash.addEventListener('click',e=>{
+    const dayChip=e.target.closest('.arc-day-chip');
+    if(dayChip){arcSelectedDay=dayChip.dataset.day;renderArcCheckin();return;}
+
+    const quickBtn=e.target.closest('.arc-quick-btn');
+    if(quickBtn){
+      const row=quickBtn.closest('.arc-checkin-row');
+      const key=row.dataset.key;
+      const delta=parseFloat(quickBtn.dataset.delta);
+      const day=arcSelectedDay||dayKey(new Date());
+      const cur=(ARC.checkins[day]&&ARC.checkins[day][key])||0;
+      const h=WinterArc.HABITS.find(x=>x.key===key);
+      const next=Math.max(0,Math.min(h.max,cur+delta));
+      arcApplyCheckin(day,{[key]:next});
+      return;
+    }
+
+    const sqDot=e.target.closest('.arc-sq-dot');
+    if(sqDot){
+      const day=arcSelectedDay||dayKey(new Date());
+      arcApplyCheckin(day,{sleepQ:parseInt(sqDot.dataset.q,10)});
+      return;
+    }
+
+    const objRow=e.target.closest('.arc-obj-row');
+    if(objRow){
+      const id=objRow.dataset.obj;
+      // "Move" points at logging a workout; the other three point at
+      // today's check-in card, already on this screen.
+      if(id==='move'){document.querySelector('.bot-btn[data-v="Log"]').click();}
+      else{document.getElementById('arcCheckinCard')?.scrollIntoView({behavior:'smooth',block:'nearest'});}
+      return;
+    }
+  });
+
+  // Custom numeric entry for water/protein/mobility (blur or Enter commits).
+  dash?.addEventListener('change',e=>{
+    const inp=e.target.closest('.arc-quick-custom');
+    if(inp){
+      const row=inp.closest('.arc-checkin-row');
+      const key=row.dataset.key;
+      const h=WinterArc.HABITS.find(x=>x.key===key);
+      const v=Math.max(0,Math.min(h.max,parseFloat(inp.value)||0));
+      const day=arcSelectedDay||dayKey(new Date());
+      arcApplyCheckin(day,{[key]:v});
+      return;
+    }
+    // The Lock In note commits on blur, not per keystroke — arcApplyCheckin
+    // re-renders the whole check-in card (renderArcCheckin resets the
+    // textarea's .value), which would fight the cursor if it fired on
+    // every keystroke while still focused.
+    if(e.target.id==='arcNoteInput'){
+      const day=arcSelectedDay||dayKey(new Date());
+      arcApplyCheckin(day,{note:e.target.value.slice(0,140)});
+      return;
+    }
+    // Bedtime / wake time. When both are set, derive sleepH from the
+    // clock times and let that override the manual stepper value — the
+    // times are the more precise input once someone bothers entering
+    // them. Either field alone just records the time with no side effect.
+    if(e.target.id==='arcSleepStart'||e.target.id==='arcSleepEnd'){
+      const day=arcSelectedDay||dayKey(new Date());
+      const cur=ARC.checkins[day]||WinterArc.emptyCheckin();
+      const start=e.target.id==='arcSleepStart'?e.target.value:cur.sleepStart;
+      const end=e.target.id==='arcSleepEnd'?e.target.value:cur.sleepEnd;
+      const patch={sleepStart:start||'',sleepEnd:end||''};
+      const derived=WinterArc.computeSleepHours(start,end);
+      if(derived!=null)patch.sleepH=derived;
+      arcApplyCheckin(day,patch);
+    }
+  });
+
+  // Live character count only — no state write, no re-render, so typing
+  // never loses focus or cursor position mid-sentence.
+  dash?.addEventListener('input',e=>{
+    if(e.target.id!=='arcNoteInput')return;
+    const count=document.getElementById('arcNoteCount');
+    if(count)count.textContent=`${e.target.value.length} / 140`;
+  });
+}
+
+// Wraps arcCheckin() with the celebration + toast side-effects a UI action
+// needs, that the pure persistence layer (app-state module above) should
+// not know about.
+function arcApplyCheckin(day,fields){
+  const before=ARC?ChallengeEngine.summary(arcInput()):null;
+  arcCheckin(day,fields);
+  const after=ChallengeEngine.summary(arcInput());
+  renderArc();
+  if(before&&after.objectivesDone>before.objectivesDone&&after.objectivesDone===after.objectivesTotal){
+    toast('All objectives complete — nice work','success');
+  }
+  if(before){
+    const newBadges=after.badges.filter(b=>!before.badges.includes(b));
+    newBadges.forEach(()=>toast('Badge earned','success'));
+  }
+}
+
+function arcLevelName(level){
+  const NAMES=['Frostling','Frostling','Snowbound','Snowbound','Icebreaker','Icebreaker','Glacier','Glacier','Aurora','Aurora','Everfrost'];
+  return NAMES[Math.min(level,NAMES.length-1)]||'Everfrost';
+}
+
+function renderArc(){
+  const onboard=document.getElementById('arcOnboardCard');
+  const dash=document.getElementById('arcDash');
+  if(!onboard||!dash)return;
+  if(!ARC)arcLoad();
+
+  const goalsRow=document.getElementById('arcGoalsRow');
+  if(goalsRow)goalsRow.style.display=arcEnrolled()?'flex':'none';
+
+  if(!arcEnrolled()){
+    onboard.style.display='flex';
+    dash.style.display='none';
+    const s=WinterArc.season();
+    document.getElementById('arcOnboardTitle').textContent=s?s.name:'Winter Arc';
+    document.getElementById('arcOnboardSub').textContent=s?s.tagline:'';
+    return;
+  }
+  onboard.style.display='none';
+  dash.style.display='block';
+
+  const sum=arcRecompute();
+  renderArcHero(sum);
+  renderArcStreak(sum);
+  renderArcObjectives(sum);
+  renderArcCheckin();
+  renderArcChallenges(sum);
+  renderArcBadges(sum);
+  renderArcCalPreview();
+}
+
+// Friendly "Nov 1" from a "YYYY-MM-DD" — no timezone re-derivation, just a
+// display format on an already-resolved local day string.
+function arcFriendlyDate(ds){
+  const d=WinterArc.parseDay(ds);
+  return d?d.toLocaleDateString(undefined,{month:'short',day:'numeric'}):ds;
+}
+function arcFullDate(ds){
+  const d=WinterArc.parseDay(ds);
+  return d?d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'}):ds;
+}
+
+function renderArcHero(sum){
+  const s=sum.season;
+  const dayLabel=document.getElementById('arcDayLabel');
+  const dateLabel=document.getElementById('arcDateLabel');
+  const daysLeft=document.getElementById('arcDaysLeft');
+  if(dateLabel)dateLabel.textContent=arcFullDate(sum.today);
+  if(!s){
+    dayLabel.textContent='—'; daysLeft.textContent='';
+  }else if(sum.phase==='upcoming'){
+    // The literal state anyone opens the app to before the season starts —
+    // "Day 0 of 92" reads as broken, so this gets its own copy rather than
+    // falling through the normal day-counter path.
+    dayLabel.textContent=`Starts ${arcFriendlyDate(s.start)}`;
+    daysLeft.textContent=`${WinterArc.daysBetween(sum.today,s.start)}d to go`;
+  }else if(sum.phase==='ended'){
+    dayLabel.textContent='Season complete';
+    daysLeft.textContent=`ended ${arcFriendlyDate(s.end)}`;
+  }else{
+    dayLabel.textContent=`Day ${sum.day} of ${sum.seasonLength}`;
+    daysLeft.textContent=`${sum.daysLeft} days left`;
+  }
+  document.getElementById('arcSeasonFill').style.width=(s&&sum.seasonLength&&sum.phase!=='upcoming')?`${Math.min(100,(sum.day/sum.seasonLength)*100)}%`:'0%';
+  document.getElementById('arcTagline').textContent=s?s.tagline:'';
+  const lp=sum.level;
+  document.getElementById('arcLevelNum').textContent='L'+lp.level;
+  document.getElementById('arcLevelName').textContent=arcLevelName(lp.level);
+  document.getElementById('arcXpFill').style.width=lp.pct+'%';
+  document.getElementById('arcXpLabel').textContent=`${fmtStatNum(lp.into)} / ${fmtStatNum(lp.need)} XP`;
+}
+
+function renderArcStreak(sum){
+  const st=sum.streak;
+  const flame=document.getElementById('arcStreakFlame');
+  const numEl=document.getElementById('arcStreakNum');
+  const prevNum=parseInt(numEl.textContent,10)||0;
+  numEl.textContent=st.current;
+  if(st.current>prevNum){flame.classList.remove('pulse');void flame.offsetWidth;flame.classList.add('pulse');}
+  document.getElementById('arcStreakBest').textContent=st.best;
+  const freezesLeft=(ARC.streak&&ARC.streak.freezesLeft!=null)?ARC.streak.freezesLeft:2;
+  document.getElementById('arcFreezes').innerHTML=Array.from({length:2},(_,i)=>
+    `<span class="arc-freeze-dot${i<freezesLeft?'':' used'}" title="${i<freezesLeft?'Freeze available':'Freeze used'}"></span>`).join('');
+  const risk=document.getElementById('arcStreakRisk');
+  risk.style.display=st.atRisk?'block':'none';
+}
+
+function renderArcObjectives(sum){
+  const list=document.getElementById('arcObjList');
+  list.innerHTML=sum.objectives.map(o=>`
+    <div class="arc-obj-row${o.done?' done':''}" data-obj="${o.id}">
+      <div class="arc-obj-icon">${arcIcon(o.icon,17)}</div>
+      <div class="arc-obj-body">
+        <div class="arc-obj-label">${esc(o.label)}</div>
+        <div class="arc-obj-hint">${esc(o.hint)}</div>
+        ${o.done?'':`<div class="arc-obj-track"><div class="arc-obj-fill" style="width:${Math.min(100,o.pct)}%"></div></div>`}
+      </div>
+      <div class="arc-obj-check">${o.done?arcIcon('check',13):''}</div>
+    </div>`).join('');
+}
+
+function renderArcCheckin(){
+  const dayEl=document.getElementById('arcCheckinDay');
+  const today=dayKey(new Date());
+  if(!arcSelectedDay)arcSelectedDay=today;
+  const days=Array.from({length:7},(_,i)=>WinterArc.addDays(today,-i));
+  dayEl.innerHTML=days.map(d=>{
+    const label=d===today?'Today':WinterArc.dateStr(d)===d?new Date(d+'T00:00:00').toLocaleDateString(undefined,{weekday:'short'}):d;
+    return `<button class="arc-day-chip${d===arcSelectedDay?' on':''}" data-day="${d}">${label}</button>`;
+  }).join('');
+
+  const c=ARC.checkins[arcSelectedDay]||WinterArc.emptyCheckin();
+  const g=ARC.goals;
+  const rows=document.getElementById('arcCheckinRows');
+  rows.innerHTML=WinterArc.HABITS.map(h=>{
+    const val=c[h.key]||0;
+    const target=g[h.key]||h.goal;
+    const pct=target?Math.min(100,(val/target)*100):0;
+    const hit=val>=target;
+    const quick = h.key==='sleepH'
+      ? `<div class="arc-quick-row">
+           <button class="arc-quick-btn arc-quick-neg" data-delta="-${h.step}">−${h.step}</button>
+           <input type="number" class="arc-quick-custom arc-num" step="${h.step}" min="0" value="${val||''}" placeholder="0">
+           <button class="arc-quick-btn" data-delta="${h.step}">+${h.step}${h.unit}</button>
+         </div>`
+      : `<div class="arc-quick-row">
+           <button class="arc-quick-btn" data-delta="${h.step}">+${h.step}</button>
+           <button class="arc-quick-btn" data-delta="${h.step*2}">+${h.step*2}</button>
+           <input type="number" class="arc-quick-custom arc-num" min="0" value="${val||''}" placeholder="0">
+         </div>`;
+    const sleepQuality = h.key==='sleepH'
+      ? `<div class="arc-sleep-quality" style="margin-top:8px">${Array.from({length:WinterArc.SLEEP_QUALITY_MAX},(_,i)=>
+          `<span class="arc-sq-dot${(c.sleepQ||0)>i?' on':''}" data-q="${i+1}"></span>`).join('')}</div>`
+      : '';
+    // Bedtime + wake time, alongside the hours stepper — enter either or
+    // both; when both are present they OVERRIDE the hours field via
+    // computeSleepHours() (see the bindArc() 'change' handler), so the
+    // stepper stays the manual fallback for anyone who doesn't want to
+    // enter exact clock times.
+    const sleepTimes = h.key==='sleepH'
+      ? `<div class="arc-sleep-times">
+           <label class="arc-sleep-time-field">
+             <span>Bedtime</span>
+             <input type="time" class="arc-time-input" id="arcSleepStart" value="${esc(c.sleepStart||'')}">
+           </label>
+           <label class="arc-sleep-time-field">
+             <span>Wake</span>
+             <input type="time" class="arc-time-input" id="arcSleepEnd" value="${esc(c.sleepEnd||'')}">
+           </label>
+         </div>`
+      : '';
+    return `<div class="arc-checkin-row${hit?' hit':''}" data-key="${h.key}">
+      <div class="arc-checkin-icon">${arcIcon(h.icon,17)}</div>
+      <div class="arc-checkin-main">
+        <div class="arc-checkin-toprow">
+          <span class="arc-checkin-label">${esc(h.label)}</span>
+          <span class="arc-checkin-val"><b>${val||0}</b>${h.unit?(' '+h.unit):''} / ${target}${h.unit}</span>
+        </div>
+        <div class="arc-checkin-track"><div class="arc-checkin-fill${hit?' over':''}" style="width:${pct}%"></div></div>
+        ${quick}
+        ${sleepQuality}
+        ${sleepTimes}
+      </div>
+    </div>`;
+  }).join('');
+
+  const noteInput=document.getElementById('arcNoteInput');
+  const noteCount=document.getElementById('arcNoteCount');
+  if(noteInput){
+    noteInput.value=c.note||'';
+    if(noteCount)noteCount.textContent=`${(c.note||'').length} / 140`;
+  }
+}
+
+// Soft indicator for a target-less "race" challenge (most-workouts-this-
+// season) — there is no denominator to divide by, so a small fixed fill
+// just signals "in progress" rather than claiming a real percentage.
+function arcChallengePct(c){
+  return c.target ? Math.min(100,c.pct) : Math.min(100,(c.value>0?35:4));
+}
+
+function arcChallengeCard(c,opts){
+  opts=opts||{};
+  const def=c.def;
+  const pct=arcChallengePct(c);
+  const action=opts.action; // 'join' | 'leave' | null
+  const actionHtml=action==='join'
+    ? `<button class="ch-card-action" data-join="${def.id}">Join</button>`
+    : action==='leave'
+      ? (c.done?`<span class="ch-card-action done">${arcIcon('check',13)}</span>`:`<button class="ch-card-action leave" data-leave="${def.id}">Leave</button>`)
+      : '';
+  return `<div class="ch-card card glass-card${c.done?' done':''}">
+    <div class="ch-card-icon">${arcIcon(def.icon,17)}</div>
+    <div class="ch-card-body">
+      <div class="ch-card-name">${esc(def.name)}</div>
+      <div class="ch-card-desc">${esc(def.desc||'')}</div>
+      <div class="ch-card-track"><div class="ch-card-fill" style="width:${pct}%"></div></div>
+      <div class="ch-card-meta">
+        <span>${c.target?`${fmtStatNum(c.value)} / ${fmtStatNum(c.target)}`:fmtStatNum(c.value)+' logged'}</span>
+        <span>${c.expired?'ended':(c.daysLeft!=null?c.daysLeft+'d left':'')}${def.xp?` · ${def.xp} XP`:''}</span>
+      </div>
+    </div>
+    ${actionHtml}
+  </div>`;
+}
+
+// The dashboard teaser: only what's joined and still worth looking at.
+// Completed and abandoned challenges move to the full browser so the
+// home screen never gets cluttered with "done" cards.
+function renderArcChallenges(sum){
+  const scroll=document.getElementById('arcChallengeScroll');
+  const joined=Object.keys(ARC.joinedChallenges||{});
+  const active=sum.challenges.filter(c=>joined.includes(c.def.id)&&!c.expired&&!c.done);
+  if(!active.length){
+    scroll.innerHTML=`<div class="arc-challenge-empty">${joined.length?'All caught up — see all challenges':'No challenges joined yet'}</div>`;
+    return;
+  }
+  scroll.innerHTML=active.map(c=>{
+    const def=c.def;
+    const pct=arcChallengePct(c);
+    return `<div class="arc-challenge-card card glass-card${c.done?' done':''}">
+      <div class="arc-challenge-icon">${arcIcon(def.icon,15)}</div>
+      <div class="arc-challenge-name">${esc(def.name)}</div>
+      <div class="arc-challenge-track"><div class="arc-challenge-fill" style="width:${pct}%"></div></div>
+      <div class="arc-challenge-meta">
+        <span>${c.target?`${fmtStatNum(c.value)}/${fmtStatNum(c.target)}`:fmtStatNum(c.value)}</span>
+        <span>${c.daysLeft!=null?c.daysLeft+'d left':''}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ── Challenges browser sheet ─────────────────────────────── */
+let chActiveTab='active';
+
+function bindChallengesBrowser(){
+  const openBtn=document.getElementById('arcSeeAllChallenges');
+  const bg=document.getElementById('chBg');
+  const closeBtn=document.getElementById('chClose');
+  if(openBtn)openBtn.addEventListener('click',()=>{bg.classList.add('open');renderChallengesBrowser();});
+  if(closeBtn)closeBtn.addEventListener('click',()=>bg.classList.remove('open'));
+  if(bg)bg.addEventListener('click',e=>{if(e.target===bg)bg.classList.remove('open');});
+
+  // Dashboard teaser cards aren't a dead end — tapping any of them opens
+  // the same browser sheet "See all" does, on the Active tab (the
+  // scroller only ever shows joined+active challenges to begin with).
+  const scroll=document.getElementById('arcChallengeScroll');
+  if(scroll)scroll.addEventListener('click',e=>{
+    if(!e.target.closest('.arc-challenge-card'))return;
+    chActiveTab='active';
+    if(tabs){tabs.querySelectorAll('.seg-tab').forEach(x=>x.classList.remove('on'));const t=tabs.querySelector('[data-ch-tab="active"]');if(t)t.classList.add('on');}
+    bg.classList.add('open');
+    renderChallengesBrowser();
+  });
+
+  const tabs=document.getElementById('chTabs');
+  if(tabs)tabs.addEventListener('click',e=>{
+    const t=e.target.closest('.seg-tab');
+    if(!t)return;
+    tabs.querySelectorAll('.seg-tab').forEach(x=>x.classList.remove('on'));
+    t.classList.add('on');
+    chActiveTab=t.dataset.chTab;
+    renderChallengesBrowser();
+  });
+
+  const list=document.getElementById('chList');
+  if(list)list.addEventListener('click',e=>{
+    const joinBtn=e.target.closest('[data-join]');
+    if(joinBtn){arcJoinChallenge(joinBtn.dataset.join);renderChallengesBrowser();renderArc();toast('Challenge joined','success');return;}
+    const leaveBtn=e.target.closest('[data-leave]');
+    if(leaveBtn){arcLeaveChallenge(leaveBtn.dataset.leave);renderChallengesBrowser();renderArc();return;}
+  });
+}
+
+function renderChallengesBrowser(){
+  const list=document.getElementById('chList');
+  if(!list||!arcEnrolled())return;
+  const sum=ChallengeEngine.summary(arcInput());
+  const joined=ARC.joinedChallenges||{};
+
+  let rows;
+  if(chActiveTab==='active'){
+    rows=sum.challenges.filter(c=>joined[c.def.id]&&!c.done&&!c.expired);
+  }else if(chActiveTab==='done'){
+    rows=sum.challenges.filter(c=>joined[c.def.id]&&c.done);
+  }else{ // available
+    rows=sum.challenges.filter(c=>!joined[c.def.id]);
+  }
+
+  if(!rows.length){
+    const msg={active:'No active challenges — join one from Available',
+               done:'Nothing completed yet — keep going',
+               available:"You've joined every built-in challenge"}[chActiveTab];
+    list.innerHTML=`<div class="ch-list-empty">${msg}</div>`;
+    return;
+  }
+  const action=chActiveTab==='available'?'join':'leave';
+  list.innerHTML=rows.map(c=>arcChallengeCard(c,{action})).join('');
+}
+
+function renderArcBadges(sum){
+  const label=document.getElementById('arcBadgesLabel');
+  const strip=document.getElementById('arcBadgesStrip');
+  const earnedIds=Object.keys(ARC.badges||{});
+  if(!earnedIds.length){label.style.display='none';strip.innerHTML='';return;}
+  label.style.display='block';
+  strip.innerHTML=earnedIds.map(id=>{
+    const def=ChallengeEngine.CATALOGUE.find(c=>c.badge===id);
+    return `<div class="arc-badge-chip">
+      <div class="arc-badge-icon">${arcIcon(def?def.icon:'star',20)}</div>
+      <div class="arc-badge-name">${esc(def?def.name:id)}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ── Winter Arc: Social leaderboard ───────────────────────────
+   Everyone's streak/level/activity, visible to the people who follow
+   them — reusing the Strava-style following model the Social tab
+   already has. Deliberately reads ONLY arcPublic/, never arc/: that
+   split is what keeps sleep, protein, water, steps and body weight
+   out of any social surface even if this code has a bug. */
+const AFCK='asca_gym_arc_friends_cache';
+let arcLbMetric='streak';
+
+function getArcFriendsCache(){
+  try{
+    const raw=localStorage.getItem(AFCK);
+    if(raw){const d=JSON.parse(raw);if(d&&d.friends)return d;}
+  }catch(_){}
+  return {ts:0,friends:{}};
+}
+function saveArcFriendEntry(id,data){
+  const c=getArcFriendsCache();
+  c.friends[id]=Object.assign({},data,{ts:Date.now()});
+  c.ts=Date.now();
+  try{localStorage.setItem(AFCK,JSON.stringify(c));}catch(_){}
+}
+
+// The narrow projection written to arcPublic/{id}/{seasonId} — every field
+// here is safe to show a follower; nothing from checkins/goals is ever
+// included, structurally (this function never reads ARC.checkins).
+function arcPublicProjection(sum){
+  return {
+    day:sum.day||0,
+    streak:sum.streak.current,
+    best:sum.streak.best,
+    level:sum.level.level,
+    xp:sum.xp,
+    workoutsThisWeek:periodStats(W).week||0,
+    challengesDone:sum.challenges.filter(c=>c.done).length
+  };
+}
+
+// Pull my own + every followed friend's arcPublic doc in parallel, same
+// shape as fbPullFollowing(). Best-effort: a friend who hasn't enrolled,
+// hasn't synced yet, or is offline just doesn't appear — no error surfaced,
+// matching how the rest of the friends list already degrades.
+async function arcPullFollowingPublic(){
+  if(!fbCfg().connected||!ARC||!ARC.seasonId)return;
+  const cfg=fbCfg();
+  const ids=[cfg.userId,...cfg.following.map(f=>f.id)].filter(Boolean);
+  await Promise.allSettled(ids.map(async id=>{
+    const doc=await ArcSync.readArcPublic(id,ARC.seasonId);
+    if(doc)saveArcFriendEntry(id,doc);
+  }));
+  renderArcLeaderboard();
+}
+
+function bindArcLeaderboard(){
+  const tabs=document.getElementById('arcLbTabs');
+  if(tabs)tabs.addEventListener('click',e=>{
+    const t=e.target.closest('.seg-tab');
+    if(!t)return;
+    tabs.querySelectorAll('.seg-tab').forEach(x=>x.classList.remove('on'));
+    t.classList.add('on');
+    arcLbMetric=t.dataset.arcMetric;
+    renderArcLeaderboard();
+  });
+}
+
+function renderArcLeaderboard(){
+  const label=document.getElementById('arcLbLabel');
+  const card=document.getElementById('arcLbCard');
+  const rowsEl=document.getElementById('arcLbRows');
+  const updatedEl=document.getElementById('arcLbUpdated');
+  if(!card)return;
+  if(!arcEnrolled()){label.style.display='none';card.style.display='none';return;}
+  label.style.display='block';
+  card.style.display='block';
+
+  const cfg=fbCfg();
+  const cache=getArcFriendsCache().friends;
+  const mySum=ChallengeEngine.summary(arcInput());
+  const rows=[{id:cfg.userId||'me',name:cfg.displayName||cfg.userId||'You',me:true,data:arcPublicProjection(mySum)}];
+  (cfg.following||[]).forEach(f=>{
+    const d=cache[f.id];
+    if(d)rows.push({id:f.id,name:f.name||f.id,me:false,data:d});
+  });
+
+  const metricVal=r=>({streak:r.data.streak||0,level:r.data.level||0,week:r.data.workoutsThisWeek||0}[arcLbMetric]||0);
+  rows.sort((a,b)=>metricVal(b)-metricVal(a));
+
+  if(rows.length===1){
+    rowsEl.innerHTML='<div class="arc-lb-empty">Follow friends who are also running the Arc to see them here.</div>';
+    updatedEl.textContent='';
+    return;
+  }
+
+  rowsEl.innerHTML=rows.map((r,i)=>{
+    const rank=i+1;
+    const rankCls=rank===1?'top1':rank===2?'top2':rank===3?'top3':'';
+    return `<div class="arc-lb-row${r.me?' me':''}">
+      <div class="arc-lb-rank ${rankCls}">${rank}</div>
+      <div class="arc-lb-avatar" style="background:${avatarBgOf(r.id)}">${avatarHtmlOf(r.id,r.name)}</div>
+      <div class="arc-lb-name">${esc(r.name)}${r.me?'<span class="arc-lb-you-chip">You</span>':''}</div>
+      <div class="arc-lb-val">${metricVal(r)}${arcLbMetric==='level'?' L':arcLbMetric==='streak'?' 🔥':''}</div>
+    </div>`;
+  }).join('');
+  updatedEl.textContent='Updated '+timeAgo(Date.now());
+}
+
+/* ── Locked In (monk mode) ────────────────────────────────────
+   One question, answered plainly: what do I do right now. Everything
+   else the app tracks is still true and still recorded — this screen
+   just refuses to show any of it until the one that matters is done. */
+
+function arcNextAction(sum){
+  if(!sum.season)return 'Join the Winter Arc to start today\'s mission.';
+  const today=dayKey(new Date());
+  const c=ARC.checkins[today]||WinterArc.emptyCheckin();
+  const g=ARC.goals;
+  const incomplete=sum.objectives.filter(o=>!o.done);
+
+  if(incomplete.length){
+    const o=incomplete[0];
+    if(o.id==='move'){
+      const stepsLeft=Math.max(0,(g.steps||0)-(c.steps||0));
+      return `Log today's workout — or hit ${fmtStatNum(stepsLeft)} more steps`;
+    }
+    if(o.id==='fuel'){
+      const left=Math.max(0,(g.proteinG||0)-(c.proteinG||0));
+      return `${Math.round(left)}g more protein to hit today's target`;
+    }
+    if(o.id==='hydrate'){
+      const left=Math.max(0,(g.waterMl||0)-(c.waterMl||0));
+      return `${fmtStatNum(left)}ml more water`;
+    }
+    if(o.id==='recover'){
+      const sleepLeft=Math.max(0,(g.sleepH||0)-(c.sleepH||0));
+      const mobLeft=Math.max(0,(g.mobilityMin||0)-(c.mobilityMin||0));
+      return `${sleepLeft.toFixed(1)}h more sleep tonight — or ${Math.round(mobLeft)} min of mobility`;
+    }
+  }
+
+  // Every objective is met — point at whichever joined challenge is
+  // closest to done, since that's the highest-leverage thing left today.
+  const joined=ARC.joinedChallenges||{};
+  const inProgress=sum.challenges
+    .filter(c=>joined[c.def.id]&&!c.done&&!c.expired&&c.target)
+    .sort((a,b)=>b.pct-a.pct);
+  if(inProgress.length){
+    const c0=inProgress[0];
+    return `${Math.round(Math.min(100,c0.pct))}% through "${c0.def.name}" — keep going`;
+  }
+  return 'Perfect day. Rest well — the Arc continues tomorrow.';
+}
+
+/* ── Season Calendar ───────────────────────────────────────── */
+// One day's facts + display level (0-4, by objectives met) + whether a
+// freeze was spent on it. Pure lookup — no engine call per cell, since
+// buildContext() has already indexed every day once per render.
+function arcDayCell(ctx,date){
+  const f=ctx.facts[date]||ChallengeEngine.dayFacts(null,null,ctx.goals);
+  return {
+    date, level:f.objectivesDone||0,
+    workout:f.workouts>0, frozen:!!(ctx.freezeUsed&&ctx.freezeUsed[date])
+  };
+}
+
+function arcBuildCalCtx(){
+  return ChallengeEngine.buildContext(arcInput());
+}
+
+function renderArcCalPreview(){
+  const el=document.getElementById('arcCalPreview');
+  if(!el||!arcEnrolled())return;
+  const ctx=arcBuildCalCtx();
+  const today=ctx.today;
+  const s=ctx.season;
+  const from=s&&s.start>ctx.firstDay?s.start:ctx.firstDay;
+  // Last 35 days up to today (or since season start, whichever is shorter) —
+  // enough to see a real pattern without loading the whole season inline.
+  const start=WinterArc.daysBetween(from,today)>34?WinterArc.addDays(today,-34):from;
+  const days=ChallengeEngine.daysIn({from:start,to:today});
+  el.innerHTML=`<div class="arc-cal-preview-label">Last ${days.length} days</div>
+    <div class="arc-cal-preview-row">${days.map(d=>{
+      const c=arcDayCell(ctx,d);
+      return `<div class="arc-cal-cell lvl-${c.level}${d===today?' today':''}${c.frozen?' frozen':''}" style="width:16px;height:16px;flex:0 0 auto" title="${d}"></div>`;
+    }).join('')}</div>`;
+}
+
+/* ── Season Goals editor ───────────────────────────────────── */
+function bindArcGoals(){
+  const row=document.getElementById('arcGoalsRow');
+  const bg=document.getElementById('goalsBg');
+  const closeBtn=document.getElementById('goalsClose');
+  const saveBtn=document.getElementById('goalsSaveBtn');
+  if(row)row.addEventListener('click',()=>{
+    if(!arcEnrolled())return;
+    document.getElementById('goalWorkoutsPerWeek').value=ARC.goals.workoutsPerWeek||5;
+    document.getElementById('goalsEditGrid').innerHTML=arcGoalGridHtml(ARC.goals);
+    bg.classList.add('open');
+  });
+  if(closeBtn)closeBtn.addEventListener('click',()=>bg.classList.remove('open'));
+  if(bg)bg.addEventListener('click',e=>{if(e.target===bg)bg.classList.remove('open');});
+  if(saveBtn)saveBtn.addEventListener('click',async()=>{
+    const goals={workoutsPerWeek:parseFloat(document.getElementById('goalWorkoutsPerWeek').value)||5};
+    document.querySelectorAll('#goalsEditGrid [data-goal]').forEach(inp=>{
+      goals[inp.dataset.goal]=parseFloat(inp.value)||0;
+    });
+    saveBtn.disabled=true;saveBtn.textContent='Saving…';
+    await arcUpdateGoals(goals);
+    saveBtn.disabled=false;saveBtn.textContent='Save Goals';
+    bg.classList.remove('open');
+    renderArc();
+    toast('Season goals updated','success');
+  });
+}
+
+function bindArcCalendar(){
+  const openBtn=document.getElementById('arcOpenCalendar');
+  const bg=document.getElementById('calBg');
+  const closeBtn=document.getElementById('calClose');
+  if(openBtn)openBtn.addEventListener('click',()=>{bg.classList.add('open');renderArcCalendarFull();});
+  if(closeBtn)closeBtn.addEventListener('click',()=>bg.classList.remove('open'));
+  if(bg)bg.addEventListener('click',e=>{if(e.target===bg)bg.classList.remove('open');});
+
+  // The inline 35-day strip on the dashboard opens the same full sheet —
+  // it's a preview, not a second, separate calendar.
+  const preview=document.getElementById('arcCalPreview');
+  if(preview)preview.addEventListener('click',()=>{bg.classList.add('open');renderArcCalendarFull();});
+
+  const months=document.getElementById('calMonths');
+  if(months)months.addEventListener('click',e=>{
+    const cell=e.target.closest('.arc-cal-cell');
+    if(!cell||cell.classList.contains('empty')||cell.classList.contains('future'))return;
+    const date=cell.dataset.day;
+    const ctx=arcBuildCalCtx();
+    const c=arcDayCell(ctx,date);
+    const checkin=ctx.checkins[date];
+    const wo=ctx.workoutsByDate[date];
+    const detail=document.getElementById('calDayDetail');
+    const parts=[`<b>${arcFullDate(date)}</b>`];
+    parts.push(c.level>0?`${c.level}/4 objectives met`:'No objectives met');
+    if(wo&&wo.dayType&&wo.dayType!=='Rest Day')parts.push(`Workout: ${esc(wo.dayType)}`);
+    if(checkin&&checkin.note)parts.push(`Lock In: “${esc(checkin.note)}”`);
+    if(c.frozen)parts.push('Streak freeze used this day');
+    detail.innerHTML=parts.join('<br>');
+  });
+}
+
+function renderArcCalendarFull(){
+  const el=document.getElementById('calMonths');
+  if(!el||!arcEnrolled())return;
+  const ctx=arcBuildCalCtx();
+  const s=ctx.season;
+  const today=ctx.today;
+  const from=s?s.start:ctx.firstDay;
+  const to=today; // never render future months — nothing to show yet
+
+  // Walk calendar months from `from` through `to`, inclusive.
+  const months=[];
+  let cursor=WinterArc.dateStr(new Date(WinterArc.parseDay(from).getFullYear(),WinterArc.parseDay(from).getMonth(),1));
+  const toMonthStart=WinterArc.dateStr(new Date(WinterArc.parseDay(to).getFullYear(),WinterArc.parseDay(to).getMonth(),1));
+  let guard=0;
+  while(cursor<=toMonthStart&&guard++<24){
+    months.push(cursor);
+    const d=WinterArc.parseDay(cursor);
+    cursor=WinterArc.dateStr(new Date(d.getFullYear(),d.getMonth()+1,1));
+  }
+
+  el.innerHTML=months.map(monthStart=>{
+    const d0=WinterArc.parseDay(monthStart);
+    const year=d0.getFullYear(),month=d0.getMonth();
+    const daysInMonth=new Date(year,month+1,0).getDate();
+    const firstDow=d0.getDay(); // 0=Sun
+    const title=d0.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+    let cells='';
+    for(let i=0;i<firstDow;i++)cells+='<div class="arc-cal-cell empty"></div>';
+    for(let day=1;day<=daysInMonth;day++){
+      const date=`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      if(date<from||date>today){
+        // Before the season, or a future day in the current month — dim,
+        // non-interactive placeholder rather than a hidden cell, so the
+        // grid keeps its shape.
+        cells+=`<div class="arc-cal-cell future" data-day="${date}">${day}</div>`;
+        continue;
+      }
+      const c=arcDayCell(ctx,date);
+      cells+=`<div class="arc-cal-cell lvl-${c.level}${date===today?' today':''}${c.frozen?' frozen':''}" data-day="${date}">${day}</div>`;
+    }
+    return `<div>
+      <div class="arc-cal-month-title">${esc(title)}</div>
+      <div class="arc-cal-weekdays"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+      <div class="arc-cal-grid">${cells}</div>
+    </div>`;
+  }).join('');
+}
+
+function bindMonkMode(){
+  const btn=document.getElementById('arcLockInBtn');
+  const overlay=document.getElementById('monkOverlay');
+  const exit=document.getElementById('monkExit');
+  if(btn)btn.addEventListener('click',()=>{
+    if(!arcEnrolled())return;
+    renderMonkMode();
+    overlay.classList.add('show');
+  });
+  if(exit)exit.addEventListener('click',()=>overlay.classList.remove('show'));
+}
+
+function renderMonkMode(){
+  const el=document.getElementById('monkContent');
+  if(!el||!arcEnrolled())return;
+  const sum=ChallengeEngine.summary(arcInput());
+  const s=sum.season;
+  const week=periodStats(W).week||0;
+  const joined=ARC.joinedChallenges||{};
+  const chRows=sum.challenges
+    .filter(c=>joined[c.def.id]&&!c.expired)
+    .sort((a,b)=>arcChallengePct(b)-arcChallengePct(a))
+    .slice(0,3);
+
+  el.innerHTML=`
+    <div class="monk-day-block">
+      <div class="monk-daycounter">DAY ${sum.day||0}</div>
+      <div class="monk-season-label">OF ${sum.seasonLength||0} · ${esc((s&&s.name)||'WINTER ARC').toUpperCase()}</div>
+    </div>
+
+    <div class="monk-streak-row">
+      <div class="monk-streak-flame">${arcIcon('flame',26)}</div>
+      <div class="monk-streak-num">${sum.streak.current}</div>
+      <div class="monk-streak-word">day streak</div>
+    </div>
+
+    <div class="monk-stats-grid">
+      <div class="monk-stat"><div class="monk-stat-val">${fmtStatNum(sum.xp)}</div><div class="monk-stat-label">XP</div></div>
+      <div class="monk-stat"><div class="monk-stat-val">L${sum.level.level}</div><div class="monk-stat-label">Level</div></div>
+      <div class="monk-stat"><div class="monk-stat-val">${week}</div><div class="monk-stat-label">This week</div></div>
+      <div class="monk-stat"><div class="monk-stat-val">${sum.daysLeft}</div><div class="monk-stat-label">Days left</div></div>
+    </div>
+
+    <div class="monk-mission-label">Today's Mission</div>
+    <div class="monk-obj-list">
+      ${sum.objectives.map(o=>`
+        <div class="monk-obj-row${o.done?' done':''}">
+          <div class="monk-obj-box">${o.done?arcIcon('check',12):''}</div>
+          <div class="monk-obj-text">${esc(o.label)} — ${esc(o.hint)}</div>
+        </div>`).join('')}
+    </div>
+
+    <div class="monk-next">
+      <div class="monk-next-arrow">→</div>
+      <div class="monk-next-text">${esc(arcNextAction(sum))}</div>
+    </div>
+
+    ${chRows.length?`<div class="monk-challenges">
+      ${chRows.map(c=>`
+        <div class="monk-ch-row">
+          <div class="monk-ch-name">${esc(c.def.name)}</div>
+          <div class="monk-ch-track"><div class="monk-ch-fill" style="width:${arcChallengePct(c)}%"></div></div>
+          <div class="monk-ch-pct">${Math.round(arcChallengePct(c))}%</div>
+        </div>`).join('')}
+    </div>`:''}
+  `;
+}
+
+const ARC_PROMO_KEY='asca_gym_arc_promo_seen';
+
+function bindTheme(){
+  const btn=document.getElementById('themeToggle');
+  const desc=document.getElementById('themeDesc');
+  const paint=t=>{
+    if(btn)btn.setAttribute('aria-checked',t==='winter'?'true':'false');
+    if(desc)desc.textContent=t==='winter'
+      ?'Winter Arc — cold, frosted, snow drift'
+      :'Classic Asca Gym — pitch black, amber';
+    renderArcPromo();
+  };
+  paint(WinterArc.applyTheme(WinterArc.getTheme()));
+  if(btn)btn.addEventListener('click',()=>{
+    const next=WinterArc.isWinter()?'classic':'winter';
+    paint(WinterArc.applyTheme(next));
+    toast(next==='winter'?'Winter Arc theme on':'Back to classic','success');
+  });
+}
+
+// Shown once, on the Log tab (the one every user already lands on), until
+// dismissed or used — the Arc nav tab is invisible in Classic mode, so
+// without this there is no way to ever discover the feature.
+function renderArcPromo(){
+  const card=document.getElementById('arcPromoCard');
+  if(!card)return;
+  let seen=false;
+  try{seen=localStorage.getItem(ARC_PROMO_KEY)==='1';}catch(_){}
+  card.style.display=(!seen&&!WinterArc.isWinter()&&!arcEnrolled())?'flex':'none';
+}
+function dismissArcPromo(){
+  try{localStorage.setItem(ARC_PROMO_KEY,'1');}catch(_){}
+  const card=document.getElementById('arcPromoCard');
+  if(card)card.style.display='none';
+}
+function bindArcPromo(){
+  const closeBtn=document.getElementById('arcPromoClose');
+  const tryBtn=document.getElementById('arcPromoBtn');
+  if(closeBtn)closeBtn.addEventListener('click',dismissArcPromo);
+  if(tryBtn)tryBtn.addEventListener('click',()=>{
+    WinterArc.applyTheme('winter');
+    renderArcPromo();
+    dismissArcPromo();
+    const arcBtn=document.querySelector('.bot-btn[data-v="Arc"]');
+    if(arcBtn)arcBtn.click();
+  });
+  renderArcPromo();
+}
 
 /* ── Body Weight Tracker ──────────────────────────────────── */
 function bindBodyWeight(){
@@ -911,6 +2029,7 @@ async function fbPush(interactive=true){
 }
 
 function refreshAllUI() {
+  if(arcEnrolled()){renderArc();renderArcLeaderboard();}
   renderBodyWeight();
   renderHeatmapCalendar();
   renderVolWidget();
@@ -1488,7 +2607,7 @@ function periodStatsExtended(list, timeframe='week'){
   let streak=0,checkDate=new Date();checkDate.setHours(0,0,0,0);
   const dateSet=new Set((list||[]).filter(w=>w&&w.dayType!=='Rest Day').map(w=>w.date));
   while(true){
-    const ds=checkDate.toISOString().slice(0,10);
+    const ds=dayKey(checkDate);
     if(dateSet.has(ds)){streak++;checkDate.setDate(checkDate.getDate()-1);}
     else break;
   }
@@ -1513,7 +2632,7 @@ function periodStatsExtended(list, timeframe='week'){
   const pts=timeframe==='week'?7:timeframe==='month'?15:30;
   for(let i=pts-1;i>=0;i--){
     const d=new Date(today);d.setDate(d.getDate()-i);
-    spark.push(dailyVol[d.toISOString().slice(0,10)]||0);
+    spark.push(dailyVol[dayKey(d)]||0);
   }
   return {workouts,volume:vol,sets,heaviest,variety:exNames.size,streak,spark,
     cardioMins:Math.round(cardioMins),cardioKm:Math.round(cardioKm*10)/10,cardioKcal:Math.round(cardioKcal)};
@@ -1597,11 +2716,11 @@ function gymHeatmapHtml(id,name,workouts,score,bare){
   const maxC=Math.max(...Object.values(cardioMap),1);
   let streak=0,d=new Date(today);
   const dateSet=new Set((workouts||[]).filter(w=>w&&w.dayType!=='Rest Day').map(w=>w.date));
-  while(dateSet.has(d.toISOString().slice(0,10))){streak++;d.setDate(d.getDate()-1);}
+  while(dateSet.has(dayKey(d))){streak++;d.setDate(d.getDate()-1);}
   let dots='';const startDate=new Date(today);startDate.setDate(today.getDate()-(days-1));startDate.setDate(startDate.getDate()-startDate.getDay());
   for(let i=0;i<days;i++){const dd=new Date(startDate);dd.setDate(startDate.getDate()+i);
     if(dd>today||(rangeStart&&dd<rangeStart)){dots+='<div class="gym-heatmap-dot" style="visibility:hidden"></div>';continue;}
-    const ds=dd.toISOString().slice(0,10);const v=volMap[ds]||0;const cm=cardioMap[ds]||0;let lvl='';
+    const ds=dayKey(dd);const v=volMap[ds]||0;const cm=cardioMap[ds]||0;let lvl='';
     // Cardio-only days count too — intensity is the stronger of the two ratios
     if(v>0||cm>0||dateSet.has(ds)){const r=Math.max(v/maxV,cm/maxC);lvl=r>0.7?'g-4':r>0.4?'g-3':r>0.15?'g-2':'g-1';}
     const tip=cm>0?`${ds} · ${cm} min cardio${v>0?` · ${Math.round(v)} kg`:''}`:v>0?`${ds} · ${Math.round(v)} kg`:ds;
@@ -3568,70 +4687,173 @@ function bindSettings(){
     copyRulesBtn.addEventListener('click',()=>{
       const rules=JSON.stringify({
         rules: {
+          // Any signed-in member can read (Strava-style); only the owner
+          // (uid) may write, and the payload is validated + size-capped so
+          // a hostile client can't store malformed or oversized data.
           gym: {
-            // Any signed-in member can read (Strava-style); only the owner
-            // (uid) may write, and the payload is validated + size-capped so
-            // a hostile client can't store malformed or oversized data.
             $userId: {
               ".read": "auth != null",
               ".write": "auth != null && (data.exists() ? data.child('uid').val() === auth.uid : newData.child('uid').val() === auth.uid)",
               ".validate": "newData.hasChildren(['uid','ts']) && newData.child('uid').val() === auth.uid && newData.child('ts').isNumber()",
-              name:   { ".validate": "newData.isString() && newData.val().length <= 60" },
-              bio:    { ".validate": "newData.isString() && newData.val().length <= 120" },
-              github: { ".validate": "newData.isString() && newData.val().length <= 40" },
-              avatar: { ".validate": "newData.isString() && newData.val().length <= 200000" },
-              bw:     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 700" }
+              name: {
+                ".validate": "newData.isString() && newData.val().length <= 60"
+              },
+              bio: {
+                ".validate": "newData.isString() && newData.val().length <= 120"
+              },
+              github: {
+                ".validate": "newData.isString() && newData.val().length <= 40"
+              },
+              avatar: {
+                ".validate": "newData.isString() && newData.val().length <= 200000"
+              },
+              bw: {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 700"
+              }
             }
           },
+          // Writable by the node's owner: self-uid stamp (atomic writes) or
+          // the matching gym node's uid (legacy path). Fields are validated.
           directory: {
             ".read": "auth != null",
-            // Writable by the node's owner: self-uid stamp (atomic writes) or
-            // the matching gym node's uid (legacy path). Fields are validated.
             $userId: {
               ".write": "auth != null && (newData.child('uid').val() === auth.uid || root.child('gym').child($userId).child('uid').val() === auth.uid)",
-              uid:    { ".validate": "newData.val() === auth.uid" },
-              name:   { ".validate": "newData.isString() && newData.val().length <= 60" },
-              bio:    { ".validate": "newData.isString() && newData.val().length <= 120" },
-              avatar: { ".validate": "newData.isString() && newData.val().length <= 200000" },
-              bw:     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 700" },
-              ts:     { ".validate": "newData.isNumber()" }
+              uid: {
+                ".validate": "newData.val() === auth.uid"
+              },
+              name: {
+                ".validate": "newData.isString() && newData.val().length <= 60"
+              },
+              bio: {
+                ".validate": "newData.isString() && newData.val().length <= 120"
+              },
+              avatar: {
+                ".validate": "newData.isString() && newData.val().length <= 200000"
+              },
+              bw: {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 700"
+              },
+              ts: {
+                ".validate": "newData.isNumber()"
+              }
             }
           },
           kudos: {
             ".read": "auth != null",
-            $ownerId: { $date: { $likerUid: {
-              ".write": "auth != null && auth.uid === $likerUid",
-              ".validate": "newData.val() === true"
-            } } }
+            $ownerId: {
+              $date: {
+                $likerUid: {
+                  ".write": "auth != null && auth.uid === $likerUid",
+                  ".validate": "newData.val() === true"
+                }
+              }
+            }
           },
           comments: {
             ".read": "auth != null",
-            $ownerId: { $date: { $commentId: {
-              ".write": "auth != null && (!data.exists() ? newData.child('uid').val() === auth.uid : data.child('uid').val() === auth.uid)",
-              ".validate": "newData.hasChildren(['uid','text','ts']) && newData.child('uid').val() === auth.uid && newData.child('text').isString() && newData.child('text').val().length <= 300 && newData.child('ts').isNumber()"
-            } } }
+            $ownerId: {
+              $date: {
+                $commentId: {
+                  ".write": "auth != null && (!data.exists() ? newData.child('uid').val() === auth.uid : data.child('uid').val() === auth.uid)",
+                  ".validate": "newData.hasChildren(['uid','text','ts']) && newData.child('uid').val() === auth.uid && newData.child('text').isString() && newData.child('text').val().length <= 300 && newData.child('ts').isNumber()"
+                }
+              }
+            }
           },
+          // Progress pics stored as base64 JPEG (`img`) directly in RTDB —
+          // no Cloud Storage / billing. Any member can read; only the owner
+          // of that username's gym node may write/delete, the record must
+          // stamp their own uid, and `img` is size-capped (~900KB).
           progress: {
-            // Progress pics stored as base64 JPEG (`img`) directly in RTDB —
-            // no Cloud Storage / billing. Any member can read; only the owner
-            // of that username's gym node may write/delete, the record must
-            // stamp their own uid, and `img` is size-capped (~900KB).
             ".read": "auth != null",
-            $ownerId: { $picId: {
-              ".write": "auth != null && root.child('gym').child($ownerId).child('uid').val() === auth.uid && (!newData.exists() || newData.child('uid').val() === auth.uid)",
-              ".validate": "!newData.exists() || (newData.hasChildren(['uid','img','ts']) && newData.child('uid').val() === auth.uid && newData.child('img').isString() && newData.child('img').val().length <= 900000 && newData.child('ts').isNumber())"
-            } }
+            $ownerId: {
+              $picId: {
+                ".write": "auth != null && root.child('gym').child($ownerId).child('uid').val() === auth.uid && (!newData.exists() || newData.child('uid').val() === auth.uid)",
+                ".validate": "!newData.exists() || (newData.hasChildren(['uid','img','ts']) && newData.child('uid').val() === auth.uid && newData.child('img').isString() && newData.child('img').val().length <= 900000 && newData.child('ts').isNumber())"
+              }
+            }
           },
+          // Asca Budget app (separate site, same accounts): one private
+          // doc per user at budget/{userId}. Unlike gym data budgets are
+          // NOT social — only the owning account may read its node (a
+          // missing node stays readable so first sync can see it's empty).
           budget: {
-            // Asca Budget app (separate site, same accounts): one private
-            // doc per user at budget/{userId}. Unlike gym data budgets are
-            // NOT social — only the owning account may read its node (a
-            // missing node stays readable so first sync can see it's empty).
             $userId: {
               ".read": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)",
               ".write": "auth != null && (data.exists() ? data.child('uid').val() === auth.uid : newData.child('uid').val() === auth.uid)",
               ".validate": "newData.hasChildren(['uid','ts']) && newData.child('uid').val() === auth.uid && newData.child('ts').isNumber()",
-              name: { ".validate": "newData.isString() && newData.val().length <= 60" }
+              name: {
+                ".validate": "newData.isString() && newData.val().length <= 60"
+              }
+            }
+          },
+          // Winter Arc private season state: goals, daily check-ins, xp/level,
+          // streak, badges. Owner-read-only — sleep/protein/water/steps never
+          // leave this node, which is what makes the social surfaces safe.
+          arc: {
+            $userId: {
+              ".read": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)",
+              ".write": "auth != null && (data.exists() ? data.child('uid').val() === auth.uid : newData.child('uid').val() === auth.uid)",
+              $seasonId: {
+                ".validate": "newData.hasChildren(['uid','ts']) && newData.child('uid').val() === auth.uid && newData.child('ts').isNumber()"
+              }
+            }
+          },
+          // The narrow social projection of arc/: xp, level, streak, badge
+          // count. Member-readable like directory/. NEVER sleep, protein,
+          // water, steps or body weight — those stay in arc/ only.
+          arcPublic: {
+            ".read": "auth != null",
+            $userId: {
+              ".write": "auth != null && (newData.child('uid').val() === auth.uid || root.child('gym').child($userId).child('uid').val() === auth.uid)",
+              $seasonId: {
+                uid: {
+                  ".validate": "newData.val() === auth.uid"
+                },
+                ts: {
+                  ".validate": "newData.isNumber()"
+                }
+              }
+            }
+          },
+          // Challenge definitions (built-in or friend-created). Any member
+          // may read; only the creator may write, checked both on create
+          // (no existing owner yet) and on every subsequent edit.
+          challenges: {
+            ".read": "auth != null",
+            $cid: {
+              ".write": "auth != null && (!data.exists() ? newData.child('ownerUid').val() === auth.uid : data.child('ownerUid').val() === auth.uid)",
+              ".validate": "newData.hasChildren(['ownerUid','ts']) && newData.child('ts').isNumber()",
+              name: {
+                ".validate": "newData.isString() && newData.val().length <= 60"
+              },
+              desc: {
+                ".validate": "newData.isString() && newData.val().length <= 200"
+              }
+            }
+          },
+          // Sibling of challenges/, not a child — a member can write ONLY
+          // their own progress here with no write access to the definition.
+          // The owner may also write, to remove a member.
+          challengeMembers: {
+            ".read": "auth != null",
+            $cid: {
+              $userId: {
+                ".write": "auth != null && (root.child('gym').child($userId).child('uid').val() === auth.uid || root.child('challenges').child($cid).child('ownerUid').val() === auth.uid)",
+                ".validate": "!newData.exists() || (newData.hasChildren(['uid','ts']) && newData.child('ts').isNumber())"
+              }
+            }
+          },
+          // The sender creates an invite; the recipient can read + delete
+          // their own inbox (accept = join elsewhere + delete; decline =
+          // delete). Mirrors the gym-node-owner trick used by directory/.
+          invites: {
+            $inviteeId: {
+              ".read": "auth != null && root.child('gym').child($inviteeId).child('uid').val() === auth.uid",
+              $cid: {
+                ".write": "auth != null && (newData.child('fromUid').val() === auth.uid || root.child('gym').child($inviteeId).child('uid').val() === auth.uid)",
+                ".validate": "!newData.exists() || (newData.hasChildren(['fromUid','ts']) && newData.child('fromUid').val() === auth.uid && newData.child('ts').isNumber())"
+              }
             }
           }
         }
@@ -3644,7 +4866,7 @@ function bindSettings(){
     t.addEventListener('click',()=>{t.closest('.connection-guide').classList.toggle('open');});
   });
 
-  document.getElementById('bExp').addEventListener('click',()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(W,null,2)],{type:'application/json'}));a.download=`asca_gym_${new Date().toISOString().split('T')[0]}.json`;a.click();toast('Exported','success');});
+  document.getElementById('bExp').addEventListener('click',()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(W,null,2)],{type:'application/json'}));a.download=`asca_gym_${dayKey(new Date())}.json`;a.click();toast('Exported','success');});
   document.getElementById('bImp').addEventListener('click',()=>document.getElementById('fIn').click());
   document.getElementById('fIn').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(!Array.isArray(d))throw 0;d.forEach(wo=>{if(!W.find(w=>w.date===wo.date&&w.dayType===wo.dayType))W.push(wo);});W.sort((a,b)=>b.date.localeCompare(a.date));save();toast(`Imported ${d.length} workouts`,'success');}catch(_){toast('Invalid file format','error');}};r.readAsText(f);e.target.value='';});
   document.getElementById('bRst').addEventListener('click',()=>showM('Reset Database?','This will permanently delete all workouts and custom exercise files from local memory.',()=>{W=[];save();toast('App data reset','error');}));
@@ -4078,6 +5300,25 @@ function updateEditorHeatmap(exName) {
   ms.forEach(m => { muscles[m] = 3; });
   renderAnatomyMap(container, muscles);
 }
+
+// Debug hook — mirrors the window.triggerRestTimer pattern above. Used by
+// test/ui.js to drive the Arc render path against a synthetic DOM/state,
+// and doubles as the "?debug=arc" console inspector the plan calls for:
+// paste `window.__arcDebug.summary()` in devtools to see exactly what the
+// engine computed for today. Ships no data — it's read-only accessors and
+// re-renders, nothing here writes anything a normal UI action couldn't.
+window.__arcDebug = {
+  startApp, // normally only runs after a real sign-in via unlock() — exposed so
+            // tests can reach bindArc() and friends without a live Firebase auth flow
+  renderArc, bindArc, arcCheckin: arcApplyCheckin, arcEnroll, arcRecompute,
+  arcJoinChallenge, arcLeaveChallenge, renderChallengesBrowser,
+  renderMonkMode, arcNextAction, arcUpdateGoals,
+  renderArcCalendarFull, renderArcCalPreview, arcDayCell,
+  arcPullFollowingPublic, renderArcLeaderboard,
+  summary: () => ChallengeEngine.summary(arcInput()),
+  state: () => ARC,
+  workouts: () => W
+};
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);

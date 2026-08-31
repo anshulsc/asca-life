@@ -76,6 +76,70 @@
           ".validate": "!newData.exists() || (newData.hasChildren(['uid','img','ts']) && newData.child('uid').val() === auth.uid && newData.child('img').isString() && newData.child('img').val().length <= 900000 && newData.child('ts').isNumber())"
         }
       }
+    },
+    "budget": {
+      "$userId": {
+        ".read": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)",
+        ".write": "auth != null && (data.exists() ? data.child('uid').val() === auth.uid : newData.child('uid').val() === auth.uid)",
+        ".validate": "newData.hasChildren(['uid','ts']) && newData.child('uid').val() === auth.uid && newData.child('ts').isNumber()",
+        "name": {
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        }
+      }
+    },
+    "arc": {
+      "$userId": {
+        ".read": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)",
+        ".write": "auth != null && (data.exists() ? data.child('uid').val() === auth.uid : newData.child('uid').val() === auth.uid)",
+        "$seasonId": {
+          ".validate": "newData.hasChildren(['uid','ts']) && newData.child('uid').val() === auth.uid && newData.child('ts').isNumber()"
+        }
+      }
+    },
+    "arcPublic": {
+      ".read": "auth != null",
+      "$userId": {
+        ".write": "auth != null && (newData.child('uid').val() === auth.uid || root.child('gym').child($userId).child('uid').val() === auth.uid)",
+        "$seasonId": {
+          "uid": {
+            ".validate": "newData.val() === auth.uid"
+          },
+          "ts": {
+            ".validate": "newData.isNumber()"
+          }
+        }
+      }
+    },
+    "challenges": {
+      ".read": "auth != null",
+      "$cid": {
+        ".write": "auth != null && (!data.exists() ? newData.child('ownerUid').val() === auth.uid : data.child('ownerUid').val() === auth.uid)",
+        ".validate": "newData.hasChildren(['ownerUid','ts']) && newData.child('ts').isNumber()",
+        "name": {
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        },
+        "desc": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        }
+      }
+    },
+    "challengeMembers": {
+      ".read": "auth != null",
+      "$cid": {
+        "$userId": {
+          ".write": "auth != null && (root.child('gym').child($userId).child('uid').val() === auth.uid || root.child('challenges').child($cid).child('ownerUid').val() === auth.uid)",
+          ".validate": "!newData.exists() || (newData.hasChildren(['uid','ts']) && newData.child('ts').isNumber())"
+        }
+      }
+    },
+    "invites": {
+      "$inviteeId": {
+        ".read": "auth != null && root.child('gym').child($inviteeId).child('uid').val() === auth.uid",
+        "$cid": {
+          ".write": "auth != null && (newData.child('fromUid').val() === auth.uid || root.child('gym').child($inviteeId).child('uid').val() === auth.uid)",
+          ".validate": "!newData.exists() || (newData.hasChildren(['fromUid','ts']) && newData.child('fromUid').val() === auth.uid && newData.child('ts').isNumber())"
+        }
+      }
     }
   }
 }
