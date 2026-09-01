@@ -50,7 +50,12 @@ function startApp() {
       .then(ok=>{if(!ok)setTimeout(()=>fbPush(false),8000);}) // flaky network at open — try once more
       .catch(()=>{});
     fbPullFollowing(false);
-    if(arcEnrolled()){arcFlush();arcPullFollowingPublic();}
+    // Pulling friends' Arc progress does NOT require being enrolled
+    // yourself — you should see it the moment you follow someone who's
+    // running the Arc, not only once you've joined too. Only the flush
+    // (pushing my own local changes up) needs my own enrollment.
+    if(arcEnrolled())arcFlush();
+    arcPullFollowingPublic();
   }
   
   document.addEventListener('visibilitychange',()=>{
@@ -954,18 +959,51 @@ function renderArcStreak(sum){
   risk.style.display=st.atRisk?'block':'none';
 }
 
+// Every one of these render*() functions rebuilds its container's
+// innerHTML from scratch on each call (a workout logged, a check-in
+// saved, a tab switch into Arc) rather than patching the existing nodes.
+// That's the simplest render model in the codebase and fine for text —
+// but a brand-new DOM node has no "before" value for a CSS transition to
+// interpolate from, so the progress-fill widths and the objective
+// checkmark's fill-in (both real, deliberately-tuned transitions in
+// style.css) were silently never playing; they just snapped to their
+// final state. This helper re-arms them one frame after insertion so
+// logging a set / hitting a habit goal actually reads as the bar filling
+// up and the check landing, not the screen just redrawing itself. Doing
+// this on every render (not just on a genuine value change) is fine per
+// Emil Kowalski's frequency gate — opening a tab a few times a day is
+// "occasional," not the 100-times-a-day tier where motion should be cut.
+function arcAnimateFills(root){
+  // Markup ships each fill at width:0% with its real value parked in
+  // data-w, and each about-to-complete row flagged data-pending-done —
+  // both inert until this fires, which is what gives the transition a
+  // real "before" state to animate from.
+  const fills=root.querySelectorAll('.arc-obj-fill[data-w], .arc-checkin-fill[data-w], .arc-challenge-fill[data-w], .ch-card-fill[data-w]');
+  const rows=root.querySelectorAll('.arc-obj-row[data-pending-done]');
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    fills.forEach(f=>{ f.style.width=f.dataset.w; });
+    rows.forEach(r=>{
+      r.classList.add('done');
+      const chk=r.querySelector('.arc-obj-check');
+      if(chk)chk.innerHTML=arcIcon('check',13);
+      r.removeAttribute('data-pending-done');
+    });
+  }));
+}
+
 function renderArcObjectives(sum){
   const list=document.getElementById('arcObjList');
   list.innerHTML=sum.objectives.map(o=>`
-    <div class="arc-obj-row${o.done?' done':''}" data-obj="${o.id}">
+    <div class="arc-obj-row" data-obj="${o.id}"${o.done?' data-pending-done':''}>
       <div class="arc-obj-icon">${arcIcon(o.icon,17)}</div>
       <div class="arc-obj-body">
         <div class="arc-obj-label">${esc(o.label)}</div>
         <div class="arc-obj-hint">${esc(o.hint)}</div>
-        ${o.done?'':`<div class="arc-obj-track"><div class="arc-obj-fill" style="width:${Math.min(100,o.pct)}%"></div></div>`}
+        ${o.done?'':`<div class="arc-obj-track"><div class="arc-obj-fill" data-w="${Math.min(100,o.pct)}%" style="width:0%"></div></div>`}
       </div>
-      <div class="arc-obj-check">${o.done?arcIcon('check',13):''}</div>
+      <div class="arc-obj-check"></div>
     </div>`).join('');
+  arcAnimateFills(list);
 }
 
 function renderArcCheckin(){
@@ -1025,13 +1063,14 @@ function renderArcCheckin(){
           <span class="arc-checkin-label">${esc(h.label)}</span>
           <span class="arc-checkin-val"><b>${val||0}</b>${h.unit?(' '+h.unit):''} / ${target}${h.unit}</span>
         </div>
-        <div class="arc-checkin-track"><div class="arc-checkin-fill${hit?' over':''}" style="width:${pct}%"></div></div>
+        <div class="arc-checkin-track"><div class="arc-checkin-fill${hit?' over':''}" data-w="${pct}%" style="width:0%"></div></div>
         ${quick}
         ${sleepQuality}
         ${sleepTimes}
       </div>
     </div>`;
   }).join('');
+  arcAnimateFills(rows);
 
   const noteInput=document.getElementById('arcNoteInput');
   const noteCount=document.getElementById('arcNoteCount');
@@ -1063,7 +1102,7 @@ function arcChallengeCard(c,opts){
     <div class="ch-card-body">
       <div class="ch-card-name">${esc(def.name)}</div>
       <div class="ch-card-desc">${esc(def.desc||'')}</div>
-      <div class="ch-card-track"><div class="ch-card-fill" style="width:${pct}%"></div></div>
+      <div class="ch-card-track"><div class="ch-card-fill" data-w="${pct}%" style="width:0%"></div></div>
       <div class="ch-card-meta">
         <span>${c.target?`${fmtStatNum(c.value)} / ${fmtStatNum(c.target)}`:fmtStatNum(c.value)+' logged'}</span>
         <span>${c.expired?'ended':(c.daysLeft!=null?c.daysLeft+'d left':'')}${def.xp?` · ${def.xp} XP`:''}</span>
@@ -1090,13 +1129,14 @@ function renderArcChallenges(sum){
     return `<div class="arc-challenge-card card glass-card${c.done?' done':''}">
       <div class="arc-challenge-icon">${arcIcon(def.icon,15)}</div>
       <div class="arc-challenge-name">${esc(def.name)}</div>
-      <div class="arc-challenge-track"><div class="arc-challenge-fill" style="width:${pct}%"></div></div>
+      <div class="arc-challenge-track"><div class="arc-challenge-fill" data-w="${pct}%" style="width:0%"></div></div>
       <div class="arc-challenge-meta">
         <span>${c.target?`${fmtStatNum(c.value)}/${fmtStatNum(c.target)}`:fmtStatNum(c.value)}</span>
         <span>${c.daysLeft!=null?c.daysLeft+'d left':''}</span>
       </div>
     </div>`;
   }).join('');
+  arcAnimateFills(scroll);
 }
 
 /* ── Challenges browser sheet ─────────────────────────────── */
@@ -1165,6 +1205,7 @@ function renderChallengesBrowser(){
   }
   const action=chActiveTab==='available'?'join':'leave';
   list.innerHTML=rows.map(c=>arcChallengeCard(c,{action})).join('');
+  arcAnimateFills(list);
 }
 
 function renderArcBadges(sum){
@@ -1253,23 +1294,35 @@ function renderArcLeaderboard(){
   const rowsEl=document.getElementById('arcLbRows');
   const updatedEl=document.getElementById('arcLbUpdated');
   if(!card)return;
-  if(!arcEnrolled()){label.style.display='none';card.style.display='none';return;}
-  label.style.display='block';
-  card.style.display='block';
 
   const cfg=fbCfg();
   const cache=getArcFriendsCache().friends;
-  const mySum=ChallengeEngine.summary(arcInput());
-  const rows=[{id:cfg.userId||'me',name:cfg.displayName||cfg.userId||'You',me:true,data:arcPublicProjection(mySum)}];
+  const iAmEnrolled=arcEnrolled();
+  const rows=[];
+  if(iAmEnrolled){
+    const mySum=ChallengeEngine.summary(arcInput());
+    rows.push({id:cfg.userId||'me',name:cfg.displayName||cfg.userId||'You',me:true,data:arcPublicProjection(mySum)});
+  }
   (cfg.following||[]).forEach(f=>{
     const d=cache[f.id];
     if(d)rows.push({id:f.id,name:f.name||f.id,me:false,data:d});
   });
 
+  // Visible the instant there's anything to show — a followed friend's
+  // progress counts on its own, same as your own would. NOT gated on
+  // your own enrollment: you shouldn't have to join the Arc yourself
+  // just to see that someone you follow is on day 34 of it.
+  if(!rows.length){label.style.display='none';card.style.display='none';return;}
+  label.style.display='block';
+  card.style.display='block';
+
   const metricVal=r=>({streak:r.data.streak||0,level:r.data.level||0,week:r.data.workoutsThisWeek||0}[arcLbMetric]||0);
   rows.sort((a,b)=>metricVal(b)-metricVal(a));
 
-  if(rows.length===1){
+  // Only reachable when I've joined but nobody I follow has (yet) —
+  // anyone I follow who IS running it always has a real row above, joined
+  // or not, so this is never "there's nothing here," only "invite people."
+  if(rows.length===1&&iAmEnrolled){
     rowsEl.innerHTML='<div class="arc-lb-empty">Follow friends who are also running the Arc to see them here.</div>';
     updatedEl.textContent='';
     return;
@@ -2029,7 +2082,8 @@ async function fbPush(interactive=true){
 }
 
 function refreshAllUI() {
-  if(arcEnrolled()){renderArc();renderArcLeaderboard();}
+  if(arcEnrolled())renderArc();
+  renderArcLeaderboard();
   renderBodyWeight();
   renderHeatmapCalendar();
   renderVolWidget();
@@ -4925,10 +4979,25 @@ function bindLibraryModal() {
   tabsContainer.addEventListener('click', (e) => {const tab = e.target.closest('.lib-tab');if (!tab) return;activeSplit = tab.dataset.split;renderTabs();renderExercises();});
 }
 
+// Toasts fire in bursts (log a set, hit a PR, save a check-in can land
+// within a second of each other) and the app gets backgrounded mid-workout
+// constantly — a toast whose 2.5s clock keeps ticking while the tab is
+// hidden is gone before anyone reads it. So each toast's dismiss timer is
+// tracked here and paused/resumed on visibilitychange instead of running
+// blind, and its transition is enter/exit via classList (see .toast /
+// .toast.show / .toast.leave in style.css) rather than a keyframe restart,
+// so a rapid second toast never clips the first one's animation.
+const _activeToasts = new Set();
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { _activeToasts.forEach(tt => tt.pause()); }
+    else { _activeToasts.forEach(tt => tt.resume()); }
+  });
+}
 function toast(msg,type=''){
   const el=document.getElementById('tw'),t=document.createElement('div');
   t.className=`toast ${type}`;
-  const svg = type === 'success' 
+  const svg = type === 'success'
     ? `<svg class="toast-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
     : `<svg class="toast-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
   // Only the icon is trusted markup; the message can carry user-controlled
@@ -4936,7 +5005,23 @@ function toast(msg,type=''){
   const icon=document.createElement('span');icon.className='toast-icon-svg';icon.innerHTML=svg;
   const body=document.createElement('div');body.textContent=msg;
   t.appendChild(icon);t.appendChild(body);
-  el.appendChild(t);setTimeout(()=>{t.style.animation='toastOut 0.35s ease forwards';setTimeout(()=>t.remove(),350);},2500);
+  el.appendChild(t);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>t.classList.add('show')));
+
+  const DURATION=2500;
+  let remaining=DURATION, timer=null, startedAt=0;
+  const leave=()=>{
+    _activeToasts.delete(entry);
+    t.classList.add('leave');
+    setTimeout(()=>t.remove(),150);
+  };
+  const arm=()=>{ startedAt=Date.now(); timer=setTimeout(leave,remaining); };
+  const entry={
+    pause(){ if(!timer)return; clearTimeout(timer); timer=null; remaining-=Date.now()-startedAt; },
+    resume(){ if(timer||remaining<=0)return; arm(); }
+  };
+  _activeToasts.add(entry);
+  arm();
 }
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML.replace(/"/g,'&quot;');}
 

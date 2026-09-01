@@ -247,9 +247,21 @@ if (sum.objectivesDone === 4) good('all 4 objectives read as done from goal-meet
 else bad(`objectivesDone = ${sum.objectivesDone}, expected 4`);
 
 dbg.renderArc();
-const doneRows = (document_.getElementById('arcObjList').innerHTML.match(/arc-obj-row done/g) || []).length;
-if (doneRows === 4) good('DOM reflects all 4 objectives as done');
-else bad(`DOM shows ${doneRows} done rows, expected 4`);
+// The 'done' class and the checkmark icon land one tick after render now,
+// not in the initial HTML string: arcAnimateFills() adds them via a real
+// classList.add()/querySelector() on the freshly-inserted rows, one frame
+// later, so the completion CSS transition has an actual "before" state to
+// play from instead of snapping in pre-done (see arcAnimateFills in
+// app.js). This stub DOM's querySelectorAll() always returns [] — it
+// doesn't parse innerHTML into a live tree — so it can't observe that
+// mutation at all, deferred or not. What it CAN observe is the row's
+// data-pending-done flag, baked straight into the initial HTML string by
+// renderArcObjectives() and the thing arcAnimateFills() itself reads to
+// know which rows to promote — a faithful proxy for "the render correctly
+// identified this objective as complete."
+const pendingRows = (document_.getElementById('arcObjList').innerHTML.match(/data-pending-done/g) || []).length;
+if (pendingRows === 4) good('all 4 objectives flagged complete in the render (data-pending-done)');
+else bad(`DOM shows ${pendingRows} pending-done rows, expected 4`);
 
 /* ── Streak and XP move together with real data ────────────── */
 
