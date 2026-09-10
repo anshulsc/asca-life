@@ -4882,8 +4882,12 @@ function bindSettings(){
           // leave this node, which is what makes the social surfaces safe.
           arc: {
             $userId: {
-              ".read": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)",
-              ".write": "auth != null && (data.exists() ? data.child('uid').val() === auth.uid : newData.child('uid').val() === auth.uid)",
+              // Writes typically target deep subpaths (checkins/<date>), so a
+              // first-ever check-in PATCH must also pass BEFORE uid/ts land at
+              // $seasonId. Same gym-node fallback arcPublic uses, for both the
+              // exists() and new branches. Read mirrors it for older calls.
+              ".read": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || root.child('gym').child($userId).child('uid').val() === auth.uid)",
+              ".write": "auth != null && (data.exists() ? (data.child('uid').val() === auth.uid || root.child('gym').child($userId).child('uid').val() === auth.uid) : (newData.child('uid').val() === auth.uid || root.child('gym').child($userId).child('uid').val() === auth.uid))",
               $seasonId: {
                 ".validate": "newData.hasChildren(['uid','ts']) && newData.child('uid').val() === auth.uid && newData.child('ts').isNumber()"
               }
