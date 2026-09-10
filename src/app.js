@@ -50,12 +50,17 @@ function startApp() {
       .then(ok=>{if(!ok)setTimeout(()=>fbPush(false),8000);}) // flaky network at open — try once more
       .catch(()=>{});
     fbPullFollowing(false);
-    // Pulling friends' Arc progress does NOT require being enrolled
-    // yourself — you should see it the moment you follow someone who's
-    // running the Arc, not only once you've joined too. Only the flush
-    // (pushing my own local changes up) needs my own enrollment.
-    if(arcEnrolled())arcFlush();
-    arcPullFollowingPublic();
+    // Restore my Arc state from the cloud BEFORE any flush — without this,
+    // a fresh device/incognito tab would push an empty local ARC over the
+    // server's richer record the moment the user tapped anything. Once the
+    // merge lands locally, flush is safe (and needed, to push merged state
+    // back up so arcPublic reflects the reunion). Then pull friends.
+    arcRestore().then(()=>{
+      if(arcEnrolled())arcFlush();
+      renderArc();
+      renderArcLeaderboard();
+      arcPullFollowingPublic();
+    }).catch(()=>{});
   }
   
   document.addEventListener('visibilitychange',()=>{
@@ -598,6 +603,39 @@ function arcSave(){
 }
 function arcSaveDirty(){
   try{localStorage.setItem(ARK_DIRTY,JSON.stringify(arcDirtyCheckins));}catch(_){}
+}
+
+/* ── Cloud restore ───────────────────────────────────────────
+   RTDB arc/{user}/{season} is the durable record; localStorage under ARK
+   is what paints instantly and what the app runs on offline. Writes go up
+   via targeted PATCHes; this is the missing reverse direction: on a fresh
+   device, an incognito window, or a cleared Safari cache, ARC starts empty
+   and nothing here used to bring it back from the cloud. arcRestore() fixes
+   that by reading the cloud season once at boot and folding it in.
+
+   The merge itself is WinterArc.mergeArcState (in winter.js so it runs in
+   Node for tests) — pure, deterministic, last-writer-per-day on checkins,
+   derived stats (xp/level/streak-current) rebuilt by arcRecompute below
+   rather than copied, so a merge can never disagree with the engine. */
+async function arcRestore(){
+  if(!fbCfg().connected||typeof ArcSync==='undefined')return;
+  const cfg=FirebaseSync.getConfig();
+  if(!cfg.userId)return;
+  try{
+    const cloud=await ArcSync.readArc(ARC.seasonId||((WinterArc.season()||{}).id));
+    if(!cloud)return; // no cloud season — nothing to pull, nothing to lose
+    ARC=WinterArc.mergeArcState(arcDefault(),ARC,cloud);
+    // Checkins we just adopted from cloud are clean by definition — remove
+    // them from the dirty set so the very first flush doesn't bounce them
+    // back up verbatim. Local-only days stay dirty and flush as usual.
+    Object.keys(cloud.checkins||{}).forEach(d=>{delete arcDirtyCheckins[d];});
+    arcSave(); arcSaveDirty();
+    document.documentElement.setAttribute('data-arc','on');
+    arcRecompute(); // xp/level/streak are derived — rebuilt, not copied
+  }catch(_){
+    /* Network down mid-boot, token expired, rules flaky — leave local alone.
+       The next flush/pull will retry; nothing is lost by skipping. */
+  }
 }
 
 // The single input builder every Arc render and every engine call goes

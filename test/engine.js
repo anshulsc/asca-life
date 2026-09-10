@@ -377,6 +377,65 @@ section('cardio/lifting classification');
   eq('level notes are parsed as weight when unset', CE.setWeight({ weight: null, notes: 'Level 6' }), 6);
 }
 
+section('arc state merge (WinterArc.mergeArcState)');
+{
+  const defaults = WA.defaultGoals;
+  const base = {
+    enrolled: false, seasonId: SEASON.id, joinedAt: 0,
+    goals: { waterMl: 2000 }, checkins: {},
+    xp: 0, level: 1,
+    streak: { current: 0, best: 0, lastDay: '', freezesLeft: 2, freezeUsed: {} },
+    badges: {}, seenBadges: {}, joinedChallenges: {}, forceJoinApplied: {}, monkMode: false
+  };
+  // Empty local + populated cloud -> adopt fully
+  {
+    const cloud = {
+      active: true, joinedAt: 100, seasonId: SEASON.id,
+      goals: { waterMl: 3000 },
+      checkins: { [day(1)]: { waterMl: 500, ts: 10 }, [day(3)]: { waterMl: 700, ts: 30 } },
+      streak: { current: 3, best: 5, lastDay: day(3), freezesLeft: 1, freezeUsed: { [day(2)]: 20 }, ts: 30 },
+      badges: { day1: 10 }
+    };
+    const out = WA.mergeArcState(base, {}, cloud);
+    ok('empty local adopts cloud enrolled', out.enrolled === true);
+    eq('goals come from cloud', out.goals.waterMl, 3000);
+    eq('checkins: both days taken', Object.keys(out.checkins).sort(), [day(1), day(3)].sort());
+    eq('streak current from newer side', out.streak.current, 3);
+    eq('best is max', out.streak.best, 5);
+    eq('freeze days unioned', out.streak.freezeUsed[day(2)], 20);
+    eq('badges union', out.badges.day1, 10);
+  }
+  // LWW per-day on checkin entry
+  {
+    const local = Object.assign({}, base, {
+      checkins: { [day(1)]: { waterMl: 100, ts: 5 } },
+      streak: { current: 1, best: 1, lastDay: day(1), freezesLeft: 2, freezeUsed: {}, ts: 5 }
+    });
+    const cloud = {
+      active: true,
+      checkins: { [day(1)]: { waterMl: 900, ts: 50 }, [day(2)]: { waterMl: 200, ts: 20 } },
+      streak: { current: 2, best: 2, lastDay: day(2), freezesLeft: 2, freezeUsed: {}, ts: 20 }
+    };
+    const out = WA.mergeArcState(base, local, cloud);
+    eq('cloud newer checkin wins the shared day', out.checkins[day(1)].waterMl, 900);
+    eq('local-only fields on shared day persist via cloud object identity', out.checkins[day(1)].ts, 50);
+    eq('cloud-only day arrives intact', out.checkins[day(2)].waterMl, 200);
+    eq('streak.ts from newer side wins', out.streak.current, 2);
+  }
+  // .active false honours the "left the season" signal
+  {
+    const out = WA.mergeArcState(base, {}, { active: false, checkins: { [day(1)]: { ts: 1 } } });
+    ok('active:false keeps user un-enrolled', out.enrolled === false);
+  }
+  // Null cloud -> local untouched
+  {
+    const local = Object.assign({}, base, { enrolled: true, xp: 42 });
+    const out = WA.mergeArcState(base, local, null);
+    eq('null cloud returns local untouched', out.xp, 42);
+    ok('null cloud keeps enrolled', out.enrolled === true);
+  }
+}
+
 /* ── Report ────────────────────────────────────────────────── */
 
 console.log('\n' + '─'.repeat(60));

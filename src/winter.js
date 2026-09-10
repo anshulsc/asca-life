@@ -323,6 +323,57 @@ const WinterArc = (() => {
     return getTheme() === 'winter';
   }
 
+  /* ── Arc state merge (cloud ↔ local restore) ───────────────
+     Pure; used only by app.js's arcRestore() on boot, but lives here so
+     test/engine.js can exercise it without dragging fetch/localStorage
+     into the harness. Contract:
+       - checkins: per-day union; newer `ts` wins that day
+       - goals / seasonId / joinedAt: cloud wins when present
+       - enrolled: any cloud doc means the user joined, except active:false
+       - streak: current/lastDay from the side with the newer streak.ts;
+         best = max; freeze fields unioned (max counts, merged day map)
+       - badges / joinedChallenges (preserved from local; the cloud does
+         not carry them) / seenBadges / forceJoinApplied: key-union
+       - monkMode: true if either side says it
+       - xp / level: intentionally NOT merged — app.js recomputes them
+         from the merged inputs so they stay consistent with the engine */
+  function mergeArcState(defaults, local, cloud) {
+    if (!cloud || typeof cloud !== 'object') return local || defaults;
+    const base = Object.assign({}, defaults, local || {});
+    const out = Object.assign({}, base);
+    if (cloud.seasonId) out.seasonId = cloud.seasonId;
+    if (cloud.joinedAt) out.joinedAt = cloud.joinedAt;
+    if (cloud.goals && typeof cloud.goals === 'object' && Object.keys(cloud.goals).length) out.goals = cloud.goals;
+    out.enrolled = cloud.active === false ? false : true;
+
+    const l = base.checkins || {}, r = cloud.checkins || {};
+    const merged = Object.assign({}, l);
+    Object.keys(r).forEach(d => {
+      const a = l[d], b = r[d];
+      merged[d] = (!a || (b.ts || 0) >= (a.ts || 0)) ? b : a;
+    });
+    out.checkins = merged;
+
+    const ls = base.streak || {}, cs = cloud.streak || {};
+    out.streak = {
+      current: (cs.ts || 0) >= (ls.ts || 0) ? (cs.current || 0) : (ls.current || 0),
+      best: Math.max(ls.best || 0, cs.best || 0),
+      lastDay: (cs.ts || 0) >= (ls.ts || 0) ? (cs.lastDay || '') : (ls.lastDay || ''),
+      freezesLeft: Math.max(
+        ls.freezesLeft != null ? ls.freezesLeft : 2,
+        cs.freezesLeft != null ? cs.freezesLeft : 2
+      ),
+      freezeUsed: Object.assign({}, ls.freezeUsed || {}, cs.freezeUsed || {})
+    };
+
+    out.badges = Object.assign({}, base.badges || {}, cloud.badges || {});
+    out.seenBadges = Object.assign({}, base.seenBadges || {});
+    out.joinedChallenges = Object.assign({}, base.joinedChallenges || {});
+    out.forceJoinApplied = Object.assign({}, base.forceJoinApplied || {});
+    out.monkMode = !!(base.monkMode || cloud.monkMode);
+    return out;
+  }
+
   return Object.freeze({
     // dates
     dateStr, todayStr, parseDay, addDays, daysBetween, weekStart, msUntilMidnight,
@@ -335,7 +386,9 @@ const WinterArc = (() => {
     // day types
     dayTypeColor, dayTypeToken,
     // theme
-    THEME_KEY, THEMES, getTheme, applyTheme, isWinter
+    THEME_KEY, THEMES, getTheme, applyTheme, isWinter,
+    // arc state
+    mergeArcState
   });
 })();
 
