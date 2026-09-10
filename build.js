@@ -190,7 +190,13 @@ function generateHeatmapPreview(historicalData) {
       const formattedDate = d.toLocaleDateString('en-US', options);
       const tooltip = info ? `${formattedDate}\\nWorkout Day` : `${formattedDate}\\nRest Day`;
 
-      dotsHtml += `<div class="lock-heatmap-dot ${lvl}" style="${style}" title="${tooltip}"></div>`;
+      // Login-screen settle-in: a tiny per-dot stagger lets the grid
+      // "crystallise" left→right, oldest to newest. Inline style is required
+      // -- build.js substitutes dotsHtml into the lock slice which ships
+      // ahead of the main payload, so no class lookup can happen later.
+      const set = `animation-delay: ${Math.round(dayIdx * 4)}ms`;
+
+      dotsHtml += `<div class="lock-heatmap-dot ${lvl}" style="${style}${set}" title="${tooltip}"></div>`;
 
       // Track months (skip hidden lead-in days before the range start)
       const monthKey = d.getFullYear() + '-' + d.getMonth();
@@ -230,9 +236,25 @@ let appLayoutHtml = fullBodyContent.replace(lockScreenHtml, '');
 // Strip the original script tags at the bottom
 appLayoutHtml = appLayoutHtml.replace(/<script[\s\S]*?<\/script>/gi, '');
 
+// Whitespace + comment strip only; selectors and class names untouched, so
+// the marker-based slicer above (operating on the PRE-strip source) never
+// sees a scrambled indent. HTML and JS pipelines are left verbose.
+function shrinkCss(s){
+  return s
+    .replace(/\/\*[\s\S]*?\*\//g,'')
+    .replace(/^\s+/gm,'')
+    .replace(/\s+$/gm,'')
+    .replace(/\n{2,}/g,'\n')
+    .replace(/\s*\{\s*/g,'{')
+    .replace(/\s*\}\s*/g,'}')
+    .replace(/:[ \t]+/g,':')
+    .replace(/;[ \t]+/g,';')
+    .replace(/\s*,\s*/g,',');
+}
+
 // Payload object
 const payload = {
-  css: styleCss,
+  css: shrinkCss(styleCss),
   html: appLayoutHtml,
   data: dataJs,
   winter: winterJs,

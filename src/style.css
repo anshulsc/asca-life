@@ -99,6 +99,41 @@
   --bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
   --smooth: cubic-bezier(0.4, 0, 0.2, 1);
   --arc-settle: cubic-bezier(0.25, 1, 0.5, 1);
+
+  /* Motion durations — one scale, so any future retiming happens here. */
+  --dur-fast: 150ms;
+  --dur-med:  300ms;
+  --dur-slow: 500ms;
+
+  /* Spacing — 4px base; the arc/settle spacing story rides these, not
+     one-off pixel values spread across the sheet. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Type scale — collapsed from the 41 ad-hoc sizes the sheet grew into.
+     The values below cover every use today; anything between them is a
+     legacy one-off the next Stage 2 touch will normalize. */
+  --text-xs:      0.68rem;  /* labels, hints */
+  --text-s:       0.82rem;  /* body-small */
+  --text-m:       0.98rem;  /* body */
+  --text-l:       1.25rem;  /* card titles */
+  --text-xl:      2rem;     /* view titles */
+  --text-display: 3.25rem;  /* Arc masthead number */
+
+  /* Glass recipe — split into its three parts so themes can de-gloss in
+     one place. Every backdrop-filter call-site composes these directly:
+       backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright))
+     (There's deliberately no --glass-recipe token: custom-property values
+     are computed once, so a composite would freeze its parts at parse time
+     and ignore theme overrides.) */
+  --glass-blur: 20px;
+  --glass-sat:  190%;
+  --glass-bright: 1.1;
   
   /* Fonts */
   --ff-sans: 'Plus Jakarta Sans', -apple-system, sans-serif;
@@ -215,6 +250,10 @@
   --elev-2: inset 0 1px 0 0 rgba(var(--wht), 0.30),
             inset 0 0 0 0.5px rgba(var(--wht), 0.14),
             0 18px 48px rgba(var(--blk), 0.72);
+  /* Colder, tighter glass: less glow, less saturation, still a hint of lift. */
+  --glass-sat: 140%;
+  --glass-bright: 1.05;
+  --glass-blur: 24px;
 }
 
 /* ── THEME TOKENS END ── */
@@ -350,8 +389,8 @@ body {
   align-items: center;
   padding: calc(20px + var(--sat)) 20px 14px 20px;
   background: linear-gradient(180deg, rgba(var(--wht), 0.06) 0%, rgba(var(--wht), 0.02) 100%);
-  backdrop-filter: blur(20px) saturate(190%) brightness(1.1);
-  -webkit-backdrop-filter: blur(20px) saturate(190%) brightness(1.1);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   border-bottom: 1px solid rgba(var(--wht), 0.08);
   box-shadow: var(--specular-top), 0 4px 20px rgba(var(--blk), 0.25);
 }
@@ -441,8 +480,8 @@ body {
 /* ── Apple Liquid Glass Cards ─────────────────────────────── */
 .card, .glass-card {
   background: var(--glass-surface);
-  backdrop-filter: blur(20px) saturate(190%) brightness(1.1);
-  -webkit-backdrop-filter: blur(20px) saturate(190%) brightness(1.1);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   border: 1px solid rgba(var(--wht), 0.08);
   border-radius: var(--r-l);
   padding: 18px;
@@ -474,106 +513,6 @@ body {
                 inset 0 0 0 0.5px rgba(var(--wht), 0.15),
                 0 12px 40px rgba(var(--blk), 0.55);
   }
-}
-
-/* ── Dropset-Style Routine Cards ─────────────────────────── */
-.routine-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.routine-card {
-  background: var(--glass-surface);
-  backdrop-filter: blur(20px) saturate(180%) brightness(1.1);
-  -webkit-backdrop-filter: blur(20px) saturate(180%) brightness(1.1);
-  border: 1px solid rgba(var(--wht), 0.07);
-  border-radius: var(--r-l);
-  padding: 16px;
-  position: relative;
-  overflow: hidden;
-  cursor: pointer;
-  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, transform 0.3s var(--spring), opacity 0.3s ease;
-  box-shadow: var(--specular-top), var(--specular-edge),
-              0 4px 16px rgba(var(--blk), 0.3);
-}
-
-.routine-card::before {
-  content: '';
-  position: absolute; top: 0; left: 0; right: 0; height: 50%;
-  background: linear-gradient(180deg, rgba(var(--wht), 0.04), transparent);
-  pointer-events: none;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .routine-card:hover {
-    transform: translateY(-2px);
-    border-color: rgba(var(--wht), 0.14);
-    background: linear-gradient(135deg, rgba(var(--wht), 0.09) 0%, rgba(var(--wht), 0.03) 100%);
-    box-shadow: inset 0 1px 0 0 rgba(var(--wht), 0.35),
-                0 8px 24px rgba(var(--blk), 0.45);
-  }
-}
-
-.routine-card:active { transform: scale(0.97); }
-
-.routine-card.bw-card {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 4px;
-}
-
-.routine-num {
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  background: var(--glass-3);
-  border: 1px solid var(--border-light);
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--ff-mono);
-  font-size: 0.75rem; font-weight: 800;
-  color: var(--t-2);
-  margin-bottom: 10px;
-  box-shadow: var(--specular-top);
-}
-
-.routine-name {
-  font-family: var(--ff-title);
-  font-size: 0.88rem; font-weight: 700;
-  color: var(--t-1);
-  margin-bottom: 2px;
-}
-
-.routine-day {
-  font-size: 0.68rem; font-weight: 600;
-  color: var(--t-3);
-  text-transform: capitalize;
-}
-
-.bw-value {
-  font-family: var(--ff-mono);
-  font-size: 1.6rem; font-weight: 800;
-  color: var(--t-1);
-  line-height: 1;
-}
-
-.bw-unit {
-  font-size: 0.85rem; font-weight: 600;
-  color: var(--t-3);
-  margin-left: 2px;
-}
-
-.bw-label {
-  font-size: 0.72rem; font-weight: 700;
-  color: var(--t-3); text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-top: 4px;
-}
-
-.bw-timestamp {
-  font-size: 0.6rem; font-weight: 600;
-  color: var(--t-4);
 }
 
 /* ── Workout Heatmap Calendar ────────────────────────────── */
@@ -1519,9 +1458,16 @@ select.input-field {
 .tl-card.expanded .tl-expand-chevron { transform: rotate(180deg); color: var(--accent); }
 
 .tl-body-collapsed { display: block; padding: 12px 16px; }
-.tl-body-expanded { display: none; padding: 16px; animation: fadeIn 0.25s var(--spring) forwards; }
+.tl-body-expanded { display: none; padding: 16px; animation: tlOpen 0.32s var(--spring) forwards; }
 .tl-card.expanded .tl-body-collapsed { display: none; }
 .tl-card.expanded .tl-body-expanded { display: block; }
+
+/* Card "opening like paper": rises into place + the chevron spin already
+   up top. Replaces flat fadeIn for this surface only. */
+@keyframes tlOpen {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
 .tl-ex-detail {
   margin-bottom: 12px;
@@ -2694,8 +2640,8 @@ canvas { width: 100%; height: 100%; }
 
 .toast {
   background: rgba(var(--blk), 0.78);
-  backdrop-filter: blur(20px) saturate(190%) brightness(1.1);
-  -webkit-backdrop-filter: blur(20px) saturate(190%) brightness(1.1);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   border: 1px solid var(--border-strong);
   border-radius: var(--r-full);
   padding: 10px 18px;
@@ -3563,6 +3509,24 @@ canvas { width: 100%; height: 100%; }
 .arc-streak-flame svg { width: 24px; height: 24px; }
 .arc-streak-flame.pulse { animation: arcFlamePulse 0.5s var(--bounce); }
 @keyframes arcFlamePulse { 0% { transform: scale(1); } 40% { transform: scale(1.25); } 100% { transform: scale(1); } }
+
+/* Completion beat — one signature moment per day on Arc: when the last
+   objective lands, the day number dims-and-rises while the flame pops.
+   Transform/opacity only so nothing reflows under the thumb. Both classes
+   fire inside arcApplyCheckin() on completion. (Reduced-motion honored by
+   the global blanket at the end of this file.) */
+.arc-settling { animation: arcSettleBeat 0.7s var(--arc-settle, var(--spring)) both; }
+@keyframes arcSettleBeat {
+  0%   { opacity: 0.92; }
+  40%  { opacity: 0.62; }
+  100% { opacity: 1; }
+}
+.arc-flame-pop { animation: arcFlamePop 0.55s var(--bounce) both; }
+@keyframes arcFlamePop {
+  0%   { transform: scale(0.88); filter: brightness(1); }
+  55%  { transform: scale(1.22); filter: brightness(1.5); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
 .arc-streak-info { display: flex; flex-direction: column; gap: 4px; }
 .arc-streak-num { font-size: 1.6rem; font-weight: 800; color: var(--t-1); line-height: 1; }
 .arc-streak-label { font-size: 0.68rem; color: var(--t-3); font-weight: 600; }
@@ -4001,6 +3965,15 @@ canvas { width: 100%; height: 100%; }
 .arc-lb-empty { padding: 20px 4px; text-align: center; color: var(--t-3); font-size: 0.8rem; }
 .arc-lb-updated { text-align: center; font-size: 0.62rem; color: var(--t-4); margin-top: 10px; }
 
+/* Tab-switch cross-fade: the seg tabs in the leaderboard use these two —
+   the JS in bindArcLeaderboard toggles them around each render. */
+.arc-lb-rows.switching { opacity: 0.35; transition: opacity 0.12s ease-out; }
+.arc-lb-rows.switching-in { animation: lbSwitchIn 0.32s var(--spring) both; }
+@keyframes lbSwitchIn {
+  from { opacity: 0.35; transform: translateY(4px); }
+  to   { opacity: 1;    transform: translateY(0); }
+}
+
 /* Arc sync notice: the only non-silent failure the social layer shows.
    Rendered inside the leaderboard card when the live RTDB ruleset predates
    the arcPublic node — that failure means nobody can see anyone, so it
@@ -4361,8 +4334,8 @@ canvas { width: 100%; height: 100%; }
    dev. Restate the glass recipe here; fixes it in both themes. */
 .lock-card {
   background: var(--glass-surface);
-  backdrop-filter: blur(20px) saturate(190%) brightness(1.1);
-  -webkit-backdrop-filter: blur(20px) saturate(190%) brightness(1.1);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   border: 1px solid rgba(var(--wht), 0.08);
 }
 
@@ -4666,6 +4639,16 @@ canvas { width: 100%; height: 100%; }
   border-radius: 1px;
   background: rgba(var(--wht), 0.04);
   transition: transform 0.2s;
+  /* Settle-in: with the inline animation-delay build.js stamps onto each
+     dot, the grid crystallises left→right on first paint. The slow ease
+     (arc-settle) matches the winter theme's "cold settling" feel; classic
+     just reads as a considered arrival. Reduced-motion honored at EOF. */
+  animation: dotCrystallise 0.5s var(--arc-settle, cubic-bezier(0.25,1,0.5,1)) backwards;
+}
+
+@keyframes dotCrystallise {
+  from { opacity: 0; transform: scale(0.5); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
 .lock-heatmap-dot.lvl-1 { background: rgba(var(--wht), 0.22); }

@@ -455,6 +455,7 @@ function bindTabs(){
   const navs = document.querySelectorAll('.nav-btn, .bot-btn');
   navs.forEach(b=>{
     b.addEventListener('click',()=>{
+      buzz(8); // tab switch — the nav-lens lands with a physical tick
       navs.forEach(x=>x.classList.remove('on'));
       const tgt = b.dataset.v;
       document.querySelectorAll(`[data-v="${tgt}"]`).forEach(x=>x.classList.add('on'));
@@ -899,11 +900,36 @@ function arcApplyCheckin(day,fields){
   renderArc();
   if(before&&after.objectivesDone>before.objectivesDone&&after.objectivesDone===after.objectivesTotal){
     toast('All objectives complete — nice work','success');
+    // Completion ceremony: day number dim-and-rise + a flame pop. One moment
+    // per day, on the Arc page (already rendered by renderArc above). No
+    // layout shift — transform/opacity-only keyframes. Reduced-motion users
+    // get the toast and nothing more.
+    if(!prm()){
+      const dayEl=document.getElementById('arcDayLabel');
+      if(dayEl){dayEl.classList.remove('arc-settling');void dayEl.offsetWidth;dayEl.classList.add('arc-settling');}
+      const flame=document.querySelector('.arc-streak-flame');
+      if(flame){flame.classList.remove('arc-flame-pop');void flame.offsetWidth;flame.classList.add('arc-flame-pop');}
+    }
   }
   if(before){
     const newBadges=after.badges.filter(b=>!before.badges.includes(b));
     newBadges.forEach(()=>toast('Badge earned','success'));
   }
+}
+
+// 10ms tick — short enough to read as confirmation, long enough to register.
+// Fires on the highest-frequency tap in the app; also the tab-bar lens.
+// Honors might-reduce-motion: haptics are motion feedback, and an OS
+// setting that says "no flourishes" applies here too.
+function buzz(pattern=10){
+  try{if(prm())return;if(navigator.vibrate)navigator.vibrate(pattern);}catch(_){}
+}
+
+// One place to check the OS-level motion setting from JS. CSS honors it via
+// the blanket media query at the end of style.css; JS-driven animation
+// (vibrate, canvas draws, per-frame style updates) needs this instead.
+function prm(){
+  try{return window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;}catch(_){return false;}
 }
 
 function arcLevelName(level){
@@ -1336,7 +1362,22 @@ function bindArcLeaderboard(){
     tabs.querySelectorAll('.seg-tab').forEach(x=>x.classList.remove('on'));
     t.classList.add('on');
     arcLbMetric=t.dataset.arcMetric;
-    renderArcLeaderboard();
+    // Brief dim-out -> re-render -> settle-in, instead of a hard snap.
+    // innerHTML rewrite is the render model here; two .arc-lb-rows classes
+    // coordinate with CSS keyframes below. Reduced-motion skips the dance —
+    // instant swap is the respectful version there.
+    const rowsEl=document.getElementById('arcLbRows');
+    if(rowsEl&&!prm()){
+      rowsEl.classList.add('switching');
+      requestAnimationFrame(()=>{
+        renderArcLeaderboard();
+        rowsEl.classList.remove('switching');
+        rowsEl.classList.add('switching-in');
+        setTimeout(()=>rowsEl.classList.remove('switching-in'),340);
+      });
+    } else {
+      renderArcLeaderboard();
+    }
   });
 }
 
@@ -3563,6 +3604,7 @@ function saveEx(){
   }
 
   eEx=null;eSets=[];document.getElementById('se').style.display='none';
+  buzz(12); // a set committing is the most-repeated tap in the app — feel it
   renderLogged();toast('Exercise added','success');
   document.getElementById('acts').style.display='flex';
 }
@@ -3629,6 +3671,8 @@ async function finish(){
     W.sort((a,b)=>b.date.localeCompare(a.date));save();
     const synced=fbCfg().connected?await fbPush(false):false;
     toast(synced?'Saved & Synced':'Saved locally','success');
+    // Session complete is the day's one real payoff — make it land.
+    buzz([14,40,14]);
     eEx=null;eSets=[];document.getElementById('se').style.display='none';
     document.getElementById('acts').style.display='none';renderLogged();
     // renderFriendsCard covers the profile + Social leaderboard/activity
