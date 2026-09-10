@@ -332,6 +332,7 @@
           <div class="arc-section-title" style="flex:1">This Season</div>
           <button class="arc-seeall-btn" id="arcSeeAllChallenges">Challenges</button>
           <button class="arc-seeall-btn" id="arcOpenCalendar">Calendar</button>
+          <button class="arc-seeall-btn" id="arcSeasonReviewBtn" style="margin-left:auto">Season Review</button>
         </div>
         <div class="arc-challenge-scroll" id="arcChallengeScroll"></div>
         <div class="card glass-card arc-cal-preview" id="arcCalPreview"></div>
@@ -532,6 +533,12 @@
         <h2 class="view-title">Insights</h2>
         <p class="view-subtitle">Metrics and progressive overload</p>
       </div>
+
+      <!-- Year in Review entry — quiet card, opens the Wrapped overlay -->
+      <button type="button" class="card glass-card wrapped-entry" id="wrappedEntryCard">
+        <div class="wrapped-entry-title">Wrapped</div>
+        <div class="wrapped-entry-sub">Your year so far, in six pages. Tap — no audio, no login.</div>
+      </button>
 
       <!-- Weekly Progress Ring + Stats Grid -->
       <div class="insights-top-row">

@@ -5,12 +5,16 @@ const srcDir = path.join(__dirname, 'src');
 
 // Read files
 const indexHtml = fs.readFileSync(path.join(srcDir, 'index.html'), 'utf8');
-const styleCss = fs.readFileSync(path.join(srcDir, 'style.css'), 'utf8');
+// Wrap the season reviews' own stylesheet around the main app skin — the
+// card overlay needs its layered backdrop and accent-cycling basis.
+const styleCss = fs.readFileSync(path.join(srcDir, 'style.css'), 'utf8')
+  + '\n' + fs.readFileSync(path.join(srcDir, 'wrapped.css'), 'utf8');
 const dataJs = fs.readFileSync(path.join(srcDir, 'data.js'), 'utf8');
 const firebaseSyncJs = fs.readFileSync(path.join(srcDir, 'firebase-sync.js'), 'utf8');
 const arcSyncJs = fs.readFileSync(path.join(srcDir, 'arc-sync.js'), 'utf8');
 const winterJs = fs.readFileSync(path.join(srcDir, 'winter.js'), 'utf8');
 const challengesJs = fs.readFileSync(path.join(srcDir, 'challenges.js'), 'utf8');
+const wrappedJs = fs.readFileSync(path.join(srcDir, 'wrapped.js'), 'utf8');
 const appJs = fs.readFileSync(path.join(srcDir, 'app.js'), 'utf8');
 
 // Access control is Firebase Authentication now (see firebase-sync.js) —
@@ -261,6 +265,7 @@ const payload = {
   challenges: challengesJs,
   fsync: firebaseSyncJs,
   arcSync: arcSyncJs,
+  wrapped: wrappedJs,
   app: appJs
 };
 
@@ -310,6 +315,7 @@ ${lockScreenHtmlWithPreview.trim()}
     if (payload.challenges) injectScript(payload.challenges);
     if (payload.fsync) injectScript(payload.fsync);
     if (payload.arcSync) injectScript(payload.arcSync);
+    if (payload.wrapped) injectScript(payload.wrapped);
     injectScript(payload.app);
   }
 

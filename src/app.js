@@ -795,6 +795,13 @@ function arcGoalGridHtml(values){
 function bindArc(){
   const goalGrid=document.getElementById('arcGoalGrid');
   if(goalGrid)goalGrid.innerHTML=arcGoalGridHtml(WinterArc.defaultGoals());
+  // Two entry points, same overlay. Wrapped is year-scope; Season Review is
+  // arc-scope. The buttons live here because Wrapped is data-first — app.js
+  // doesn't own its rendering.
+  const wrappedEntry=document.getElementById('wrappedEntryCard');
+  if(wrappedEntry)wrappedEntry.addEventListener('click',()=>{buzz(10);openWrapped('year');});
+  const seasonBtn=document.getElementById('arcSeasonReviewBtn');
+  if(seasonBtn)seasonBtn.addEventListener('click',e=>{e.stopPropagation();buzz(10);openWrapped('season');});
   const joinBtn=document.getElementById('arcJoinBtn');
   if(joinBtn)joinBtn.addEventListener('click',async()=>{
     const goals={};

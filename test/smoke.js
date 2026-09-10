@@ -43,8 +43,8 @@ const payload = JSON.parse(decodeURIComponent(escape(Buffer.from(m[1], 'base64')
 // The order here must mirror boot() in build.js. If a chunk is added to the
 // payload but not injected (or injected in the wrong place), this list is
 // where it gets noticed.
-const INJECTION_ORDER = ['data', 'winter', 'challenges', 'fsync', 'arcSync', 'app'];
-const EXPECTED_GLOBALS = ['HISTORICAL_DATA', 'EXERCISE_LIBRARY', 'DAY_TYPES', 'WinterArc', 'ChallengeEngine', 'FirebaseSync', 'ArcSync'];
+const INJECTION_ORDER = ['data', 'winter', 'challenges', 'fsync', 'arcSync', 'wrapped', 'app'];
+const EXPECTED_GLOBALS = ['HISTORICAL_DATA', 'EXERCISE_LIBRARY', 'DAY_TYPES', 'WinterArc', 'ChallengeEngine', 'FirebaseSync', 'ArcSync', 'Wrapped'];
 
 let failed = 0;
 const bad = msg => { console.log(`  \x1b[31m✗\x1b[0m ${msg}`); failed++; };
@@ -162,6 +162,9 @@ const probe = `
   out.__arcSync = (typeof ArcSync !== 'undefined')
     ? Object.keys(ArcSync).filter(k => typeof ArcSync[k] === 'function').length
     : null;
+  out.__wrapped = (typeof Wrapped !== 'undefined')
+    ? { hasCompute: typeof Wrapped.compute === 'function', hasOpen: typeof Wrapped.openWrapped === 'function' }
+    : null;
   out;
 `;
 const seen = vm.runInContext(probe, ctx, { filename: 'probe.js' });
@@ -191,6 +194,13 @@ if (seen.__arcSync != null) {
   else good(`ArcSync live: ${seen.__arcSync} functions exposed`);
 } else {
   bad('ArcSync did not load or exposed nothing');
+}
+
+if (seen.__wrapped != null) {
+  if (!seen.__wrapped.hasCompute || !seen.__wrapped.hasOpen) bad('Wrapped missing compute/openWrapped on its public surface');
+  else good('Wrapped live: compute() + openWrapped() exposed');
+} else {
+  bad('Wrapped did not load');
 }
 
 console.log('');

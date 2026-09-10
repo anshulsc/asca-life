@@ -5313,6 +5313,125 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .gradient-mesh::after, .gradient-mesh::before { display: none; }
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   Wrapped view — the year/season story cards' look
+   Loaded with the rest of the app; styled independently of themes
+   (each card owns its accent via inline style). No element IDs are
+   shared with the app below, so the viewer can live totally on top.
+   ═══════════════════════════════════════════════════════════════ */
+
+.wrapped-overlay {
+  position: fixed; inset: 0;
+  z-index: 200;
+  background: var(--veil-2, rgba(0, 0, 0, 0.94));
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+.wrapped-overlay.open { display: flex; }
+
+.wrap-stage { width: 100%; max-width: 420px; padding: var(--space-4) var(--space-5); position: relative; }
+
+/* The card itself — big, quiet, single-accent. Height is fixed-ish so the
+   dots/nav don't jump between cards with different content shapes. */
+.wrap-card {
+  min-height: 62vh;
+  border-radius: var(--r-xl);
+  padding: var(--space-6) var(--space-5);
+  background: linear-gradient(160deg, rgba(var(--wht), 0.06), rgba(var(--wht), 0.02));
+  border: 1px solid rgba(var(--wht), 0.1);
+  box-shadow: var(--elev-2);
+  text-align: center;
+  display: flex; flex-direction: column; justify-content: center;
+  gap: var(--space-3);
+}
+.wrap-card::before {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(80% 50% at 50% 0%, rgba(var(--wht), 0.08), transparent 70%);
+  pointer-events: none;
+}
+.wrap-eyebrow {
+  font-family: var(--ff-title); font-weight: 700;
+  font-size: var(--text-xs); letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--wrap-accent, var(--accent));
+}
+.wrap-title {
+  font-family: var(--ff-arc-display, var(--ff-title));
+  font-weight: 800;
+  font-size: var(--text-display);
+  letter-spacing: -0.02em;
+  color: var(--t-1);
+  line-height: 1.05;
+  margin-top: 4px;
+}
+.wrap-sub { color: var(--t-2); font-weight: 500; }
+
+.wrap-bignum { line-height: 1; margin-top: var(--space-3); }
+.wrap-bignum > span { display: block; font-family: var(--ff-mono); font-size: 0.85rem; color: var(--t-3); margin-top: 6px; font-weight: 500; }
+.wrap-bignum { font-family: var(--ff-mono); font-weight: 800; font-size: 6.5rem; color: var(--t-1); letter-spacing: -0.04em; }
+
+.wrap-list { display: flex; flex-direction: column; gap: 14px; }
+.wrap-li { display: flex; justify-content: space-between; align-items: baseline; }
+.wrap-li .k { color: var(--t-3); font-weight: 600; font-size: var(--text-s); }
+.wrap-li .v { font-family: var(--ff-mono); font-weight: 700; font-size: var(--text-m); color: var(--t-1); }
+
+.wrap-ring {
+  --r: 140px;
+  width: var(--r); height: var(--r);
+  border-radius: 50%;
+  margin: var(--space-3) auto 0;
+  box-shadow: var(--elev-1);
+}
+.wrap-ring-hole { border-radius: 50%; position: absolute; inset: calc(var(--r) * 0.30); background: var(--bg, #000); }
+.wrap-ring { position: relative; }
+.wrap-ring-legend { display: flex; gap: 14px; justify-content: center; margin-top: var(--space-3); flex-wrap: wrap; }
+.wrap-ring-legend span { color: var(--t-2); font-weight: 600; font-size: var(--text-s); display: inline-flex; align-items: center; gap: 6px; }
+.wrap-ring-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+
+/* dots + nav */
+.wrap-dots { position: absolute; bottom: calc(var(--space-5) + var(--sab)); left: 50%; transform: translateX(-50%); display: flex; gap: 7px; }
+.wrap-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(var(--wht), 0.22); transition: background 0.3s, transform 0.3s; }
+.wrap-dot.on { background: var(--t-1); transform: scale(1.25); }
+
+.wrap-close {
+  position: absolute; top: calc(var(--space-4) + var(--sat)); right: var(--space-4);
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--glass-2); border: 1px solid var(--border-light);
+  color: var(--t-1); font-size: 1.1rem; cursor: pointer;
+  transition: opacity 0.2s, background-color 0.2s;
+}
+.wrap-close:hover { background: var(--glass-3); }
+
+.wrap-nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--glass-2); border: 1px solid var(--border-light);
+  color: var(--t-1); font-size: 1.4rem; cursor: pointer;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.wrap-prev { left: var(--space-3); }
+.wrap-next { right: var(--space-3); }
+.wrap-nav:active { transform: translateY(-50%) scale(0.94); }
+
+/* Share button — only visible on the coda card. */
+.wrap-share {
+  position: absolute; bottom: calc(var(--space-8) + var(--sab)); left: 50%; transform: translateX(-50%);
+  padding: 12px 26px;
+  font-size: var(--text-s);
+}
+
+/* Card swap: entrance only, keeps rhythm with the archive's other moments. */
+.wrap-card { animation: wrapCardIn 0.45s var(--arc-settle, var(--spring)) backwards; }
+@keyframes wrapCardIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 
     /* ── Admin console layout (reuses the app's glass design tokens) ── */
     html, body { height: auto; min-height: 100dvh; overflow: auto; display: block; }
