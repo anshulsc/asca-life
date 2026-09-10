@@ -1262,13 +1262,27 @@ function arcPublicProjection(sum){
 }
 
 // Pull my own + every followed friend's arcPublic doc in parallel, same
-// shape as fbPullFollowing(). Best-effort: a friend who hasn't enrolled,
-// hasn't synced yet, or is offline just doesn't appear — no error surfaced,
-// matching how the rest of the friends list already degrades.
+// shape as fbPullFollowing(). Best-effort for missing data — a friend who
+// hasn't enrolled, hasn't synced yet, or is offline just doesn't appear.
+// Permission-DENIED is different: it means the live ruleset predates the
+// arcPublic node (added 2026-09-01 — RTDB rules take effect only when
+// manually published), so nobody can ever see anything. That one IS
+// surfaced (renderArcLeaderboard reads ArcSync.wasDenied()).
 async function arcPullFollowingPublic(){
   if(!fbCfg().connected||!ARC||!ARC.seasonId)return;
   const cfg=fbCfg();
   const ids=[cfg.userId,...cfg.following.map(f=>f.id)].filter(Boolean);
+  // First paint with an empty cache shows shimmer rows instead of a blank
+  // card or nothing at all — real rows arrive a beat later, same session.
+  if(!Object.keys(getArcFriendsCache().friends).length){
+    const label=document.getElementById('arcLbLabel');
+    const card=document.getElementById('arcLbCard');
+    const rowsEl=document.getElementById('arcLbRows');
+    if(card&&rowsEl&&arcEnrolled()){
+      label.style.display='block';card.style.display='block';
+      rowsEl.innerHTML='<div class="arc-lb-skel"></div><div class="arc-lb-skel"></div><div class="arc-lb-skel"></div>';
+    }
+  }
   await Promise.allSettled(ids.map(async id=>{
     const doc=await ArcSync.readArcPublic(id,ARC.seasonId);
     if(doc)saveArcFriendEntry(id,doc);
@@ -1293,10 +1307,12 @@ function renderArcLeaderboard(){
   const card=document.getElementById('arcLbCard');
   const rowsEl=document.getElementById('arcLbRows');
   const updatedEl=document.getElementById('arcLbUpdated');
+  const noteEl=document.getElementById('arcLbNote');
   if(!card)return;
 
   const cfg=fbCfg();
-  const cache=getArcFriendsCache().friends;
+  const cacheObj=getArcFriendsCache();
+  const cache=cacheObj.friends;
   const iAmEnrolled=arcEnrolled();
   const rows=[];
   if(iAmEnrolled){
@@ -1308,11 +1324,28 @@ function renderArcLeaderboard(){
     if(d)rows.push({id:f.id,name:f.name||f.id,me:false,data:d});
   });
 
+  // Denied = the LIVE ruleset predates the arcPublic node (rules only take
+  // effect when manually published in the Firebase console). Everyone is
+  // affected at once; rows from before it broke stay visible behind the note.
+  const denied=typeof ArcSync!=='undefined'&&ArcSync.wasDenied&&ArcSync.wasDenied();
+  if(noteEl){
+    noteEl.style.display=denied?'':'none';
+    if(denied)noteEl.textContent='Arc sync unavailable — republish the database rules (Settings → Firebase Sync → Copy Database Rules, then paste in the Firebase console).';
+  }
+
   // Visible the instant there's anything to show — a followed friend's
   // progress counts on its own, same as your own would. NOT gated on
   // your own enrollment: you shouldn't have to join the Arc yourself
   // just to see that someone you follow is on day 34 of it.
-  if(!rows.length){label.style.display='none';card.style.display='none';return;}
+  // A denied sync with zero rows is the ONE exception: show the card empty-ish
+  // so the note is actually visible instead of hiding the whole section.
+  if(!rows.length){
+    if(denied){
+      label.style.display='block';card.style.display='block';
+      rowsEl.innerHTML='';updatedEl.textContent='';
+    }else{label.style.display='none';card.style.display='none';}
+    return;
+  }
   label.style.display='block';
   card.style.display='block';
 
@@ -1338,7 +1371,10 @@ function renderArcLeaderboard(){
       <div class="arc-lb-val">${metricVal(r)}${arcLbMetric==='level'?' L':arcLbMetric==='streak'?' 🔥':''}</div>
     </div>`;
   }).join('');
-  updatedEl.textContent='Updated '+timeAgo(Date.now());
+  // Freshness of the newest pulled doc, not "when this render happened" —
+  // timeAgo(Date.now()) printed "just now" forever, even off a stale cache.
+  const latestTs=rows.reduce((m,r)=>Math.max(m,r.ts||0,r.data&&r.data.ts||0),cacheObj.ts||0);
+  updatedEl.textContent=latestTs?('Updated '+timeAgo(latestTs)):'';
 }
 
 /* ── Locked In (monk mode) ────────────────────────────────────
@@ -3045,7 +3081,7 @@ function showMiniProfile(userId){
     <div class="mini-profile-heatmap"><div class="mini-profile-heatmap-title">Activity — Last 16 Weeks</div>${gymHeatmapHtml(userId,name,workouts,mpScore)}</div>`;
   scrollHeatmapsToLatest(content);
   const followBtn=document.getElementById('mpFollow');const unfollowBtn=document.getElementById('mpUnfollow');
-  if(followBtn)followBtn.addEventListener('click',()=>{const c=FirebaseSync.getConfig();if(!c.following.some(f=>f.id===userId)){FirebaseSync.updateConfig({following:[...c.following,{id:userId,name:name}]});toast('Following @'+userId,'success');closeMiniProfile();renderFriendsCard();fbPush(false);startRealtimeSync();fbPullFollowing(false);}});
+  if(followBtn)followBtn.addEventListener('click',()=>{const c=FirebaseSync.getConfig();if(!c.following.some(f=>f.id===userId)){FirebaseSync.updateConfig({following:[...c.following,{id:userId,name:name}]});toast('Following @'+userId,'success');closeMiniProfile();renderFriendsCard();fbPush(false);startRealtimeSync();fbPullFollowing(false);arcPullFollowingPublic();}});
   if(unfollowBtn)unfollowBtn.addEventListener('click',()=>{const c=FirebaseSync.getConfig();FirebaseSync.updateConfig({following:c.following.filter(f=>f.id!==userId)});stopStream(userId);removeFriendEntry(userId);toast('Unfollowed @'+userId);closeMiniProfile();renderFriendsCard();fbPush(false);});
   bg.classList.add('open');bg.addEventListener('click',e=>{if(e.target===bg)closeMiniProfile();},{once:true});
 }

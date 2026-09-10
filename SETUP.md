@@ -98,3 +98,12 @@ On the deployed app:
   10GB-per-month download limits if you accumulate a lot of pics.
 - Social features (`kudos`, `comments`, `progress`) silently default-deny until
   the RTDB rules are published — that's the #1 cause of "it doesn't work."
+- **Winter Arc is the same failure with a newer date.** `arc`, `arcPublic`,
+  `challenges`, `challengeMembers` and `invites` were added to
+  `database.rules.json` on 2026-09-01. Any install whose Rules tab still has
+  the pre-Sep-2026 ruleset will: let you join + check in locally, show your
+  own Arc fine, and show **nothing** from friends — every read/write to the
+  new nodes default-denies. Symptom: "I can't see anyone on the Winter Arc
+  leaderboard." Fix: redo Part 2 above. The app now also shows an "Arc sync
+  unavailable" note inside the leaderboard card the moment its reads are
+  permission-denied, so you won't have to guess.

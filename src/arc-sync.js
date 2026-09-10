@@ -158,10 +158,21 @@ const ArcSync = (() => {
     try {
       const token = await tok();
       const res = await fetch(dbUrl(`${arcPublicPath(userId, seasonId)}?auth=${token}`));
-      if (!res.ok) return null;
+      if (!res.ok) {
+        // 401/403 = the live ruleset predates the arcPublic node (added to
+        // database.rules.json 2026-09-01; RTDB rules only take effect when
+        // manually published). Distinct from a hydrated 200-null ("friend
+        // never joined") — callers surface this instead of pretending empty.
+        if (res.status === 401 || res.status === 403) denied = true;
+        return null;
+      }
       return await res.json();
     } catch (_) { return null; }
   }
+
+  // Sticky-per-session: once any arcPublic read is denied, it stays true.
+  let denied = false;
+  function wasDenied() { return denied; }
 
   /* ── challenges/ + challengeMembers/ — group challenges ────
      Phase 2 surface; the read/write helpers are defined now because
@@ -278,7 +289,7 @@ const ArcSync = (() => {
     // invites/ (Phase 2)
     sendInvite, readInvites, respondInvite,
     // status
-    connected, myId
+    connected, myId, wasDenied
   });
 })();
 

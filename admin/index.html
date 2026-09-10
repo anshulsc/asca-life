@@ -119,6 +119,20 @@
   /* Same as --ff-title in Classic (no visual change); Winter Arc swaps it
      for a condensed, heavier display face — see the winter block below. */
   --ff-arc-display: var(--ff-title);
+
+  /* Kept-on-purpose legacy names (css.js audits declared vars). --r-md is the
+     value two older call-sites already fall back to when unset. */
+  --r-md: var(--r-l);
+
+  /* ── Elevation tiers ─────────────────────────────────────────────
+     Three real depths, not a continuous scale. Classic runs lifted &
+     glossy; the winter block below flattens toward charcoal-on-charcoal.
+     Specificity stays low: components consume the token, not a stack. */
+  --elev-1: var(--glass-shine), /* hairline specular, same as cards today */
+            var(--glass-glow);
+  --elev-2: inset 0 1px 0 0 rgba(var(--wht), 0.32),
+            inset 0 0 0 0.5px rgba(var(--wht), 0.16),
+            0 20px 56px rgba(var(--blk), 0.60);   /* floating: toast, sheet, modal, set-editor */
 }
 
 /* ── Winter Arc Tokens ─────────────────────────────────────────
@@ -204,6 +218,14 @@
   /* Completion moments decelerate like cold settling — a longer, heavier
      tail than the UI's everyday --spring. */
   --arc-settle: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Winter depth: flatter, closer to raw charcoal. The specular hairline
+     stays (that's what keeps glass readable); the ambient glow drops out. */
+  --elev-1: var(--glass-shine),
+            var(--glass-glow);
+  --elev-2: inset 0 1px 0 0 rgba(var(--wht), 0.30),
+            inset 0 0 0 0.5px rgba(var(--wht), 0.14),
+            0 18px 48px rgba(var(--blk), 0.72);
 }
 
 /* ── THEME TOKENS END ── */
@@ -2690,8 +2712,7 @@ canvas { width: 100%; height: 100%; }
   padding: 10px 18px;
   display: flex; align-items: center; gap: 10px;
   font-weight: 600; font-size: 0.85rem;
-  box-shadow: var(--glass-shine),
-              0 12px 36px rgba(var(--blk), 0.55);
+  box-shadow: var(--elev-2);
   color: var(--t-1);
   /* A transition, not a keyframe animation: toasts fire in bursts (log a
      set, hit a PR, save a check-in — three in two seconds is normal),
@@ -2743,8 +2764,7 @@ canvas { width: 100%; height: 100%; }
   width: 100%; max-width: 340px;
   text-align: center; padding: 28px 24px;
   animation: modalScaleUp 0.3s var(--spring) forwards;
-  box-shadow: var(--glass-shine),
-              0 30px 70px rgba(var(--blk), 0.6);
+  box-shadow: var(--elev-2);
 }
 
 .modal-icon { margin-bottom: 14px; display: flex; justify-content: center; }
@@ -3992,6 +4012,21 @@ canvas { width: 100%; height: 100%; }
 .arc-lb-empty { padding: 20px 4px; text-align: center; color: var(--t-3); font-size: 0.8rem; }
 .arc-lb-updated { text-align: center; font-size: 0.62rem; color: var(--t-4); margin-top: 10px; }
 
+/* Arc sync notice: the only non-silent failure the social layer shows.
+   Rendered inside the leaderboard card when the live RTDB ruleset predates
+   the arcPublic node — that failure means nobody can see anyone, so it
+   deserves real estate instead of the usual degrade-quietly treatment. */
+.arc-lb-note {
+  margin: 2px 2px 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-m);
+  background: rgba(var(--wht), 0.05);
+  border: 1px solid rgba(var(--wht), 0.1);
+  border-left: 2px solid var(--c-orange);
+  color: var(--t-2);
+  font-size: 0.72rem; font-weight: 600; line-height: 1.45;
+}
+
 /* ── Season Calendar ───────────────────────────────────────────
    Every day of the season, coloured by how many of the 4 daily
    objectives were met — the same "GitHub activity graph" idiom the
@@ -5209,6 +5244,77 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .ppx-view-cap { font-family: var(--ff-title); font-size: 1rem; font-weight: 800; margin-bottom: 2px; }
 .ppx-view-sub { font-size: 0.78rem; color: var(--t-3); margin-bottom: 14px; }
 .ppx-view-del { color: #ff5a5a; }
+
+/* ── Premium Finish ──────────────────────────────────────────
+   Consolidated 2026-09 pass. Lives at the tail so it wins against equal-
+   specificity rules above without rewriting them. All theme-aware: zero
+   literal colors — every line rides the same tokens as the rest of the
+   sheet, so classic and winter stay in lockstep. */
+
+/* View content stages in with a light stagger — the view itself already
+   animates (viewSlideIn); this makes its cards land as a cascade, not a
+   slab. Scoped to #vLog (the daily-use screen) — Social/Insights refill
+   their cards asynchronously, and a stagger would re-fire on every
+   refresh there; the single view-level animation already covers them.
+   nth-child on direct children, pure CSS. Reduced-motion users get the
+   existing blanket override below. */
+@media (prefers-reduced-motion: no-preference) {
+  #vLog.on > * { animation: viewSlideIn 0.42s var(--spring) backwards; }
+  #vLog.on > *:nth-child(1) { animation-delay: 0.00s; }
+  #vLog.on > *:nth-child(2) { animation-delay: 0.04s; }
+  #vLog.on > *:nth-child(3) { animation-delay: 0.08s; }
+  #vLog.on > *:nth-child(4) { animation-delay: 0.12s; }
+  #vLog.on > *:nth-child(5) { animation-delay: 0.16s; }
+  #vLog.on > *:nth-child(n+6) { animation-delay: 0.20s; }
+}
+
+/* Numerals: tabular everywhere a value can change under the eye — stat
+   figures, leaderboards, streaks — so digits don't jitter width while
+   animating or reflowing. Class-only; the font stays the body face. */
+.lb-val, .arc-lb-val, .mini-profile-stat-val, .mini-profile-score,
+.podium-score, .stat-val, .arc-lb-rank, .hm-count, .lock-heatmap-legend {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Arc leaderboard rank accent — the podium colors already exist above
+   (top1/2/3). Adding the warm ember edge to the streak metric label so
+   the winter intent ("streak = the one warm thing") also reads visually. */
+.arc-lb-val { letter-spacing: 0.01em; }
+.arc-lb-row.me { border: 1px solid rgba(var(--wht), 0.08); border-radius: var(--r-m); }
+.arc-lb-row { border-radius: var(--r-m); }
+
+/* Skeleton placeholder for rows while friends' Arc data is in flight —
+   a shimmering bar rhythm, not a spinner. Used by .arc-lb-rows.loading.
+   The cross-fade to real rows is just reinserting content under the
+   existing viewSlideIn fade upstream. */
+.arc-lb-skel {
+  height: 34px; border-radius: var(--r-m);
+  background: linear-gradient(90deg,
+    rgba(var(--wht), 0.04) 0%, rgba(var(--wht), 0.09) 40%,
+    rgba(var(--wht), 0.04) 80%);
+  background-size: 220% 100%;
+  animation: arcSkel 1.3s ease-in-out infinite;
+}
+.arc-lb-skel + .arc-lb-skel { margin-top: 6px; }
+.arc-lb-skel:nth-child(2) { animation-delay: 0.12s; width: 86%; }
+.arc-lb-skel:nth-child(3) { animation-delay: 0.24s; width: 72%; }
+@keyframes arcSkel {
+  0%   { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
+
+/* Focus: a visible ring for keyboard users without changing the touch
+   experience. Chromium/Safari both honor :focus-visible — taps don't
+   trigger it. */
+:focus-visible {
+  outline: 2px solid rgba(var(--accent-rgb), 0.55);
+  outline-offset: 2px;
+  border-radius: var(--r-s);
+}
+.btn:focus-visible, .seg-tab:focus-visible, .bot-btn:focus-visible {
+  outline-offset: 3px;
+}
 
 /* ── Reduced Motion ────────────────────────────────────────────
    Several of this app's animations are infinite (the four mesh blobs,
