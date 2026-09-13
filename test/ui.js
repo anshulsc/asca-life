@@ -43,6 +43,10 @@ if (!ARC_IDS.includes('arcOnboardCard')) {
   console.error('ui: could not locate the #vArc section in src/index.html — markup may have moved.');
   process.exit(1);
 }
+// The challenges sheet sits outside #vArc; register its real ids so the
+// tests below assert against real nodes rather than the generic stub.
+const chSheetSection = srcHtml.slice(srcHtml.indexOf('id="chSheet"'), srcHtml.indexOf('id="goalsSheet"'));
+const CH_IDS = [...chSheetSection.matchAll(/id="([^"]+)"/g)].map(m => m[1]);
 
 /* ── A tiny real DOM ────────────────────────────────────────── */
 
@@ -104,7 +108,7 @@ function makeDocument(ids) {
   };
 }
 
-const document_ = makeDocument(ARC_IDS.concat(['bot-nav', 'navLens', 'themeToggle', 'themeDesc']));
+const document_ = makeDocument(ARC_IDS.concat(CH_IDS, ['bot-nav', 'navLens', 'themeToggle', 'themeDesc']));
 
 /* ── Boot the real built payload against this DOM ──────────── */
 
@@ -282,6 +286,72 @@ if (chScroll.includes('arc-challenge-card') || chScroll.includes('arc-challenge-
   good('challenge scroller rendered a card list or the empty state');
 } else {
   bad('challenge scroller rendered neither cards nor an empty state');
+}
+
+/* ── Friend challenges: sheet chrome, empty state, invites ── */
+
+console.log('\n\x1b[1mfriend challenges\x1b[0m');
+dbg.renderChallengesBrowser();
+if (document_.getElementById('chCreatePane').style.display === 'block') {
+  good('create pane is visible on the challenges sheet');
+} else {
+  bad(`create pane display = "${document_.getElementById('chCreatePane').style.display}"`);
+}
+const st = dbg.state();
+if (!st.friendChallenges || Object.keys(st.friendChallenges).length === 0) {
+  good('no friend challenges seeded by default');
+} else {
+  bad(`friendChallenges unexpectedly seeded: ${JSON.stringify(Object.keys(st.friendChallenges))}`);
+}
+
+// Friends tab renders the crew-facing empty state when nothing's on it.
+dbg.setChTab('friends');
+const friendsHtml = document_.getElementById('chList').innerHTML;
+if (friendsHtml.includes('start one and invite the crew')) {
+  good('friends tab empty state ships the expected copy');
+} else {
+  bad(`friends tab empty state copy missing: "${friendsHtml.slice(0, 120)}"`);
+}
+dbg.setChTab('active'); // reset before any later catalogue assertions
+
+// Invites banner: set one synthetic invite and check both surfaces pick it up.
+if (dbg.setInvites) {
+  dbg.setInvites([{ cid: 'abc123', fromId: 'someoneelse', ts: Date.now() }]);
+  const sheetBanner = document_.getElementById('chInvitesWrap').innerHTML;
+  if (sheetBanner.includes('data-accept-invite') && sheetBanner.includes('data-decline-invite')) {
+    good('invite banner inside the sheet renders Accept + Decline');
+  } else {
+    bad('invite banner inside the sheet is missing its action buttons');
+  }
+  const arcBanner = document_.getElementById('arcInvitesCard').innerHTML;
+  if (arcBanner.includes('data-accept-invite') && arcBanner.includes('ch-invite-count')) {
+    good('compact invite card inside the Arc dashboard renders');
+  } else {
+    bad('arc invites card did not render');
+  }
+  dbg.setInvites([]);
+  if (document_.getElementById('arcInvitesCard').style.display === 'none') {
+    good('arc invites card hides again once invites clear');
+  } else {
+    bad('arc invites card stayed visible after clearing invites');
+  }
+} else {
+  bad('__arcDebug.setInvites is not exposed');
+}
+
+// Create form: selects populate from the app-side metric and window lists,
+// not hardcoded markup — that list and this UI must never drift apart.
+const metricSelHtml = document_.getElementById('chMetricSel').innerHTML;
+const winSelHtml = document_.getElementById('chWinSel').innerHTML;
+if (metricSelHtml.includes('<option') && metricSelHtml.split('<option').length > 5) {
+  good(`chMetricSel populated (${metricSelHtml.split('<option').length - 1} options)`);
+} else {
+  bad(`chMetricSel never populated: "${metricSelHtml.slice(0, 80)}"`);
+}
+if (winSelHtml.includes('Fixed dates')) {
+  good('chWinSel includes the fixed-window option');
+} else {
+  bad(`chWinSel missing expected options: "${winSelHtml.slice(0, 80)}"`);
 }
 
 console.log('');

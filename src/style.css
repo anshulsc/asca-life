@@ -4416,6 +4416,478 @@ canvas { width: 100%; height: 100%; }
 /* Centered text on the lock-screen credentials. */
 .lock-input { text-align: center; }
 
+/* ── Routines ────────────────────────────────────────────── */
+.routines-card { margin-top: var(--space-4); }
+
+.routines-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.routines-chips {
+  display: flex; gap: 8px;
+  overflow-x: auto; padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.routines-chips::-webkit-scrollbar { display: none; }
+
+.rt-dot {
+  width: 8px; height: 8px; flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.routine-chip {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px;
+  background: rgba(var(--wht), 0.05);
+  border: 1px solid rgba(var(--wht), 0.08);
+  border-radius: var(--r-full);
+  color: var(--t-1);
+  font-size: 0.82rem; font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) ease, background-color var(--dur-fast) ease;
+}
+.routine-chip.on {
+  border-color: var(--accent);
+  background: rgba(var(--wht), 0.09);
+}
+.routine-chip .rt-empty {
+  color: var(--t-3); font-weight: 500;
+}
+
+.rt-detail-title { font-weight: 700; color: var(--t-1); }
+.rt-detail-muscles { font-size: 0.78rem; color: var(--t-3); margin-top: 2px; }
+
+.routine-ex-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px;
+  background: rgba(var(--wht), 0.04);
+  border-radius: var(--r-s);
+}
+.routine-ex-name { flex: 1; font-size: 0.85rem; color: var(--t-1); }
+.routine-ex-name input { flex: 1; min-width: 0; padding: 6px 10px; font-size: 0.85rem; }
+.rt-row-btn {
+  flex: 0 0 auto;
+  padding: 4px 8px; font-size: 0.85rem; line-height: 1;
+  color: var(--t-3);
+}
+.rt-row-btn:active { color: var(--t-1); }
+
+.routine-detail-actions {
+  display: flex; gap: 8px; align-items: center;
+  margin-top: var(--space-3);
+}
+.rt-start { flex: 1; }
+.rt-del { margin-left: auto; }
+
+.rt-form-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--space-3); }
+.rt-form-ex { display: flex; gap: 6px; }
+.rt-form-ex .input-field { flex: 1; min-width: 0; }
+.rt-add-btn {
+  align-self: flex-start;
+  padding: 6px 12px; font-size: 0.8rem;
+  color: var(--t-2);
+}
+
+/* ── Motion & Delight (2026 polish) ── */
+
+/* Mini rings ("Everyone today" strip + the profile avatar score gauge) fill
+   by animating --ring-p, a 0-100 %-of-goal value JS stamps whenever the
+   number actually moves. Registered as a <number> at the foot of this
+   section so the sweep is a real transition, not a snap. Flat 'background'
+   (not the 'background-image' sub-key) keeps the rule readable after the
+   build-time CSS stripper; the transition target is the property itself. */
+.arc-today-chip:not(.met),
+.profile-avatar-ring { --ring-p: 0; background: conic-gradient(var(--accent) calc(var(--ring-p, 0) * 1%), rgba(var(--wht), 0.08) 0); transition: --ring-p 0.6s linear; }
+.profile-avatar-ring { --ring-a: 0deg; background: conic-gradient(from 220deg, #FF7600, #FFB25A var(--ring-a), rgba(var(--wht), 0.07) var(--ring-a)); transition: --ring-a 0.6s linear; }
+.arc-today-chip.met { transition: none; }
+
+/* Section stagger reveal — direct children cascade in with a per-card
+   stagger. JS (--i) is the preferred path; nth-child supplies the same
+   8-deep ladder as a no-JS fallback for server-rendered states. */
+.view.on > *:nth-child(1) { --i: 0; }
+.view.on > *:nth-child(2) { --i: 1; }
+.view.on > *:nth-child(3) { --i: 2; }
+.view.on > *:nth-child(4) { --i: 3; }
+.view.on > *:nth-child(5) { --i: 4; }
+.view.on > *:nth-child(6) { --i: 5; }
+.view.on > *:nth-child(7) { --i: 6; }
+.view.on > *:nth-child(8) { --i: 7; }
+.view.on > *:nth-child(-n+8) { animation: arcReveal 0.45s var(--spring) both; animation-delay: calc(var(--i, 0) * 55ms); }
+@keyframes arcReveal { from { opacity: 0; transform: translateY(12px); filter: blur(6px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
+
+/* Pointer-reactive spotlight — soft cursor-follow highlight inside cards,
+   driven by --mx/--my written from JS on pointermove. */
+@media (hover: hover) and (pointer: fine) {
+.card, .glass-card { --mx: 50; --my: 50; }
+.card::before, .glass-card::before { background: radial-gradient(220px circle at calc(var(--mx) * 1%) calc(var(--my) * 1%), rgba(var(--wht), 0.11), transparent 62%); }
+}
+
+/* Celebration pulse ring — a one-shot halo behind the trigger element
+   (streak milestone, PR flag, first badge reveal). Transform-only so it
+   never shifts layout. */
+.pulse-ring-anchor { position: relative; }
+.pulse-ring-anchor::after { content: ''; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; border-radius: 50%; border: 2px solid rgba(var(--accent-rgb), 0.9); transform: translate(-50%, -50%); pointer-events: none; animation: pulseRing 0.85s var(--bounce) both; }
+@keyframes pulseRing { from { opacity: 0.9; transform: translate(-50%, -50%) scale(0.2); } to { opacity: 0; transform: translate(-50%, -50%) scale(3.4); } }
+
+/* Confetti — six-to-eight accent bits fan out from an element; each one
+   carries its own JS-stamped --dx/--dy so a single keyframe fans them. */
+.celebrate-bit { position: fixed; left: 0; top: 0; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); pointer-events: none; z-index: 99999; animation: celebratePop 0.6s var(--bounce) both; }
+.celebrate-bit.alt { background: #FFB25A; }
+.celebrate-bit.white { background: rgba(var(--wht), 0.95); }
+@keyframes celebratePop { from { opacity: 1; transform: translate(0, 0) scale(1); } to { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.3); } }
+
+/* View transitions — the active tab's title morphs for browsers with the
+   View Transitions API; everything else is unchanged. */
+.view.on .view-title { view-transition-name: view-title; }
+
+/* Today heatmap cell — the one cell today always has something to do with
+   keeps breathing so it stays findable at a glance. */
+.gym-heatmap-dot.today { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--accent); animation: todayPulse 2s ease-in-out infinite; }
+@keyframes todayPulse { 0%, 100% { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--accent); } 50% { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4.5px rgba(var(--accent-rgb), 0.55); } }
+
+/* Balance the display headings whose width the tab bar cannot predict. */
+.view-title, .arc-day-huge, .arc-onboard-title, .profile-name { text-wrap: balance; }
+
+/* Reduced motion — the new kinetic candy obeys the same kill-switch the
+   rest of the app already listens to. The blanket rule at the end of this
+   file still applies too. */
+@media (prefers-reduced-motion: reduce) {
+.gym-heatmap-dot.today { animation-duration: 0.001ms !important; }
+.view.on > *:nth-child(-n+8) { animation-duration: 0.001ms !important; }
+.celebrate-bit, .pulse-ring-anchor::after { display: none !important; }
+}
+
+/* @property LAST in this section — its braces stay put even if a later
+   structural change re-slices the marker above. */
+@property --ring-p { syntax: '<number>'; inherits: false; initial-value: 0; }
+@property --ring-a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+
+/* ── PR Celebrations ─────────────────────────────────────────
+   New-PR pill on feed cards, the confetti burst + scale-pop fired from
+   celebratePRs() in app.js, and the skeleton dot for kudos/comment
+   counts while they load. */
+.pr-pill {
+  display: inline-flex; align-items: center;
+  align-self: center;
+  font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+  color: #FFB25A;
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.22), rgba(255, 178, 90, 0.10));
+  border: 1px solid rgba(var(--accent-rgb), 0.5);
+  border-radius: var(--r-full, 999px);
+  padding: 5px 11px;
+  box-shadow: 0 0 12px rgba(var(--accent-rgb), 0.18);
+  white-space: nowrap;
+}
+
+/* Particle burst — positioned absolutely because the layer itself is
+   pointer-less chrome; children carry --dx/--dy set by JS. */
+.pr-confetti { position: fixed; inset: 0; pointer-events: none; z-index: 9999; }
+.pr-confetti-p {
+  position: fixed; width: 7px; height: 7px; border-radius: 2px;
+  /* --dx/--dy are set per-particle from JS; the zero defaults exist so the
+     keyframe still computes if a particle is ever cloned static. */
+  --dx: 0px;
+  --dy: 0px;
+  transform: translate(-50%, -50%);
+  animation: prConfettiFly 0.72s cubic-bezier(0.15, 0.6, 0.35, 1) forwards;
+}
+@keyframes prConfettiFly {
+  0%   { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.4) rotate(220deg); }
+}
+
+.pr-pop { animation: prPop 0.5s var(--bounce, ease); }
+@keyframes prPop {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.12); }
+  70%  { transform: scale(0.97); }
+  100% { transform: scale(1); }
+}
+
+/* Skeleton loading state for kudos/comment counts: pulses instead of the
+   ambiguous '·' placeholder, then resolves to the number or the dot +
+   "sync rules limited" tooltip. */
+.sk-dot {
+  display: inline-block; width: 14px; height: 6px; border-radius: 3px;
+  background: var(--glass-2, rgba(255,255,255,0.08));
+  animation: skDotPulse 1.1s ease-in-out infinite;
+}
+@keyframes skDotPulse {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pr-confetti-p { animation-duration: 0.001ms !important; }
+  .pr-pop { animation: none; }
+  .sk-dot { animation-duration: 2.4s; }
+}
+
+/* ── UX State & Motion Fixes ──────────────────────────────────
+   Friction fixes, layered on top of the base rules above rather than
+   editing them: later stylesheets win at equal specificity. */
+/* Undo toast: message + action, quieter than a modal. */
+.toast-undo { display: flex; align-items: center; gap: 12px; }
+.toast-undo-btn {
+  background: var(--accent-bg); color: var(--accent);
+  border: 1px solid var(--accent); border-radius: var(--r-full);
+  font-size: 0.72rem; font-weight: 800; letter-spacing: 0.02em;
+  padding: 4px 14px; cursor: pointer; flex-shrink: 0;
+  transition: transform var(--dur-fast) var(--spring);
+}
+.toast-undo-btn:active { transform: scale(0.92); }
+/* Leaderboard placeholder for a followed athlete who has never logged —
+   reads as an invitation, not an accusation. */
+.lb-pending { font-size: 0.6rem; font-weight: 600; color: var(--t-3); letter-spacing: 0; }
+/* Rest timer: countdown readable from the rack, not just in the 36px ring.
+   The big layer carries only the digits mirroring #gtTime; layout reserves
+   the space only while the bar is visible so nothing below shifts. */
+.timer-bar-big {
+  display: none;
+  font-family: var(--ff-mono); font-variant-numeric: tabular-nums;
+  font-weight: 800; text-align: center;
+  color: var(--t-1); letter-spacing: 0.02em;
+  pointer-events: none;
+}
+#gtBar.visible .timer-bar-big {
+  display: block;
+  font-size: 44px; line-height: 1.05; padding: 4px 0 2px;
+}
+/* Header condensation: on scroll the bar tightens and the brand scales
+   down so more of the scroll column is visible. Class is JS-toggled. */
+.app-header .brand { transition: transform 0.25s var(--spring); transform-origin: left center; }
+.app-header.condensed { backdrop-filter: blur(calc(var(--glass-blur) * 1.5)) saturate(var(--glass-sat)) brightness(var(--glass-bright)); -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.5)) saturate(var(--glass-sat)) brightness(var(--glass-bright)); }
+.app-header.condensed .brand { transform: scale(0.85); }
+/* 44px touch targets on the two tap-heavy set-editor controls — visual
+   stays 32–34px, the hit area grows invisibly. Mobile only. */
+@media (hover: none), (pointer: coarse) {
+  .stepper-btn, .btn-set-check { position: relative; }
+  .stepper-btn::after, .btn-set-check::after {
+    content: '';
+    position: absolute; top: 50%; left: 50%;
+    width: 44px; height: 44px; transform: translate(-50%, -50%);
+  }
+  /* iOS zoom-on-focus guard: any editable field under 16px zooms on tap. */
+  .set-input { font-size: 16px; }
+  .set-input::placeholder { font-size: 0.82rem; }
+}
+/* ── Rest Timer: countdown digits — the large standalone readout ──
+   The ring carries secondary info (progress arc + label); the readable
+   countdown is the .timer-text sitting next to it, sized to match the
+   bar height without stealing layout. */
+.timer-text {
+  font-family: var(--ff-mono); font-variant-numeric: tabular-nums;
+  font-weight: 800; color: var(--t-1);
+  font-size: 1.5rem; letter-spacing: 0.01em;
+  margin-left: 4px; line-height: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-header .brand { transition: none; }
+}
+
+/* ── Friend Challenges ─────────────────────────────────────────────
+   Phase-2: create-a-challenge form and live member rows inside the
+   challenges sheet; invite banners inside the sheet + one compact card
+   in the Winter Arc tab's challenges scroll. Rides the same tokens as
+   the rest of the Arc surface — no new hues, no new radii. */
+
+.ch-invites-card {
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.ch-invite-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: var(--ff-title); font-weight: 700; font-size: var(--text-s);
+  color: var(--t-1); margin-bottom: 6px;
+}
+.ch-invite-count {
+  min-width: 20px; height: 20px; border-radius: 10px;
+  background: var(--accent); color: #fff;
+  font-size: 0.7rem; font-weight: 800;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 5px;
+}
+.ch-invite-row {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  padding: 8px 0;
+}
+.ch-invite-row + .ch-invite-row { border-top: 1px solid rgba(var(--wht), 0.07); }
+.ch-invite-row.compact { padding: 6px 0; }
+.ch-invite-copy { font-size: var(--text-s); color: var(--t-2); }
+.ch-invite-copy b { color: var(--t-1); font-weight: 600; }
+.ch-invite-actions { display: flex; gap: 6px; flex-shrink: 0; }
+#chInvitesWrap {
+  margin: 0 0 var(--space-3);
+}
+#chInvitesWrap .ch-invite-row {
+  background: rgba(var(--wht), 0.04);
+  border: 1px solid rgba(var(--wht), 0.07);
+  border-radius: var(--r-l); padding: var(--space-3) var(--space-4); margin-bottom: 6px;
+}
+#chInvitesWrap .ch-invite-row:last-child { margin-bottom: 0; }
+
+/* Create form — the one genuinely new UI grammar here: a labelled grid
+   of dropdowns/inputs rather than another stacked card, because a create
+   form is one action and should read as one surface end-to-end. */
+#chCreatePane { margin-top: var(--space-4); }
+.ch-create-form {
+  border-top: 1px solid rgba(var(--wht), 0.07);
+  padding-top: var(--space-4);
+}
+.ch-create-title {
+  font-family: var(--ff-title); font-weight: 800; font-size: var(--text-m);
+  color: var(--t-1); margin-bottom: var(--space-3);
+}
+.ch-create-form input[type="text"], .ch-create-form input[type="number"],
+.ch-create-form select {
+  width: 100%;
+  background: rgba(var(--wht), 0.05);
+  border: 1px solid rgba(var(--wht), 0.09);
+  border-radius: var(--r-m); color: var(--t-1);
+  font: inherit; font-size: var(--text-m);
+  padding: 10px 12px; outline: none;
+  margin-bottom: var(--space-3);
+}
+.ch-create-form input[type="date"] {
+  width: 100%;
+  background: rgba(var(--wht), 0.05);
+  border: 1px solid rgba(var(--wht), 0.09);
+  border-radius: var(--r-m); color: var(--t-1);
+  font: inherit; font-size: var(--text-m);
+  padding: 10px 12px; outline: none;
+}
+.ch-create-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 var(--space-3); }
+.ch-create-field { display: flex; flex-direction: column; gap: 4px; }
+.ch-create-field-wide { grid-column: 1 / -1; }
+.ch-create-field span {
+  font-size: var(--text-xs); color: var(--t-3);
+  font-weight: 600; letter-spacing: 0.02em;
+}
+.ch-fixed-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 0 var(--space-3); margin-bottom: var(--space-3); }
+.ch-invite-section { margin-bottom: var(--space-4); }
+.ch-invite-label {
+  font-size: var(--text-xs); color: var(--t-3); font-weight: 600;
+  letter-spacing: 0.02em; margin-bottom: 8px;
+}
+.ch-invite-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.ch-invite-chip {
+  padding: 7px 14px; border-radius: 999px;
+  background: rgba(var(--wht), 0.06);
+  border: 1px solid rgba(var(--wht), 0.09);
+  color: var(--t-2); font-size: var(--text-s); font-weight: 500;
+  cursor: pointer; transition: all 0.18s ease;
+}
+.ch-invite-chip.on {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+.ch-invite-empty { font-size: var(--text-s); color: var(--t-3); }
+.ch-create-err {
+  font-size: var(--text-s); color: #ff6060; margin-bottom: var(--space-3);
+}
+
+/* Detail — one challenge's live member list. Rows rank themselves by
+   value (pure client sort; the server rows are authoritative only about
+   each member's own reported number, not about where anyone lands). */
+#chDetailPane { display: block; }
+.ch-detail-head { display: flex; align-items: center; gap: 10px; margin-bottom: var(--space-3); }
+#chDetailBack {
+  width: 30px; height: 30px; border-radius: 50%; font-size: 1.2rem; line-height: 1;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.ch-detail-titles { flex: 1; min-width: 0; }
+.ch-detail-name { font-family: var(--ff-title); font-weight: 800; font-size: 1.05rem; color: var(--t-1); }
+.ch-detail-meta { font-size: var(--text-xs); color: var(--t-3); margin-top: 1px; }
+.ch-member-row {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: 10px 0;
+}
+.ch-member-row + .ch-member-row { border-top: 1px solid rgba(var(--wht), 0.06); }
+.ch-member-row.me .ch-member-name { color: var(--accent); }
+.ch-member-rank {
+  width: 22px; flex-shrink: 0; text-align: center;
+  font-weight: 800; font-size: var(--text-s); color: var(--t-3);
+}
+.ch-member-avatar {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 0.85rem; color: #fff;
+}
+.ch-member-main { flex: 1; min-width: 0; }
+.ch-member-name {
+  font-size: var(--text-s); font-weight: 600; color: var(--t-1);
+  display: flex; align-items: center; gap: 6px;
+}
+.ch-member-you { font-size: var(--text-xs); color: var(--accent); font-weight: 700; }
+.ch-member-done {
+  font-size: var(--text-xs); color: var(--t-2); font-weight: 600;
+  background: rgba(var(--wht), 0.06); border-radius: 999px; padding: 2px 8px;
+}
+.ch-member-sub { font-size: var(--text-xs); color: var(--t-3); margin-top: 1px; }
+.ch-member-track {
+  height: 4px; background: rgba(var(--wht), 0.08);
+  border-radius: 2px; margin-top: 6px; overflow: hidden;
+}
+.ch-member-fill {
+  height: 100%; background: var(--accent); border-radius: 2px;
+  transition: width 0.6s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.ch-member-fill.over { background: #4ade80; }
+.ch-member-val { font-weight: 700; font-size: var(--text-s); color: var(--t-1); flex-shrink: 0; }
+
+/* ── Arc Gamification ── */
+/* Freeze note on the streak card, the level-up pulse, the weekly digest
+   card under the challenges strip, and the local correlation nudge line.
+   Kept quiet — one subtle accent, no rhinestones — matching the Arc's
+   printed-sheet aesthetic. */
+
+.arc-freeze-note {
+  display: flex; align-items: center; gap: 5px;
+  margin-top: 6px; font-size: 0.68rem; font-weight: 600;
+  color: var(--t-2);
+}
+.arc-freeze-note svg { color: var(--c-cyan); flex: 0 0 auto; }
+
+.arc-level-chip.arc-level-up {
+  animation: arc-level-pop 700ms cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+}
+@keyframes arc-level-pop {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.12); }
+  70%  { transform: scale(0.97); }
+  100% { transform: scale(1); }
+}
+
+.arc-digest-card {
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.arc-digest-head {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--t-2);
+}
+.arc-digest-head svg { color: var(--accent); }
+.arc-digest-lines { display: flex; flex-direction: column; gap: 5px; }
+.arc-digest-line {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 0.82rem; line-height: 1.4; color: var(--t-1);
+}
+.arc-digest-ic { color: var(--t-2); flex: 0 0 auto; margin-top: 1px; display: flex; }
+.arc-digest-nudge {
+  margin-top: 2px; padding-top: 8px;
+  border-top: 1px solid var(--glass-2);
+  font-size: 0.76rem; line-height: 1.45; color: var(--t-2);
+  font-style: italic;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arc-level-chip.arc-level-up { animation: none; }
+}
+
 /* ── Lock Screen Overlay ─────────────────────────────────── */
 .lock-screen {
   position: fixed;

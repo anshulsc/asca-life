@@ -161,12 +161,160 @@ const ChallengeEngine = (() => {
       checkins,
       season: input.season || WA.season(),
       freezeUsed: input.freezeUsed || {},
+      freezeCap: Math.max(0, (input.freezeCap != null ? input.freezeCap : FREEZE_CAP) | 0),
       firstDay: [...days].sort()[0] || today
     };
   }
 
   function factsOn(ctx, day) {
     return ctx.facts[day] || dayFacts(null, null, ctx.goals);
+  }
+
+  /* ── Streak freezes — state & chronology ───────────────────
+     Everything about freezes is derived from scratch here, on every
+     recompute. Pure and deterministic: no DOM, no Date.now(), the
+     caller passes `now` through buildContext. */
+
+  const FREEZE_CAP = 2;
+
+  // Classify the blank days of the record. A THREATENING day is entirely
+  // blank (zero objectives met) and sits inside — or at the open end of —
+  // a real run of active days, which is exactly when an auto-spent freeze
+  // has a streak to save. Days before the first active day have no run to
+  // threaten and are excluded. An interior gap is threatening whenever a
+  // hit follows it; the trailing edge contributes at most its newest blank
+  // day (a second consecutive trailing blank breaks the run outright, and
+  // an older one is unreachable behind it).
+  function classifyFreezes(ctx, days, hits) {
+    const n = days.length;
+    const posterior = new Array(n).fill(0), anterior = new Array(n).fill(0);
+    let r = 0;
+    for (let i = n - 1; i >= 0; i--) { if (hits[i]) r++; posterior[i] = r; }
+    let leading = 0;
+    for (let i = 0; i < n; i++) { anterior[i] = leading; if (hits[i]) leading++; }
+
+    const out = { gap: [], threatening: [], todayPending: false, trailingGap: null };
+    days.forEach((d, i) => {
+      if (hits[i]) return;
+      if (posterior[i] > 0 && anterior[i] > 0) { out.gap.push(d); return; }
+      if (d === ctx.today) { out.todayPending = true; return; }  // today pending isn't a threat
+      // Newest blank of the trailing edge — the first one reached walking
+      // the ascending days that has nothing but blanks after it.
+      if (posterior[i] === 0 && !out.trailingGap) out.trailingGap = d;
+    });
+    // Threatening = interior gaps + the newest trailing blank, oldest first,
+    // same order the walk below visits them in (from today backwards).
+    out.threatening = out.gap.concat(out.trailingGap ? [out.trailingGap] : []);
+    return out;
+  }
+
+  // One backward walk from today that both the spend rule and the streak
+  // aggregator share the shape of: from the CANDIDATE blank days
+  // (threatSet), collect exactly those a freeze bridges on the final
+  // streak walk — active days reset the not-two-in-a-row flag. Days with
+  // a manual freeze on record are marked hit BEFORE this walk runs, so
+  // they always bridge (recorded intent beats the auto rules), and any
+  // remaining candidate is reachable only where a manual mark didn't
+  // already absorb the slot. Affordability is then enforced
+  // chronologically: a spend happens only if earned freezes outnumber
+  // the spends before it — and the ledger quotes what the UI shows
+  // ("Freeze used Mon · 1 left").
+  function walkFreezeLedger(days, hitIdx, threatSet, earnAt, cap) {
+    const autoSpend = [];
+    let i = days.length - 1, usedFreeze = false;
+    while (i >= 0) {
+      if (hitIdx.has(i)) { usedFreeze = false; i--; continue; }
+      if (threatSet.has(days[i]) && !usedFreeze) { autoSpend.push(days[i]); usedFreeze = true; i--; continue; }
+      i--;
+    }
+    autoSpend.reverse(); // oldest first
+    const earnedBefore = new Array(days.length).fill(0);
+    let e = 0;
+    days.forEach((d, i) => {
+      const earnedOn = earnAt[d] != null ? Math.min(cap, earnAt[d]) : e;
+      if (earnedOn > e) e = earnedOn;
+      earnedBefore[i] = e;
+    });
+    // Affordability, chronological: a spend only happens if the bank —
+    // freezes earned through that day, minus those already spent — has
+    // one to give. An empty bank breaks the streak, as it should.
+    const ledger = {};
+    const spent = [];
+    autoSpend.forEach(d => {
+      const i = days.indexOf(d);
+      if (i < 0) return;
+      const bank = earnedBefore[i] - spent.length;
+      if (bank <= 0) return;
+      ledger[d] = bank - 1; // remaining after this spend — what the UI quotes
+      spent.push(d);
+    });
+    return { autoSpend: spent, ledger };
+  }
+
+  // Earliest day each freeze bank is earned: one per 7 CONSECUTIVE
+  // perfect days, up to the cap. `runLen` is the current consecutive
+  // perfect-day count; every time it passes a multiple of 7, that day
+  // banks a freeze (day 8 of a 14-day run pays the second). Earns settle
+  // overnight — today's contribution to the run can't pay out until
+  // tomorrow — so a single recompute can never earn and spend the same
+  // freeze, whether the transition happened at a midnight rollover or at
+  // a check-in tap.
+  function freezeEarnAt(ctx, days) {
+    const cap = ctx.freezeCap;
+    const earnAt = {};
+    if (!cap) return earnAt;
+    let earned = 0, runLen = 0, prevPerfect = false;
+    days.forEach(d => {
+      if (d === ctx.today) return;              // today's run settles tomorrow
+      if (earned >= cap) return;
+      const f = factsOn(ctx, d);
+      runLen = f.perfectDay ? (prevPerfect ? runLen + 1 : 1) : 0;
+      prevPerfect = !!f.perfectDay;
+      if (runLen > 0 && runLen % 7 === 0) { earnAt[d] = ++earned; }
+    });
+    return earnAt;
+  }
+
+  // The whole freeze state, derived from scratch on every recompute —
+  // this function is THE definition of "how many freezes do I have":
+  //   freezesLeft   = clamp(min(cap, earned-to-date) − auto-spends, 0, cap)
+  //   effectiveUsed = manual freezeUsed ∪ auto-spends that saved
+  //                   (manual maps are always honoured: a manual day is
+  //                   counted even where an auto-spend would refuse —
+  //                   recorded intent beats the auto rules)
+  // Input.freezeUsed stays accepted by buildContext for manual/external
+  // records and for tests; nothing is ever written back into it.
+  function freezePlan(ctx) {
+    const days = daysIn(resolveWindow({ kind: 'allTime' }, ctx));
+    const hits = days.map(d => factsOn(ctx, d).activeDay > 0);
+    const cls = classifyFreezes(ctx, days, hits);
+    const earnAt = freezeEarnAt(ctx, days);
+
+    const manualUsed = ctx.freezeUsed || {};
+    const effectiveUsed = Object.assign({}, manualUsed);
+
+    // Indices the backward walk treats as "run continues": active days
+    // plus every freeze already on record.
+    const hitIdx = new Set();
+    days.forEach((d, i) => { if (hits[i] || effectiveUsed[d]) hitIdx.add(i); });
+
+    const threats = new Set(cls.threatening.filter(d => !effectiveUsed[d]));
+    const walk = walkFreezeLedger(days, hitIdx, threats, earnAt, ctx.freezeCap);
+    walk.autoSpend.forEach(d => { effectiveUsed[d] = true; });
+
+    const earned = Math.min(ctx.freezeCap, Object.keys(earnAt).filter(d => d <= ctx.today).length);
+    const spentTotal = Object.keys(effectiveUsed).length;
+    const left = Math.max(0, Math.min(ctx.freezeCap, earned - spentTotal));
+
+    return {
+      days, hits, cls, earnAt,
+      manualUsed, effectiveUsed, spentTotal, freezesLeft: left,
+      // walk.autoSpend is exactly the set of NEW spends — manual days were
+      // excluded from `threats`, so they can never appear in the walk.
+      newSpends: walk.autoSpend,
+      newSpendSet: new Set(walk.autoSpend),
+      spendLedger: walk.ledger
+    };
   }
 
   /* ── Windows ───────────────────────────────────────────────
@@ -220,9 +368,23 @@ const ChallengeEngine = (() => {
 
     // The run ending at the last COMPLETED day of the window. Today is
     // pending, not failed — it only extends the run, never breaks it.
+    // Freezes come from ctx.freezePlan().effectiveUsed when the plan is
+    // cached on the context (i.e. the allTime season streak, which
+    // streakState primes), or straight from ctx.freezeUsed otherwise —
+    // manual marks always count, auto-spends only ever apply to the
+    // season-level streak, never to per-challenge freeze windows.
     streak: (vals, def, days, ctx) => {
+      const plan = ctx._frozenPlan || null;
+      const frozen = d => !!(plan ? plan.effectiveUsed[d] : (def.allowFreeze && ctx.freezeUsed[d]));
       const perDay = def.perDay != null ? def.perDay : 1;
-      const hit = i => cmp(vals[i], def.op, perDay);
+      // Auto-spent freezes (only present when the freeze plan is primed,
+      // i.e. the allTime season streak) count WITHIN the run — the spend
+      // exists to save it. Manual marks stay bridge-only: they keep a run
+      // alive across the frozen day but the blank day itself still earns
+      // nothing, which is what stops two stacked manual freezes from
+      // letting the walk coast through a double gap.
+      const hit = i => cmp(vals[i], def.op, perDay) ||
+                       (plan ? (!!plan.newSpendSet && plan.newSpendSet.has(days[i])) : false);
 
       let i = days.length - 1;
       // Today is pending: if it is not yet met, start from yesterday.
@@ -232,7 +394,7 @@ const ChallengeEngine = (() => {
       while (i >= 0) {
         if (hit(i)) { run++; usedFreeze = false; i--; continue; }
         // One freeze may bridge a single blank day, and never two in a row.
-        if (def.allowFreeze && ctx.freezeUsed[days[i]] && !usedFreeze) {
+        if (def.allowFreeze && !usedFreeze && frozen(days[i])) {
           usedFreeze = true; i--; continue;
         }
         break;
@@ -296,19 +458,26 @@ const ChallengeEngine = (() => {
 
   /* ── Streak ────────────────────────────────────────────────
      The season-level streak, separate from any challenge. A day counts
-     on ANY objective, not on a workout.                              */
+     on ANY objective, not on a workout. Freezes enter here via
+     freezePlan(): a re-derivation of every earned/spent freeze from the
+     record itself (see the block above), cached on the ctx so the streak
+     aggregator below reads the SAME effective freeze map — an auto-spent
+     freeze extends the streak on the very recompute that spends it.   */
 
   function streakState(ctx) {
+    const plan = ctx._frozenPlan || freezePlan(ctx);
+    ctx._frozenPlan = plan; // cached: evaluate() and summary() share one plan per ctx
     const def = { metric: 'activeDay', agg: 'streak', op: '>=', perDay: 1, allowFreeze: true };
     const all = { kind: 'allTime' };
     const cur = evaluate(Object.assign({ id: '_streak', window: all }, def), ctx);
 
-    // Best run anywhere in the record.
-    const days = daysIn(resolveWindow(all, ctx));
+    // Best run anywhere in the record. Same rule as the aggregator:
+    // auto-spent days count inside the run (that's the point of the
+    // spend); manual-only freezes bridge without counting.
     let best = 0, run = 0;
-    days.forEach(d => {
-      if (factsOn(ctx, d).activeDay) { run++; if (run > best) best = run; }
-      else if (!ctx.freezeUsed[d]) run = 0;
+    plan.days.forEach(d => {
+      if (factsOn(ctx, d).activeDay || plan.newSpendSet.has(d)) { run++; if (run > best) best = run; }
+      else if (!plan.effectiveUsed[d]) run = 0;
     });
 
     const todayDone = factsOn(ctx, ctx.today).activeDay > 0;
@@ -318,7 +487,14 @@ const ChallengeEngine = (() => {
       todayDone,
       // "At risk" only means: you have a run going and today is still blank.
       atRisk: !todayDone && (cur ? cur.value : 0) > 0,
-      lastDay: ctx.today
+      lastDay: ctx.today,
+      // Freeze state, fully derived — the app persists this but never
+      // writes it back into the engine.
+      freezesLeft: plan.freezesLeft,
+      freezeUsed: plan.effectiveUsed,
+      freezesEarned: Math.min(ctx.freezeCap, Object.keys(plan.earnAt).length),
+      freezeCap: ctx.freezeCap,
+      freezeSpends: plan.spendLedger
     };
   }
 
@@ -498,12 +674,69 @@ const ChallengeEngine = (() => {
     };
   }
 
+  /* ── Weekly digest ─────────────────────────────────────────
+     One plain-words week-in-review, fully local. The calendar week
+     (Mon→today), season-gated so days before enrolment never leak in.
+     The sentence assembly stays in app.js (DOM-adjacent); this returns
+     only the numbers it needs.                                       */
+
+  function weeklyDigest(ctx) {
+    const to = ctx.today;
+    const from = weekStart(to);
+    const days = daysIn({ from, to }).filter(d => {
+      const s = ctx.season;
+      return !s || (d >= s.start && d <= s.end);
+    });
+    const facts = days.map(d => factsOn(ctx, d));
+
+    const workouts = facts.reduce((a, f) => a + f.workouts, 0);
+    const sleepVals = facts.filter(f => f.sleepH > 0).map(f => f.sleepH);
+    const sleepAvg = sleepVals.length ? sleepVals.reduce((a, b) => a + b, 0) / sleepVals.length : 0;
+    const sleepDays = sleepVals.length;
+    const loggedDays = facts.filter(f => f.activeDay || f.objectivesDone > 0).length;
+
+    // Best day = most objectives met, volume as the tiebreak; null when
+    // the whole week is blank.
+    let bestDay = null;
+    days.forEach((d, i) => {
+      const f = facts[i];
+      if (f.objectivesDone <= 0) return;
+      if (!bestDay || f.objectivesDone > bestDay.objectivesDone ||
+          (f.objectivesDone === bestDay.objectivesDone && f.volume > bestDay.volume)) {
+        bestDay = { date: d, objectivesDone: f.objectivesDone, volume: f.volume };
+      }
+    });
+
+    // Weakest habit = habit furthest under its goal on the days it was
+    // logged; a habit never logged this week is the weakest of all.
+    let weakest = null;
+    HABITS.forEach(h => {
+      const vals = facts.map(f => f[h.key]).filter(v => v > 0);
+      const goal = ctx.goals[h.key] || h.goal || 1;
+      const hit = vals.length > 0 && vals.every(v => v >= goal);
+      if (hit) return;
+      const avgPct = vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length) / goal : 0;
+      if (!weakest || avgPct < weakest.avgPct) {
+        weakest = { key: h.key, label: h.label, goal, avgPct: Math.round(avgPct * 100), loggedDays: vals.length };
+      }
+    });
+
+    return {
+      from, to, days: days.length,
+      workouts, workoutsGoal: ctx.goals.workoutsPerWeek || 5,
+      sleepAvg: Math.round(sleepAvg * 10) / 10, sleepGoal: ctx.goals.sleepH, sleepDays,
+      loggedDays, bestDay, weakest
+    };
+  }
+
   return Object.freeze({
     // primitives (exported for tests and for app.js reuse)
     isCardioSet, setWeight, dayFacts, objectivesForDay,
     // core
     buildContext, resolveWindow, daysIn, evaluate, streakState,
     dailyXp, xpFromRecord, summary,
+    // freezes + digest
+    FREEZE_CAP, freezePlan, weeklyDigest,
     // data
     OBJECTIVES, AGGREGATORS, CATALOGUE, METRIC_IDS, validate, resolveDef
   });

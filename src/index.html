@@ -270,6 +270,11 @@
           <div class="arc-hero-tag" id="arcTagline"></div>
         </header>
 
+        <!-- INVITES — compact and high up because a challenge invite is
+             the closest thing this tab gets to a call-to-action you did
+             not generate yourself; it must be visible before the scroll. -->
+        <div class="card glass-card ch-invites-card" id="arcInvitesCard" style="display:none"></div>
+
         <!-- STATUS — streak and level/XP, still no card. A hairline is
              the only separator; this is a spec line, not a panel. -->
         <div class="arc-status">
@@ -284,6 +289,7 @@
             <div class="arc-streak-meta">
               <div class="arc-streak-best">Best <b class="arc-num" id="arcStreakBest">0</b></div>
               <div class="arc-streak-freezes" id="arcFreezes" title="Freezes left this month"></div>
+              <div class="arc-freeze-note" id="arcFreezeNote" style="display:none"></div>
             </div>
           </div>
           <div class="arc-streak-risk" id="arcStreakRisk" style="display:none">At risk — log something today</div>
@@ -330,11 +336,13 @@
              not twice. -->
         <div class="arc-section-head">
           <div class="arc-section-title" style="flex:1">This Season</div>
+          <button class="arc-seeall-btn" id="arcCreateChallengeBtn">Create</button>
           <button class="arc-seeall-btn" id="arcSeeAllChallenges">Challenges</button>
           <button class="arc-seeall-btn" id="arcOpenCalendar">Calendar</button>
           <button class="arc-seeall-btn" id="arcSeasonReviewBtn" style="margin-left:auto">Season Review</button>
         </div>
         <div class="arc-challenge-scroll" id="arcChallengeScroll"></div>
+        <div class="card glass-card arc-digest-card" id="arcDigestCard"></div>
         <div class="card glass-card arc-cal-preview" id="arcCalPreview"></div>
 
         <div class="arc-badges-row">
@@ -491,6 +499,16 @@
             <button class="btn btn-primary btn-full" id="svEx">Save Exercise</button>
           </div>
         </div>
+      </div>
+
+      <!-- Workout Routines -->
+      <div class="card glass-card routines-card" id="rtCard">
+        <div class="routines-head">
+          <span class="label" style="margin-bottom:0">Routines</span>
+          <button class="btn btn-ghost btn-sm" id="rtAddBtn">+ New Routine</button>
+        </div>
+        <div class="routines-chips" id="rtChips"></div>
+        <div class="routine-detail" id="rtDetail" style="display:none"></div>
       </div>
 
       <!-- Logged Exercises List -->
@@ -1039,6 +1057,7 @@
 
   <!-- Global Rest Timer Bar -->
   <div class="global-timer-bar hidden" id="gtBar">
+    <div class="timer-bar-big" aria-hidden="true"></div>
     <div class="timer-content">
       <div class="timer-left">
         <div class="timer-ring-wrap">
@@ -1046,12 +1065,12 @@
             <circle class="timer-svg-bg" cx="18" cy="18" r="15.9155"></circle>
             <circle class="timer-svg-fill" id="gtFill" cx="18" cy="18" r="15.9155" stroke-dasharray="100 100" stroke-dashoffset="0"></circle>
           </svg>
-          <span class="timer-text" id="gtTime">00:00</span>
         </div>
         <div class="timer-info">
           <span class="timer-title">Resting</span>
           <span class="timer-desc" id="gtDesc">Tap preset to start</span>
         </div>
+        <span class="timer-text" id="gtTime">00:00</span>
       </div>
       <div class="timer-presets">
         <button class="btn-timer-chip" data-sec="60">60s</button>
@@ -1154,8 +1173,69 @@
         <div class="seg-tab on" data-ch-tab="active">Active</div>
         <div class="seg-tab" data-ch-tab="available">Available</div>
         <div class="seg-tab" data-ch-tab="done">Completed</div>
+        <div class="seg-tab" data-ch-tab="friends">Friends</div>
       </div>
+
+      <!-- Invites inside the sheet — the primary surface, opened when a
+           badge on the Challenges button was what brought you here. -->
+      <div id="chInvitesWrap" style="display:none"></div>
+
       <div class="ch-list" id="chList"></div>
+
+      <!-- Detail view — one friend challenge's live member rows. -->
+      <div id="chDetailPane" style="display:none">
+        <div class="ch-detail-head" id="chDetailHead">
+          <button class="arc-seeall-btn" id="chDetailBack" aria-label="Back">‹</button>
+          <div class="ch-detail-titles">
+            <div class="ch-detail-name" id="chDetailTitle"></div>
+            <div class="ch-detail-meta" id="chDetailMeta"></div>
+          </div>
+          <button class="btn-close" id="chDetailLeaveBtn" style="display:none">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="ch-detail-body" id="chDetailBody"></div>
+      </div>
+
+      <!-- Create — one form, same model as every catalogue challenge:
+           a metric + aggregator + window + optional target + a list of
+           people you follow who get an invite. -->
+      <div id="chCreatePane">
+        <div class="ch-create-form" id="chCreateForm">
+          <div class="ch-create-title">Start one</div>
+          <input type="text" id="chTitleInput" maxlength="60" placeholder="Challenge name — 30 Days, No Zeros, Week of Heavy…">
+          <div class="ch-create-grid">
+            <label class="ch-create-field">
+              <span>Metric</span>
+              <select id="chMetricSel"></select>
+            </label>
+            <label class="ch-create-field">
+              <span>Target</span>
+              <input type="number" id="chTargetInput" inputmode="decimal" min="1" placeholder="Optional">
+            </label>
+            <label class="ch-create-field ch-create-field-wide">
+              <span>Window</span>
+              <select id="chWinSel"></select>
+            </label>
+          </div>
+          <div class="ch-fixed-dates" id="chFixedDates" style="display:none">
+            <label class="ch-create-field">
+              <span>Start</span>
+              <input type="date" id="chStartInput">
+            </label>
+            <label class="ch-create-field">
+              <span>End</span>
+              <input type="date" id="chEndInput">
+            </label>
+          </div>
+          <div class="ch-invite-section">
+            <div class="ch-invite-label">Invite</div>
+            <div class="ch-invite-list" id="chInviteList"></div>
+          </div>
+          <div class="ch-create-err" id="chCreateErr" style="display:none"></div>
+          <button class="btn btn-primary btn-full" id="chSubmitBtn">Create and invite</button>
+        </div>
+      </div>
     </div>
   </div>
 

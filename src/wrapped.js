@@ -406,6 +406,15 @@ const Wrapped = (() => {
   /* ── Share PNG ────────────────────────────────────────────
      Drawn on a transient <canvas> — no upload anywhere. */
 
+  // Footer handle: the signed-in user's own identity, @-prefixed —
+  // prefer the sync/account id, fall back to the display name.
+  function shareHandle() {
+    const cfg = (typeof FirebaseSync !== 'undefined' && FirebaseSync.getConfig)
+      ? FirebaseSync.getConfig() : {};
+    const id = String(cfg.userId || cfg.displayName || 'athlete');
+    return '@' + id.replace(/^@/, '');
+  }
+
   function drawShareCard() {
     const Wc = 1080, Hc = 1920;
     const cv = document.createElement('canvas');
@@ -469,7 +478,7 @@ const Wrapped = (() => {
     g.fillText(scope.kind === 'season' ? 'winter arc' : `${scope.start.slice(0, 4)}`, Wc / 2, Hc - 210);
     g.fillStyle = accent;
     g.font = '700 32px "Outfit", sans-serif';
-    g.fillText('@anshulsc', Wc / 2, Hc - 160);
+    g.fillText(shareHandle(), Wc / 2, Hc - 160);
 
     return cv;
   }

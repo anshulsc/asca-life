@@ -436,6 +436,169 @@ section('arc state merge (WinterArc.mergeArcState)');
   }
 }
 
+/* ── Freeze earn & auto-spend (derived from scratch) ───────── */
+
+section('freeze: earn one per perfect 7-day run, capped at 2');
+{
+  // A perfect day = all four objectives met (workout+steps for "move",
+  // protein, water, sleep). `perfect` builds exactly that.
+  const perfect = d => checkin({ steps: 8000, proteinG: 140, waterMl: 3000, sleepH: 7 });
+  const perfectWeek = (endDay, n) => {
+    const ws = [], cs = {};
+    for (let i = 0; i < n; i++) {
+      const d = WA.addDays(endDay, -i);
+      ws.push(workout(d, 'Pull'));
+      cs[d] = perfect(d);
+    }
+    return { workouts: ws, checkins: cs };
+  };
+
+  // Nothing earned on a partial record.
+  {
+    const now = dateObj(day(40));
+    const s = CE.summary({ workouts: [workout(day(40), 'Pull')], checkins: {}, now, season: SEASON });
+    eq('no perfect week, freezesLeft is 0', s.streak.freezesLeft, 0);
+    eq('freeze cap is 2', s.streak.freezeCap, 2);
+  }
+
+  // Seven perfect days ending YESTERDAY — the earn settles overnight.
+  {
+    const now = dateObj(day(8));
+    const { workouts, checkins } = perfectWeek(day(7), 7);
+    const s = CE.summary({ workouts, checkins, now, season: SEASON });
+    eq('seven perfect days earn one freeze', s.streak.freezesLeft, 1);
+    eq('earn day is day 7', CE.freezePlan(CE.buildContext({ workouts, checkins, now, season: SEASON })).earnAt[day(7)], 1);
+  }
+
+  // ...but a run that only REACHES 7 through today's activity pays out
+  // tomorrow, so the same pass can never earn-and-spend one freeze.
+  {
+    const now = dateObj(day(7));
+    const { workouts, checkins } = perfectWeek(day(7), 7);
+    const s = CE.summary({ workouts, checkins, now, season: SEASON });
+    eq('run completed today has not paid out yet', s.streak.freezesLeft, 0);
+  }
+
+  // Runs do not overlap: 14 perfect days earn exactly two, at days 8 & 15.
+  {
+    const now = dateObj(day(16));
+    const { workouts, checkins } = perfectWeek(day(15), 14);
+    const s = CE.summary({ workouts, checkins, now, season: SEASON });
+    eq('fourteen perfect days hit the cap', s.streak.freezesLeft, 2);
+    const plan = CE.freezePlan(CE.buildContext({ workouts, checkins, now, season: SEASON }));
+    eq('second earn lands at day 15', plan.earnAt[day(15)], 2);
+    eq('no third earn is possible', plan.earnAt[day(8)], 1);
+  }
+
+  // A 13-day perfect run earns one, not "1.85".
+  {
+    const now = dateObj(day(15));
+    const { workouts, checkins } = perfectWeek(day(14), 13);
+    const s = CE.summary({ workouts, checkins, now, season: SEASON });
+    eq('thirteen perfect days earn one', s.streak.freezesLeft, 1);
+  }
+}
+
+section('freeze: auto-spend on the only day that needs saving');
+{
+  const perfect = d => checkin({ steps: 8000, proteinG: 140, waterMl: 3000, sleepH: 7 });
+
+  // Perfect days 1–7 (freeze banked at day 7), blank day 8, active
+  // (imperfect) day 9; "now" is day 10 with nothing logged yet — so
+  // today is pending and the freeze must already be spent, streak intact.
+  const now = dateObj(day(10));
+  const workouts = [], checkins = {};
+  for (let n = 1; n <= 7; n++) { workouts.push(workout(day(n), 'Pull')); checkins[day(n)] = perfect(day(n)); }
+  workouts.push(workout(day(9), 'Push'));
+  // day 8 left entirely blank — neither workout nor check-in.
+
+  const s = CE.summary({ workouts, checkins, now, season: SEASON });
+  eq('auto-spent freeze keeps the season streak alive', s.streak.current, 9);
+  eq('freeze shows as spent', s.streak.freezeUsed[day(8)], true);
+  // The spend is derived, not persisted: recomputing on the same record
+  // must produce the identical plan, and the ledger must hold what the
+  // UI quotes ("Freeze used day 8 · 0 left").
+  const again = CE.summary({ workouts, checkins, now, season: SEASON });
+  eq('auto-spend is deterministic on recompute', again.streak.freezeUsed, s.streak.freezeUsed);
+  eq('ledger: bank was empty after the spend', s.streak.freezeSpends[day(8)], 0);
+  eq('freezesLeft reports the empty bank', s.streak.freezesLeft, 0);
+
+  // Had the bank held TWO freezes going into the gap (14 perfect days
+  // earn at days 7 and 14), one spare survives the spend — and the
+  // ledger for the spend day says exactly what the UI shows: "1 left".
+  {
+    const ws2 = [], cs2 = {};
+    for (let n = 1; n <= 14; n++) { ws2.push(workout(day(n), 'Pull')); cs2[day(n)] = perfect(day(n)); }
+    ws2.push(workout(day(16), 'Push'));
+    // day 15 blank; now = day 17 (pending)
+    const s2 = CE.summary({
+      workouts: ws2, checkins: cs2, now: dateObj(day(17)), season: SEASON
+    });
+    eq('a spare freeze survives the auto-spend', s2.streak.freezesLeft, 1);
+    eq('ledger then shows one left', s2.streak.freezeSpends[day(15)], 1);
+    eq('streak bridges the gap through the freeze', s2.streak.current, 16);
+  }
+}
+
+section('freeze: no earn, no spend — an empty bank cannot save a streak');
+{
+  const now = dateObj(day(10));
+  // Active days 9–10, blank day 8, active days 5–7 — no perfect week
+  // anywhere, so nothing was ever earned.
+  const workouts = [9, 10, 5, 6, 7].map(n => workout(day(n), 'Pull'));
+  const s = CE.summary({ workouts, checkins: {}, now, season: SEASON });
+  eq('unearned freeze is never auto-spent', s.streak.freezeUsed[day(8)], undefined);
+  eq('streak still breaks at the gap', s.streak.current, 2);
+  eq('freezesLeft stays 0', s.streak.freezesLeft, 0);
+}
+
+section('freeze: at most two in the bank even after many perfect weeks');
+{
+  const now = dateObj(day(30));
+  const perfect = d => checkin({ steps: 8000, proteinG: 140, waterMl: 3000, sleepH: 7 });
+  const workouts = [], checkins = {};
+  for (let n = 1; n <= 29; n++) { workouts.push(workout(day(n), 'Pull')); checkins[day(n)] = perfect(day(n)); }
+  const s = CE.summary({ workouts, checkins, now, season: SEASON });
+  eq('29 perfect days still cap at two freezes', s.streak.freezesLeft, 2);
+}
+
+/* ── Weekly digest ─────────────────────────────────────────── */
+
+section('weekly digest — local, season-gated');
+{
+  const now = dateObj(day(40));           // whatever weekday that is
+  const monday = WA.weekStart(day(40));
+  const perfect = d => checkin({ steps: 8000, proteinG: 140, waterMl: 3000, sleepH: 8 });
+  const checkins = { [monday]: perfect(monday) };
+  const workouts = [workout(monday, 'Pull'), workout(WA.addDays(monday, 1), 'Push')];
+  const ctx = CE.buildContext({ workouts, checkins, now, season: SEASON, goals: WA.defaultGoals() });
+  const d = CE.weeklyDigest(ctx);
+  eq('digest week starts Monday', d.from, monday);
+  eq('digest ends today', d.to, ctx.today);
+  ok('digest counts the two workouts', d.workouts === 2);
+  eq('sleep avg from logged days only', d.sleepAvg, 8);
+  ok('best day is the perfect Monday', d.bestDay && d.bestDay.date === monday);
+  // Mobility is the one habit not logged anywhere this week.
+  ok('weakest habit is the never-logged one', d.weakest && d.weakest.key === 'mobilityMin');
+
+  // Season gate: data before the season must not inflate the digest.
+  const preSeason = WA.addDays(SEASON.start, -3);
+  const ctxPre = CE.buildContext({
+    workouts: [workout(preSeason, 'Pull')], checkins: { [preSeason]: perfect(preSeason) },
+    now: dateObj(SEASON.start), season: SEASON
+  });
+  const dPre = CE.weeklyDigest(ctxPre);
+  eq('out-of-season workout excluded', dPre.workouts, 0);
+  ok('digest window never reaches before the season',
+     dPre.days >= 1 && WA.daysBetween(dPre.from, SEASON.start) <= 6 && dPre.from <= SEASON.start);
+  // ...and its day list is season-gated day-for-day.
+  {
+    const gateDays = CE.daysIn({ from: dPre.from, to: dPre.to })
+      .filter(d => d >= SEASON.start && d <= SEASON.end);
+    eq('only in-season days are counted', dPre.days, gateDays.length);
+  }
+}
+
 /* ── Report ────────────────────────────────────────────────── */
 
 console.log('\n' + '─'.repeat(60));

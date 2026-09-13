@@ -193,13 +193,20 @@ const DAY_TYPES = [
   "Full Body", "Cardio", "Rest Day"
 ];
 
-// Workout Routines Config (for Dropset-style routine cards)
+// Workout Routines Config (for Dropset-style routine cards).
+// Shape: { name, muscles, day, exercises: [name, ...] }. The chip accent
+// derives from `name` via app.js's dayC() token map, so no color key.
 const DEFAULT_ROUTINES = [
-  { name: "Pull", muscles: "Back + Biceps", day: "Monday", color: "var(--c-blue)" },
-  { name: "Push", muscles: "Chest + Triceps", day: "Tuesday", color: "var(--c-red)" },
-  { name: "Shoulders", muscles: "Delts + Traps", day: "Wednesday", color: "var(--c-orange)" },
-  { name: "Legs", muscles: "Quads + Hams + Calves", day: "Thursday", color: "var(--c-green)" },
-  { name: "Upper", muscles: "Chest + Back + Arms", day: "Friday", color: "var(--c-purple)" }
+  { name: "Pull", muscles: "Back + Biceps", day: "Monday",
+    exercises: ["Lat Pulldown", "Seated Cable Row", "Cable Bicep Curl"] },
+  { name: "Push", muscles: "Chest + Triceps", day: "Tuesday",
+    exercises: ["Chest Press", "Incline Dumbbell Press", "Tricep Pushdown"] },
+  { name: "Shoulders", muscles: "Delts + Traps", day: "Wednesday",
+    exercises: ["Shoulder Press", "Lateral Raises", "Face Pull"] },
+  { name: "Legs", muscles: "Quads + Hams + Calves", day: "Thursday",
+    exercises: ["Squats", "Leg Extension", "Leg Curl"] },
+  { name: "Upper", muscles: "Chest + Back + Arms", day: "Friday",
+    exercises: ["Chest Press", "Lat Pulldown", "Cable Bicep Curl"] }
 ];
 
 // Historical data — with canonical names applied

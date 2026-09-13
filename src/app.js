@@ -18,19 +18,20 @@ const dayKey = d => WinterArc.dateStr(d);
 
 function init(){
   bindTheme();
+  bindFriendChallenges(); // form element listeners only — safe before Arc load
   arcLoad();
   if(arcEnrolled())document.documentElement.setAttribute('data-arc','on');
   scheduleArcRollover();
-  window.addEventListener('online',()=>arcFlush());
-  window.addEventListener('pagehide',()=>arcFlush());
   bindLockScreen();
+  arcInvitesRefresh(); // paints cached-empty instantly; real fetch lands post-restore
 }
 
 function startApp() {
   load();loadCX();fillTypes();bindTabs();bindSearch();bindSets();bindActs();
-  bindHist();bindAna();bindSettings();bindModal();bindLibraryModal();bindVolInsights();bindTimer();bindBodyWeight();bindFriend();bindProgressPics();bindArc();bindChallengesBrowser();bindMonkMode();bindArcPromo();bindArcLeaderboard();bindArcCalendar();bindArcGoals();
-  setToday();renderRecent();renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderProfile();renderArc();
+  bindHist();bindAna();bindSettings();bindModal();bindLibraryModal();bindVolInsights();bindTimer();bindBodyWeight();bindFriend();bindProgressPics();bindArc();bindChallengesBrowser();bindMonkMode();bindArcPromo();bindArcLeaderboard();bindArcCalendar();bindArcGoals();bindRoutines();
+  setToday();renderRecent();renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderProfile();renderArc();chBoot();
   restoreSE();
+  bindCardSpotlights();
   
   // Backend-first boot: the RTDB is the source of truth. Merge my cloud
   // doc and pull every followed athlete immediately, then the EventSource
@@ -168,6 +169,7 @@ function renderLockHeatmapPreview() {
 
 /* ── Login Screen (Firebase Auth) ──────────────────────────── */
 function bindLockScreen() {
+  loadRoutines();
   const lockScreen = document.getElementById('lockScreen');
   const form = document.getElementById('loginForm');
   if (!lockScreen || !form) return;
@@ -451,6 +453,143 @@ function positionNavLens(activeBtn, animate = true) {
   lens.style.top = `8px`; // centered vertically in bottom bar
 }
 
+/* ── Motion & Delight helpers (2026 polish) ────────────────────────────── */
+
+// Confetti — the canonical celebrate() helper; guarded so whichever
+// definition of the hook landed first (window.celebrate) wins and nothing
+// double-fires. Parallel PRCelebration code may have installed a simpler
+// fallback under the same name; this one is the spec'd helper.
+if(!window.__celebrate){
+  window.__celebrate=1;
+  window.celebrate=function celebrate(el){
+    try{
+      const anchor=(el&&el.getBoundingClientRect)?el.getBoundingClientRect():null;
+      const cx=anchor?anchor.left+anchor.width/2:window.innerWidth/2;
+      const cy=anchor?anchor.top+anchor.height/2:window.innerHeight*0.4;
+      const n=6+Math.floor(Math.random()*3); // 6-8
+      for(let i=0;i<n;i++){
+        const s=document.createElement('span');
+        s.className='celebrate-bit'+(i%3===1?' alt':i%3===2?' white':'');
+        const ang=Math.random()*Math.PI*2,dist=36+Math.random()*54;
+        s.style.left=cx+'px';s.style.top=cy+'px';
+        s.style.setProperty('--dx',(Math.cos(ang)*dist).toFixed(1)+'px');
+        s.style.setProperty('--dy',(Math.sin(ang)*dist-22).toFixed(1)+'px');
+        document.body.appendChild(s);
+        setTimeout(()=>{ try{s.remove();}catch(_){ } },720);
+      }
+    }catch(_){}
+  };
+}
+
+// countUpTo — rAF count-up with easeOutCubic; no-op under reduced motion.
+// fmtFn(v) controls each frame's text; default String(Math.round(v)).
+function countUpTo(el,target,ms,fmtFn){
+  try{
+    if(!el)return;
+    ms=(ms==null)?800:ms;
+    fmtFn=fmtFn||(v=>String(Math.round(v)));
+    const to=Math.round(Number(target)||0);
+    if(prm()){el.textContent=fmtFn(to);return;}
+    const from=parseFloat(String(el.textContent))||0;
+    if(from===to){el.textContent=fmtFn(to);return;}
+    if(el.__cuRAF)cancelAnimationFrame(el.__cuRAF);
+    const t0=performance.now();
+    const step=now=>{
+      const t=Math.min((now-t0)/ms,1);
+      const e=1-Math.pow(1-t,3);
+      el.textContent=fmtFn(Math.round(from+(to-from)*e));
+      if(t<1)el.__cuRAF=requestAnimationFrame(step);else{el.__cuRAF=null;el.textContent=fmtFn(to);}
+    };
+    step(t0);
+  }catch(_){}
+}
+
+// stampViewStagger — assign --i 0..7 to a view's direct children once per
+// activation so the CSS stagger (calc(var(--i) * 55ms)) reads fresh.
+function stampViewStagger(viewEl){
+  try{
+    if(!viewEl||prm())return;
+    const kids=viewEl.children;
+    for(let i=0;i<kids.length;i++)kids[i].style.setProperty('--i',Math.min(i,7));
+  }catch(_){}
+}
+
+// syncRingStrip — after innerHTML paints a today-card strip, walk its rings
+// and promote each raw --p into the animated --ring-p. The registered 0
+// below seeds the property so the rAF write one frame later is a real
+// transition instead of an initial-value snap.
+function syncRingStrip(container){
+  try{
+    if(!container)return;
+    const chips=container.querySelectorAll('.arc-today-chip');
+    chips.forEach((chip)=>{
+      const raw=chip.style.getPropertyValue('--p');
+      const p=parseFloat(raw)||0;
+      const v=chip.__ringPv==null?null:chip.__ringPv;
+      if(v===p)return;
+      chip.__ringPv=p;
+      // Seed the registered 0 so the first property write below is a real
+      // transition, not an initial-value snap.
+      chip.style.setProperty('--ring-p','0');
+      void chip.offsetWidth;
+      if(chip.__raf)cancelAnimationFrame(chip.__raf);
+      chip.__raf=requestAnimationFrame(()=>{
+        chip.__raf=null;
+        try{chip.style.setProperty('--ring-p',p);}catch(_){ }
+      });
+    });
+  }catch(_){}
+}
+
+// upgradeProfileRing — renderProfile() sets the profile gauge inline
+// (background = full conic string with the score's deg). Without breaking
+// that behaviour, when the score has actually changed we swap in the
+// registered-property track so the next paint animates the sweep.
+let _lastProfileScore=null;
+function upgradeProfileRing(ring,score){
+  try{
+    if(!ring)return;
+    const prev=_lastProfileScore;
+    _lastProfileScore=score;
+    if(prev===null||prm()||prev===score)return; // first paint: renderProfile's inline stands
+    if(!window.CSS||!CSS.registerProperty)return;         // angle transition needs it
+    const targetDeg=Math.max(Math.min(score/150,1)*360,8);
+    const prevDeg =Math.max(Math.min(prev /150,1)*360,8);
+    if(targetDeg===prevDeg)return;
+    ring.style.setProperty('--ring-a',prevDeg+'deg');
+    ring.style.background='conic-gradient(from 220deg, #FF7600, #FFB25A var(--ring-a, 0deg), rgba(255,255,255,0.07) var(--ring-a, 0deg))';
+    void ring.offsetWidth;                                // commit prev frame
+    ring.style.setProperty('--ring-a',targetDeg+'deg');   // transition to now
+  }catch(_){}
+}
+
+// bindCardSpotlights — one delegation listener; rAF-capped --mx/--my writes
+// per card, hover:fine pointers only. Installs once, no re-render cost.
+function bindCardSpotlights(){
+  if(document.__spotlightBound)return;
+  document.__spotlightBound=1;
+  if(!window.matchMedia||!matchMedia('(hover: hover) and (pointer: fine)').matches)return;
+  const frame=new Map();
+  document.addEventListener('pointermove',(e)=>{
+    if(e.pointerType&&e.pointerType!=='mouse')return;
+    const t=e.target&&(e.target.closest?e.target.closest('.card,.glass-card'):null);
+    if(!t)return;
+    if(!frame.get(t)){
+      frame.set(t,true);
+      requestAnimationFrame(()=>{
+        frame.set(t,false);
+        try{
+          const r=t.getBoundingClientRect();
+          if(r.width&&r.height){
+            t.style.setProperty('--mx',(((e.clientX-r.left)/r.width)*100).toFixed(2));
+            t.style.setProperty('--my',(((e.clientY-r.top)/r.height)*100).toFixed(2));
+          }
+        }catch(_){}
+      });
+    }
+  },{passive:true});
+}
+
 function bindTabs(){
   const navs = document.querySelectorAll('.nav-btn, .bot-btn');
   navs.forEach(b=>{
@@ -471,13 +610,43 @@ function bindTabs(){
       
       const container = document.querySelector('.views-container');
       if(container) container.scrollTo({top:0,behavior:'smooth'});
-      
+
       const activeBotBtn = document.querySelector('.bot-btn.on');
       if (activeBotBtn) {
         positionNavLens(activeBotBtn, true);
       }
+
+      // Motion & delight — stagger the newly-visible view + hand its title
+      // to the View Transitions morph when the browser supports either.
+      if(v){
+        stampViewStagger(v);
+        document.querySelectorAll('.view-title').forEach(t=>{t.style.viewTransitionName='';});
+        const t=v.querySelector('.view-title');
+        if(t)t.style.viewTransitionName='view-title';
+        if(!prm()&&document.startViewTransition){try{document.startViewTransition(()=>{});}catch(_){}}
+      }
     });
   });
+
+  // Condense the sticky header once the athlete scrolls into content:
+  // brand shrinks, blur deepens. rAF-throttled so we write style at most
+  // once per frame; the class carries the actual visual rule in CSS, and
+  // the reduced-motion media query simply never transitions.
+  const viewsEl=document.querySelector('.views-container');
+  const headerEl=document.querySelector('.app-header');
+  if(viewsEl&&headerEl){
+    let hdrTick=false;
+    const onScroll=()=>{
+      if(hdrTick)return;
+      hdrTick=true;
+      requestAnimationFrame(()=>{
+        headerEl.classList.toggle('condensed',viewsEl.scrollTop>8);
+        hdrTick=false;
+      });
+    };
+    viewsEl.addEventListener('scroll',onScroll,{passive:true});
+    onScroll();
+  }
 
   // Position lens initially
   setTimeout(() => {
@@ -550,7 +719,8 @@ function arcDefault(){
     xp:0, level:1,
     streak:{current:0,best:0,lastDay:'',freezesLeft:2,freezeUsed:{}},
     badges:{}, seenBadges:{},
-    joinedChallenges:{}, // {challengeId: joinedTs}
+    joinedChallenges:{}, // {challengeId: joinedTs} — catalogue and friend share the map
+    friendChallenges:{}, // {cid: def} — definitions for challenges you created or joined from a friend
     monkMode:false
   };
 }
@@ -654,11 +824,62 @@ function arcInput(){
 // Recompute from scratch (never incremented — see challenges.js) and fold
 // the derived numbers back into the persisted cache, so a reload shows the
 // same XP/streak/badges without waiting for a recompute.
+//
+// Freeze state is persisted (freezesLeft/freezeUsed + the plan's spend
+// ledger) purely as a CACHE for paint and for ArcSync writes — the engine
+// re-derives all of it from the record on every pass, so a workout edit
+// that un-does (or creates) a gap self-corrects without any migration.
 function arcRecompute(){
   if(!ARC)arcLoad();
+  const prevLevel=ARC.level||1;           // BEFORE, for the level-up check below
+  const prevSpendCount=Object.keys((ARC.streak&&ARC.streak.freezeUsed)||{}).length;
   const sum=ChallengeEngine.summary(arcInput());
   ARC.xp=sum.xp; ARC.level=sum.level.level;
   ARC.streak.current=sum.streak.current; ARC.streak.best=sum.streak.best; ARC.streak.lastDay=sum.streak.lastDay;
+  ARC.streak.freezesLeft=sum.streak.freezesLeft; ARC.streak.freezeUsed=sum.streak.freezeUsed;
+
+  // Freeze moments, surfaced once per event. Both are gated by the
+  // persisted cache changing, so a plain re-render never re-fires them.
+  const newSpendCount=Object.keys(ARC.streak.freezeUsed||{}).length;
+  if(newSpendCount>prevSpendCount){
+    // Find the spend that just appeared and quote the ledger's remainder.
+    const fresh=Object.keys(ARC.streak.freezeUsed).filter(d=>!(ARC._prevFreezeUsed||{})[d]);
+    const d=fresh.sort().pop();
+    const left=ARC.streak.freezesLeft;
+    toast(`Freeze used ${arcFriendlyDate(d)} · ${left} left`);
+    ARC.freezeSeen=ARC.freezeSeen||{};
+    if(!ARC.freezeSeen.discovered){
+      // One-time discovery: the first freeze EVER earned explains the rule.
+      setTimeout(()=>toast('Streak freezes save a missed day — earn one per perfect week','success'),2800);
+      ARC.freezeSeen.discovered=true;
+    }
+  }
+  ARC._prevFreezeUsed=Object.assign({},ARC.streak.freezeUsed);
+
+  // Freeze-earn moment: fire exactly when the bank grows (per recompute),
+  // distinct from the auto-spend toast above.
+  const prevLeft=(typeof ARC._prevFreezesLeft==='number')?ARC._prevFreezesLeft:0;
+  if(ARC.streak.freezesLeft>prevLeft){
+    ARC.freezeSeen=ARC.freezeSeen||{};
+    if(!ARC.freezeSeen.discovered){
+      setTimeout(()=>toast('Freeze earned — perfect week complete. It will save a missed day automatically.','success'),600);
+      ARC.freezeSeen.discovered=true;
+    } else if(newSpendCount===prevSpendCount){
+      toast(`Freeze earned — ${ARC.streak.freezesLeft} in the bank`,'success');
+    }
+  }
+  ARC._prevFreezesLeft=ARC.streak.freezesLeft;
+
+  if(sum.level.level>prevLevel&&prevLevel>0){
+    // Level-up: one guarded celebration, once per boundary crossing.
+    toast(`Level ${sum.level.level} — ${arcLevelName(sum.level.level)}`,'success');
+    if(!prm()){
+      const chip=document.getElementById('arcLevelChip');
+      if(chip){chip.classList.remove('arc-level-up');void chip.offsetWidth;chip.classList.add('arc-level-up');}
+      buzz([30,60,30]);
+    }
+  }
+
   sum.badges.forEach(id=>{if(!ARC.badges[id])ARC.badges[id]=Date.now();});
   arcSave();
   return sum;
@@ -737,6 +958,7 @@ async function arcFlush(){
     await ArcSync.writeProgress(ARC.seasonId,{xp:ARC.xp,level:ARC.level,streak:ARC.streak,badges:ARC.badges});
     const sum=ChallengeEngine.summary(arcInput());
     await ArcSync.writeArcPublic(ARC.seasonId,arcPublicProjection(sum));
+    await chPushAllMyProgress();
   }catch(_){}
 }
 
@@ -788,7 +1010,7 @@ function arcGoalGridHtml(values){
   return WinterArc.HABITS.map(h=>`
       <div class="arc-goal-item">
         <div class="arc-goal-item-label">${esc(h.label)} ${h.unit?('('+esc(h.unit)+')'):''}</div>
-        <input type="number" class="arc-num" inputmode="decimal" step="${h.step}" min="0" data-goal="${h.key}" value="${v[h.key]!=null?v[h.key]:h.goal}">
+        <input type="number" class="arc-num" inputmode="decimal" autocomplete="off" step="${h.step}" min="0" data-goal="${h.key}" value="${v[h.key]!=null?v[h.key]:h.goal}">
       </div>`).join('');
 }
 
@@ -970,6 +1192,7 @@ function renderArc(){
   renderArcObjectives(sum);
   renderArcCheckin();
   renderArcChallenges(sum);
+  renderArcDigest(sum);
   renderArcBadges(sum);
   renderArcCalPreview();
 }
@@ -1013,6 +1236,13 @@ function renderArcHero(sum){
   document.getElementById('arcLevelName').textContent=arcLevelName(lp.level);
   document.getElementById('arcXpFill').style.width=lp.pct+'%';
   document.getElementById('arcXpLabel').textContent=`${fmtStatNum(lp.into)} / ${fmtStatNum(lp.need)} XP`;
+  const xpEl=document.getElementById('arcXpLabel');
+  if(xpEl&&xpEl.__xpCU==null&&!prm()){
+    xpEl.__xpCU=1;
+    const whole=`${fmtStatNum(lp.into)} / ${fmtStatNum(lp.need)} XP`;
+    xpEl.textContent='0 / '+whole.split(' / ')[1];
+    countUpTo(xpEl,lp.into,700,v=>fmtStatNum(v)+' / '+whole.split(' / ')[1]);
+  }
 }
 
 function renderArcStreak(sum){
@@ -1021,11 +1251,33 @@ function renderArcStreak(sum){
   const numEl=document.getElementById('arcStreakNum');
   const prevNum=parseInt(numEl.textContent,10)||0;
   numEl.textContent=st.current;
+  if(numEl.__stCU==null){numEl.__stCU=1;countUpTo(numEl,st.current,700);}
   if(st.current>prevNum){flame.classList.remove('pulse');void flame.offsetWidth;flame.classList.add('pulse');}
+  if(st.current>prevNum&&[5,7,10,14,21,30,45,60,75,90].includes(st.current)&&!prm())window.celebrate&&window.celebrate(flame);
   document.getElementById('arcStreakBest').textContent=st.best;
-  const freezesLeft=(ARC.streak&&ARC.streak.freezesLeft!=null)?ARC.streak.freezesLeft:2;
-  document.getElementById('arcFreezes').innerHTML=Array.from({length:2},(_,i)=>
+  // Prefer the freshly derived counts from the summary; the persisted
+  // ARC.streak is the same values one paint behind.
+  const cap=st.freezeCap!=null?st.freezeCap:2;
+  const freezesLeft=st.freezesLeft!=null?st.freezesLeft:cap;
+  document.getElementById('arcFreezes').innerHTML=Array.from({length:cap},(_,i)=>
     `<span class="arc-freeze-dot${i<freezesLeft?'':' used'}" title="${i<freezesLeft?'Freeze available':'Freeze used'}"></span>`).join('');
+  // "Freeze used Mon" line — the ledger tells us which days were spent,
+  // and the spend against the EARLIEST bank is the one that reads as
+  // "a freeze saved you this week". Older records predate earning, so
+  // only surface when there's at least one spend to name.
+  const noteEl=document.getElementById('arcFreezeNote');
+  if(noteEl){
+    const spentDays=Object.keys(st.freezeUsed||{}).sort();
+    if(spentDays.length){
+      const latest=spentDays[spentDays.length-1];
+      const wd=WinterArc.parseDay(latest);
+      const wdLabel=wd?wd.toLocaleDateString(undefined,{weekday:'short'}):latest;
+      noteEl.innerHTML=`${arcIcon('star',11)}<span>Freeze used ${esc(wdLabel)} · ${freezesLeft} left</span>`;
+      noteEl.style.display='flex';
+    } else {
+      noteEl.style.display='none';
+    }
+  }
   const risk=document.getElementById('arcStreakRisk');
   risk.style.display=st.atRisk?'block':'none';
 }
@@ -1098,13 +1350,13 @@ function renderArcCheckin(){
     const quick = h.key==='sleepH'
       ? `<div class="arc-quick-row">
            <button class="arc-quick-btn arc-quick-neg" data-delta="-${h.step}">−${h.step}</button>
-           <input type="number" class="arc-quick-custom arc-num" step="${h.step}" min="0" value="${val||''}" placeholder="0">
+           <input type="number" class="arc-quick-custom arc-num" inputmode="decimal" autocomplete="off" step="${h.step}" min="0" value="${val||''}" placeholder="0">
            <button class="arc-quick-btn" data-delta="${h.step}">+${h.step}${h.unit}</button>
          </div>`
       : `<div class="arc-quick-row">
            <button class="arc-quick-btn" data-delta="${h.step}">+${h.step}</button>
            <button class="arc-quick-btn" data-delta="${h.step*2}">+${h.step*2}</button>
-           <input type="number" class="arc-quick-custom arc-num" min="0" value="${val||''}" placeholder="0">
+           <input type="number" class="arc-quick-custom arc-num" inputmode="decimal" autocomplete="off" min="0" value="${val||''}" placeholder="0">
          </div>`;
     const sleepQuality = h.key==='sleepH'
       ? `<div class="arc-sleep-quality" style="margin-top:8px">${Array.from({length:WinterArc.SLEEP_QUALITY_MAX},(_,i)=>
@@ -1240,6 +1492,7 @@ function bindChallengesBrowser(){
     tabs.querySelectorAll('.seg-tab').forEach(x=>x.classList.remove('on'));
     t.classList.add('on');
     chActiveTab=t.dataset.chTab;
+    chDetailId=null;
     renderChallengesBrowser();
   });
 
@@ -1249,24 +1502,424 @@ function bindChallengesBrowser(){
     if(joinBtn){arcJoinChallenge(joinBtn.dataset.join);renderChallengesBrowser();renderArc();toast('Challenge joined','success');return;}
     const leaveBtn=e.target.closest('[data-leave]');
     if(leaveBtn){arcLeaveChallenge(leaveBtn.dataset.leave);renderChallengesBrowser();renderArc();return;}
+    const detail=e.target.closest('[data-ch-detail]');
+    if(detail&&!e.target.closest('button')){
+      chDetailId=detail.dataset.chDetail;
+      chDetailDef=(ARC.friendChallenges||{})[chDetailId]||null;
+      chDetailMembers={};
+      renderChallengesBrowser();
+      return;
+    }
   });
+}
+
+/* ── Friend challenges & invites ─────────────────────────────
+   The UI half of the Phase-2 data model ArcSync already speaks:
+   challenges/ holds shared definitions, challengeMembers/{cid}/{id}
+   each member's own row (name + write-my-progress-only), invites/
+   one pending invite per (invitee, challenge). The engine stays pure:
+   nobody evaluates a friend's data; each client computes ITS OWN
+   progress from W/checkins and PATCHes it up with writeMyProgress —
+   members read each other's rows, never compute them. */
+
+let chInvites=[], chFriends=[], chDetailId=null, chDetailDef=null, chDetailMembers={};
+
+// One number per challenge, from this device's own record only.
+// Defs arriving over the network are untrusted: validate() before they
+// ever reach the engine — same rule as the catalogue's own entries.
+function chEvaluateLocal(def){
+  const errs=ChallengeEngine.validate(def);
+  if(errs.length)return null;
+  const ctx=ChallengeEngine.buildContext(arcInput());
+  return ChallengeEngine.evaluate(ChallengeEngine.resolveDef(def,ctx),ctx);
+}
+
+// Mirror MY row into challengeMembers/{cid}/{me}. Called on detail view
+// entry for the open challenge, and from arcFlush() for EVERY joined
+// friend challenge, so crew scores move when this device logs anything —
+// never when it doesn't. Debounced because check-in quick-adds are bursty.
+let chLastPush=0;
+async function chPushMyProgress(cid,def){
+  if(!cid||!def||!fbCfg().connected||typeof ArcSync==='undefined')return;
+  const now=Date.now();
+  if(now-chLastPush<4000)return;
+  chLastPush=now;
+  try{
+    const r=chEvaluateLocal(def);
+    if(!r)return;
+    await ArcSync.writeMyProgress(cid,{value:Math.round(r.value*100)/100,pct:Math.round(r.pct),done:r.done,doneOn:r.doneOn||'',ts:now,uid:FirebaseSync.getUser().uid});
+  }catch(_){/* offline — the member list just shows a stale row until next push */}
+}
+
+// Every friend challenge I'm in gets its private row refreshed with this
+// device's own evaluation. Runs from arcFlush (after the arc write), so
+// the sync cadence for challenges inherits the existing one instead of
+// inventing a second periodic writer next to it.
+async function chPushAllMyProgress(){
+  const fch=ARC&&ARC.friendChallenges;
+  if(!fch||!Object.keys(fch).length)return;
+  const joined=ARC.joinedChallenges||{};
+  for(const cid of Object.keys(fch)){
+    if(!joined[cid])continue;
+    await chPushMyProgress(cid,fch[cid]);
+  }
+}
+
+const CH_WIN_KINDS=[{kind:'rolling',days:7,label:'Rolling 7 days'},
+                    {kind:'rolling',days:30,label:'Rolling 30 days'},
+                    {kind:'calendarWeek',label:'This calendar week'},
+                    {kind:'fixed',label:'Fixed dates (pick start + end)'}];
+// Metrics the form offers, in "a friend would understand this" order.
+// The engine's full METRIC_IDS list has raw internals (objectivesDone,
+// sleepQ…) that read as nothing in a create form, so this is a curated
+// subset with labels — still validated against METRIC_IDS on submit.
+const CH_METRICS=[
+  {id:'workouts',label:'Workouts'},
+  {id:'activeDay',label:'Active days'},
+  {id:'steps',label:'Steps'},
+  {id:'volume',label:'Volume (kg)'},
+  {id:'cardioMins',label:'Cardio (min)'},
+  {id:'cardioKm',label:'Cardio (km)'},
+  {id:'waterMl',label:'Water (ml)'},
+  {id:'proteinG',label:'Protein (g)'},
+  {id:'sleepH',label:'Sleep (h)'},
+  {id:'mobilityMin',label:'Mobility (min)'},
+  {id:'perfectDay',label:'Perfect days'},
+  {id:'discomfortLogged',label:'Lock In entries'}];
+
+function chMetricLabel(id){
+  const m=CH_METRICS.find(m=>m.id===id);if(m)return m.label;
+  const h=WinterArc.HABITS.find(h=>h.key==id);if(h)return h.label+(h.unit?` (${h.unit})`:'');
+  return id||'';
+}
+
+// From-name for an invite row: the writer only leaves an id, so we resolve
+// through the following list, then the friends cache, then the directory —
+// displaying everyone's real name requires nothing more than those.
+function chFriendName(id){
+  const fromFollowing=(fbCfg().following||[]).find(f=>f.id===id);
+  if(fromFollowing&&fromFollowing.name)return fromFollowing.name;
+  const fc=getFriendsCache().friends[id];
+  if(fc&&fc.name)return fc.name;
+  const dc=getDirectoryCache().find(u=>u.id===id);
+  if(dc&&dc.name)return dc.name;
+  return id;
+}
+
+function bindFriendChallenges(){
+  const form=document.getElementById('chCreateForm');
+  if(form)form.addEventListener('click',e=>{
+    const chip=e.target.closest('[data-ch-invite]');
+    if(chip){chip.classList.toggle('on');return;}
+  });
+
+  const backBtn=document.getElementById('chDetailBack');
+  if(backBtn)backBtn.addEventListener('click',()=>{chDetailId=null;renderChallengesBrowser();});
+  const createTab=document.getElementById('arcCreateChallengeBtn');
+  if(createTab)createTab.addEventListener('click',()=>{
+    chDetailId=null;chActiveTab='friends';
+    const bg=document.getElementById('chBg');if(bg)bg.classList.add('open');
+    renderChallengesBrowser();
+    const sheet=document.getElementById('chSheet');
+    if(sheet)sheet.scrollTo({top:sheet.scrollHeight,behavior:'smooth'});
+  });
+
+  const winSel=document.getElementById('chWinSel');
+  if(winSel)winSel.addEventListener('change',()=>{
+    const dates=document.getElementById('chFixedDates');
+    if(dates)dates.style.display=winSel.value==='fixed'?'grid':'none';
+  });
+
+  const submit=document.getElementById('chSubmitBtn');
+  if(submit)submit.addEventListener('click',chSubmitCreate);
+}
+
+// Create: one shared definition under challenges/, then an invite per
+// selected friend. The creator is already a member by construction —
+// joinChallenge() runs for self first so the detail view has my row
+// with a real avatar before the first progress push lands.
+async function chSubmitCreate(){
+  const title=(document.getElementById('chTitleInput')||{}).value||'';
+  const metric=(document.getElementById('chMetricSel')||{}).value||'';
+  const targetRaw=(document.getElementById('chTargetInput')||{}).value;
+  const winKind=(document.getElementById('chWinSel')||{}).value||'rolling';
+  const errEl=document.getElementById('chCreateErr');
+  function fail(msg){if(errEl){errEl.textContent=msg;errEl.style.display='block';}}
+  if(errEl){errEl.textContent='';errEl.style.display='none';}
+
+  const def={name:title.trim().slice(0,60),desc:'',metric,agg:'sum',
+             target:targetRaw?Math.max(1,Math.round(parseFloat(targetRaw))):null,window:null};
+  // Window resolution: rolling keeps the days picker visible; fixed takes
+  // explicit dates. calendarWeek is the only kind with nothing to ask for.
+  if(winKind==='fixed'){
+    const s=(document.getElementById('chStartInput')||{}).value;
+    const e=(document.getElementById('chEndInput')||{}).value;
+    if(!s||!e){fail('Pick a start and an end date for a fixed window.');return;}
+    if(e<s){fail('End date must be on or after the start date.');return;}
+    def.window={kind:'fixed',start:s,end:e};
+    def.agg='sum';
+  }else if(winKind==='7'){
+    def.window={kind:'rolling',days:7};
+  }else if(winKind==='30'){
+    def.window={kind:'rolling',days:30};
+  }else{
+    def.window={kind:'calendarWeek'};
+  }
+  const errs=ChallengeEngine.validate(def);
+  if(errs.length){fail(errs[0]);return;}
+  if(!fbCfg().connected||typeof ArcSync==='undefined'){fail('Sign in to create a challenge.');return;}
+  if(!def.name){fail('Give the challenge a name.');return;}
+
+  const submit=document.getElementById('chSubmitBtn');
+  if(submit){submit.disabled=true;submit.textContent='Creating…';}
+  try{
+    const cid=await ArcSync.createChallenge(def);
+    if(!cid)throw new Error('no id');
+  const me=fbCfg();
+    await ArcSync.joinChallenge(cid,me.name||me.userId||'Me',me.avatar||'');
+    ARC.friendChallenges=ARC.friendChallenges||{};
+    ARC.friendChallenges[cid]=def;
+    ARC.joinedChallenges=ARC.joinedChallenges||{};
+    ARC.joinedChallenges[cid]=Date.now();
+    arcSave();
+    const picked=[...document.querySelectorAll('#chInviteList [data-ch-invite].on')].map(x=>x.dataset.chInvite);
+    for(const fid of picked){
+      try{await ArcSync.sendInvite(fid,cid);}catch(_){/* one failed invite shouldn't block the rest */}
+    }
+    chDetailId=null;chActiveTab='friends';
+    toast(picked.length?`Challenge created — ${picked.length} invite${picked.length===1?'':'s'} sent`:'Challenge created','success');
+    renderChallengesBrowser();renderArc();
+  }catch(e){
+    fail(e&&e.message==='Challenges not enabled yet'?'Challenges backend is not enabled yet.':'Could not create the challenge — try again.');
+  }finally{
+    if(submit){submit.disabled=false;submit.textContent='Create and invite';}
+  }
+}
+
+// Invites land in TWO places by design: a compact banner inside the
+// sheet itself (the primary surface — you opened the sheet because a
+// red dot was already on your mind) and one compact card in the Social
+// tab's challenges scroll so someone browsing their crew also sees it.
+// Both render from the same chInvites[] cache, so behaviour never forks.
+function renderChInvites(){
+  const sheetHost=document.getElementById('chInvitesWrap');
+  const arcHost=document.getElementById('arcInvitesCard');
+  const inv=chInvites.filter(x=>x&&x.cid);
+  if(sheetHost){
+    if(!inv.length){sheetHost.innerHTML='';sheetHost.style.display='none';}
+    else{
+      sheetHost.style.display='block';
+      sheetHost.innerHTML=inv.map(x=>{
+        const fromName=esc(chFriendName(x.fromId));
+        return `<div class="ch-invite-row" data-cid="${esc(x.cid)}">
+          <div class="ch-invite-copy"><b>${fromName}</b> invited you to a challenge</div>
+          <div class="ch-invite-actions">
+            <button class="btn btn-primary btn-sm ch-invite-accept" data-accept-invite="${esc(x.cid)}">Accept</button>
+            <button class="btn btn-secondary btn-sm ch-invite-decline" data-decline-invite="${esc(x.cid)}">Decline</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+  if(arcHost){
+    if(!inv.length){arcHost.innerHTML='';arcHost.style.display='none';}
+    else{
+      arcHost.style.display='block';
+      arcHost.innerHTML=`<div class="ch-invite-card-head">Challenge invites <span class="ch-invite-count arc-num">${inv.length}</span></div>`+
+        inv.map(x=>{
+          const fromName=esc(chFriendName(x.fromId));
+          return `<div class="ch-invite-row compact" data-cid="${esc(x.cid)}">
+            <div class="ch-invite-copy"><b>${fromName}</b></div>
+            <div class="ch-invite-actions">
+              <button class="btn btn-primary btn-sm ch-invite-accept" data-accept-invite="${esc(x.cid)}">Accept</button>
+              <button class="btn btn-secondary btn-sm ch-invite-decline" data-decline-invite="${esc(x.cid)}">Decline</button>
+            </div>
+          </div>`;
+        }).join('');
+    }
+  }
+}
+
+// Wire the two invite surfaces' buttons. In the real app this is a
+// document-level delegate (the web page wires it inline), but this path
+// runs in tests and non-browser contexts too — the no-document guard
+// keeps the module loadable under Node where test/run.js requires it.
+if(typeof document!=='undefined')document.addEventListener('click',async e=>{
+  const acc=e.target.closest&&e.target.closest('[data-accept-invite]');
+  const dec=e.target.closest&&e.target.closest('[data-decline-invite]');
+  if(!acc&&!dec)return;
+  const btn=acc||dec;const cid=btn.dataset.acceptInvite||btn.dataset.declineInvite;
+  if(!cid)return;
+  btn.disabled=true;
+  try{
+    const inv=chInvites.find(x=>x.cid===cid);
+    const def=inv?await ArcSync.readChallenge(cid):null;
+    if(acc){
+      await ArcSync.respondInvite(cid,true,def);
+      if(def){
+        ARC.friendChallenges=ARC.friendChallenges||{};
+        ARC.friendChallenges[cid]=def;
+        ARC.joinedChallenges=ARC.joinedChallenges||{};
+        ARC.joinedChallenges[cid]=Date.now();
+        arcSave();
+        toast('Challenge joined','success');
+      }else{
+        toast('Invite accepted','success');
+      }
+    }else{
+      await ArcSync.respondInvite(cid,false,def);
+      toast('Invite declined','info');
+    }
+    chInvites=chInvites.filter(x=>x.cid!==cid);
+    renderChInvites();
+    if(!chDetailId)renderChallengesBrowser();
+    renderArc();
+  }catch(_){
+    btn.disabled=false;
+    toast('Could not respond to the invite — try again','error');
+  }
+});
+
+// Friend rows are the only mutable part of the challenges browser that
+// isn't recomputable client-side, so detail view polls lightly while
+// open and always re-reads on the sheet opening.
+async function chPullFriendDetail(){
+  if(!chDetailId)return;
+  try{
+    const def=chDetailDef||await ArcSync.readChallenge(chDetailId);
+    if(def){chDetailDef=def;ARC.friendChallenges=ARC.friendChallenges||{};ARC.friendChallenges[chDetailId]=def;arcSave();}
+    const members=await ArcSync.readMembers(chDetailId);
+    chDetailMembers=members||{};
+    renderChDetailBody();
+    chPushMyProgress(chDetailId,chDetailDef); // my own row lands with everyone else's
+  }catch(_){/* offline or rules tight — the cached members list still renders */}
+}
+
+let chDetailTimer=null;
+function chStopDetailTimer(){if(chDetailTimer){clearInterval(chDetailTimer);chDetailTimer=null;}}
+
+function renderChDetailBody(){
+  const body=document.getElementById('chDetailBody');
+  if(!body)return;
+  const def=chDetailDef;
+  if(!def){body.innerHTML='<div class="ch-list-empty">Loading…</div>';return;}
+
+  document.getElementById('chDetailTitle').textContent=def.name||'Challenge';
+  document.getElementById('chDetailMeta').textContent=
+    (def.window&&def.window.kind==='fixed'
+      ? `${def.window.start} → ${def.window.end}`
+      : def.window&&def.window.kind==='calendarWeek'?'This calendar week'
+      : def.window&&def.window.kind==='rolling'?`Rolling ${def.window.days} days`
+      : 'Season');
+
+  const mine=chEvaluateLocal(def);
+  const target=def.target!=null?def.target:null;
+  const rows=Object.entries(chDetailMembers).map(([id,m])=>{
+    const isMe=id===ArcSync.myId();
+    const name=esc((m&&m.name)||id);
+    const val=m&&m.progress?m.progress.value:0;
+    const pct=target?Math.min(100,(val/target)*100):(val>0?35:4);
+    const done=m&&m.progress&&m.progress.done;
+    const meTag=isMe?' <span class="ch-member-you">you</span>':'';
+    return {id,name,val,pct,done,meTag,isMe,mine:isMe?mine:null};
+  }).sort((a,b)=>(b.val||0)-(a.val||0));
+
+  body.innerHTML=rows.length?rows.map((r,i)=>{
+    const rank=i+1;
+    const crown=r.done?'<span class="ch-member-done">done</span>':'';
+    const mineHtml=r.isMe&&r.mine
+      ? `<div class="ch-member-sub">your progress · ${r.mine.target?`${fmtStatNum(r.mine.value)} / ${fmtStatNum(r.mine.target)}`:fmtStatNum(r.mine.value)}</div>`
+      : '';
+    return `<div class="ch-member-row${r.isMe?' me':''}${r.done?' done':''}">
+      <div class="ch-member-rank arc-num">${rank}</div>
+      <div class="ch-member-avatar" style="background:${avatarBgOf(r.id)}">${avatarHtmlOf(r.id,(r.name||r.id))}</div>
+      <div class="ch-member-main">
+        <div class="ch-member-name">${r.name}${r.meTag}${crown}</div>
+        ${mineHtml}
+        <div class="ch-member-track"><div class="ch-member-fill${r.done?' over':''}" data-w="${Math.round(r.pct)}%" style="width:0%"></div></div>
+      </div>
+      <div class="ch-member-val arc-num">${target?`${fmtStatNum(r.val)} / ${fmtStatNum(target)}`:fmtStatNum(r.val)}</div>
+    </div>`;
+  }).join(''):`<div class="ch-list-empty">No members yet — accept your invite.</div>`;
+  arcAnimateFills(body);
 }
 
 function renderChallengesBrowser(){
   const list=document.getElementById('chList');
   if(!list||!arcEnrolled())return;
+  chStopDetailTimer();
+
+  // Detail view hijacks the sheet entirely — tabs and the form are all
+  // part of the list-level state, so returning from detail is a tab
+  // switch ("Friends of"), not a stack pop.
+  if(chDetailId){
+    const head=document.getElementById('chDetailHead');
+    if(head)head.style.display='flex';
+    if(document.getElementById('chTabs'))document.getElementById('chTabs').style.display='none';
+    list.innerHTML='';
+    document.getElementById('chInvitesWrap').style.display='none';
+    document.getElementById('chCreatePane').style.display='none';
+    const pane=document.getElementById('chDetailPane');
+    if(pane)pane.style.display='block';
+    renderChDetailBody();
+    chPullFriendDetail();
+    chDetailTimer=setInterval(chPullFriendDetail,8000);
+    return;
+  }
+  const headEl=document.getElementById('chDetailHead');
+  if(headEl)headEl.style.display='none';
+  const tabsEl=document.getElementById('chTabs');
+  if(tabsEl)tabsEl.style.display='flex';
+  const pane=document.getElementById('chDetailPane');
+  if(pane)pane.style.display='none';
+
   const sum=ChallengeEngine.summary(arcInput());
   const joined=ARC.joinedChallenges||{};
 
+  // All four tab bodies share the sheet's three-pane layout — invites on
+  // top when there are any, the catalogue-or-friend list in the middle,
+  // and the create form pinned at the bottom. Per-tab, only the list
+  // changes; everything else is the same chrome.
+  const wrap=document.getElementById('chInvitesWrap');
+  if(wrap)wrap.style.display=chInvites.length?'block':'none';
+  const createPane=document.getElementById('chCreatePane');
+  if(createPane)createPane.style.display='block';
+  chFillFormOnce();
+
+  if(chActiveTab==='friends'){
+    const friendRows=Object.keys(ARC.friendChallenges||{}).map(cid=>{
+      const def=ARC.friendChallenges[cid];
+      if(!def||typeof def!=='object')return '';
+      const local=chEvaluateLocal(def);
+      const pct=local?arcChallengePct(local):4;
+      return `<div class="ch-card card glass-card" data-ch-detail="${esc(cid)}">
+        <div class="ch-card-icon">${arcIcon(def.icon||'flame',17)}</div>
+        <div class="ch-card-body">
+          <div class="ch-card-name">${esc(def.name||'')}</div>
+          <div class="ch-card-desc">${esc(def.desc||chMetricLabel(def.metric))}</div>
+          <div class="ch-card-track"><div class="ch-card-fill" data-w="${pct}%" style="width:0%"></div></div>
+          <div class="ch-card-meta">
+            <span>${local&&local.target?`${fmtStatNum(local.value)} / ${fmtStatNum(local.target)}`:local?fmtStatNum(local.value)+' logged':''}</span>
+            <span>${local&&local.expired?'ended':local&&local.daysLeft!=null?local.daysLeft+'d left':''}</span>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    list.innerHTML=friendRows||`<div class="ch-list-empty">No active challenges — start one and invite the crew.</div>`;
+    arcAnimateFills(list);
+    return;
+  }
+
+  // Catalogue tabs, exactly as before — the only change is the panes
+  // surrounding them.
   let rows;
   if(chActiveTab==='active'){
     rows=sum.challenges.filter(c=>joined[c.def.id]&&!c.done&&!c.expired);
   }else if(chActiveTab==='done'){
     rows=sum.challenges.filter(c=>joined[c.def.id]&&c.done);
-  }else{ // available
+  }else{
     rows=sum.challenges.filter(c=>!joined[c.def.id]);
   }
-
   if(!rows.length){
     const msg={active:'No active challenges — join one from Available',
                done:'Nothing completed yet — keep going',
@@ -1278,6 +1931,59 @@ function renderChallengesBrowser(){
   list.innerHTML=rows.map(c=>arcChallengeCard(c,{action})).join('');
   arcAnimateFills(list);
 }
+
+// Invite chips render from the friends cache lazily — reading it during
+// bind would paint an empty form on a cold boot before the directory
+// has landed.
+let chInviteChipsBound=false;
+function bindChInviteChipsOnce(){
+  if(chInviteChipsBound)return;
+  const host=document.getElementById('chInviteList');
+  if(!host)return;
+  chInviteChipsBound=true;
+  chFriends=(fbCfg().following||[]).map(f=>({id:f.id,name:f.name}));
+  if(!chFriends.length){
+    host.innerHTML='<div class="ch-invite-empty">Follow someone to invite them — find the crew from Account > Find Friends.</div>';
+    return;
+  }
+  host.innerHTML=chFriends.map(f=>
+    `<span class="ch-invite-chip" data-ch-invite="${esc(f.id)}">${esc(f.name||f.id)}</span>`
+  ).join('');
+}
+
+// Select options are derived from runtime lists (habits), so the form fills
+// itself the first time the sheet paints rather than shipping duplicate
+// option markup in index.html that could drift out of sync with winter.js.
+let chFormFilled=false;
+function chFillFormOnce(){
+  if(chFormFilled)return;
+  chFormFilled=true;
+  const metricSel=document.getElementById('chMetricSel');
+  if(metricSel)metricSel.innerHTML=CH_METRICS.map(m=>`<option value="${m.id}">${m.label}</option>`).join('');
+  const winSel=document.getElementById('chWinSel');
+  if(winSel)winSel.innerHTML=CH_WIN_KINDS.map(w=>`<option value="${w.kind==='rolling'?w.days:w.kind}">${w.label}</option>`).join('');
+  const startI=document.getElementById('chStartInput'),endI=document.getElementById('chEndInput');
+  const today=WinterArc.todayStr();
+  if(startI&&!startI.value)startI.value=today;
+  if(endI&&!endI.value)endI.value=WinterArc.addDays(today,6);
+  bindChInviteChipsOnce();
+}
+
+// Invites are the one cross-account surface that must be visible even
+// while the sheet is closed (the compact card inside the Arc dashboard),
+// so they're pulled once at boot and again every time the Social tab
+// opens — an interval would be dead weight for a surface that changes
+// exactly when someone else taps "invite you".
+function arcInvitesRefresh(){
+  if(!fbCfg().connected||typeof ArcSync==='undefined')return;
+  ArcSync.readInvites().then(inv=>{
+    chInvites=Object.entries(inv||{}).map(([cid,v])=>Object.assign({cid},v));
+    renderChInvites();
+    const bg=document.getElementById('chBg');
+    if(bg&&bg.classList.contains('open')&&chActiveTab==='friends'&&!chDetailId)renderChallengesBrowser();
+  }).catch(()=>{});
+}
+function chBoot(){arcInvitesRefresh();}
 
 function renderArcBadges(sum){
   const label=document.getElementById('arcBadgesLabel');
@@ -1292,6 +1998,10 @@ function renderArcBadges(sum){
       <div class="arc-badge-name">${esc(def?def.name:id)}</div>
     </div>`;
   }).join('');
+  if(!document.__badgesRevealed&&earnedIds.length&&!prm()){
+    document.__badgesRevealed=1;
+    strip.querySelectorAll('.arc-badge-chip').forEach((chip,i)=>{ setTimeout(()=>{ try{window.celebrate&&window.celebrate(chip);}catch(_){}},i*140); });
+  }
 }
 
 /* ── Winter Arc: Social leaderboard ───────────────────────────
@@ -1329,6 +2039,11 @@ function saveArcFriendEntry(id,data){
 // boundary flipped with the habits block: the privacy guarantee lives in
 // WHAT GETS WRITTEN here, not (only) in who can read what.
 function arcPublicProjection(sum){
+  // Season-gate regression guard: everything public here is either a
+  // summary number (engine-derived from ARC.checkins + W inside the
+  // season) or arcHabitProjection(), which filters every per-day lookup
+  // through inSeason(). If you add ANY per-day aggregation above the
+  // line, the gate lives in arcHabitProjection — do not bypass it.
   return {
     day:sum.day||0,
     streak:sum.streak.current,
@@ -1642,6 +2357,24 @@ function renderArcLeaderboard(){
   }
   heroHtml+=arcHeroMicroHtml(rows);
   if(heroEl)heroEl.innerHTML=heroHtml;
+  // First-run count-up on the Arc hero's numeric cell — the score one
+  // can actually chase — without re-triggering on every refresh.
+  if(heroEl&&heroEl.__heroCounted==null&&!prm()){
+    heroEl.__heroCounted=1;
+    const first=heroEl.querySelector('.arc-lb-row');
+    if(first){
+      const cell=first.querySelector('.arc-lb-cell');
+      if(cell){
+        const firstText=cell.textContent;
+        const m=firstText.match(/(\d+)/);
+        if(m){
+          const v=+m[0];
+          cell.textContent=firstText.replace(/\d+/,'0');
+          countUpTo(cell,v,700,x=>firstText.replace(/\d+/,String(x)));
+        }
+      }
+    }
+  }
 
   /* (c) Everyone today: five %-of-own-goal mini rings off the habits
      block + a workout tick + the sleep score beneath, me pinned first. */
@@ -1649,6 +2382,7 @@ function renderArcLeaderboard(){
     const strip=[...rows].sort((a,b)=>(b.me?1:0)-(a.me?1:0));
     stripEl.innerHTML=strip.map(r=>arcTodayCardHtml(r)).join('');
     stripEl.style.display='';
+    syncRingStrip(stripEl);
   }
 
   /* (b) Per-stat leaderboard. Old metrics unchanged; habit metrics read
@@ -1860,6 +2594,117 @@ function arcNextAction(sum){
     return `${Math.round(Math.min(100,c0.pct))}% through "${c0.def.name}" — keep going`;
   }
   return 'Perfect day. Rest well — the Arc continues tomorrow.';
+}
+
+/* ── Weekly digest + local correlation nudge ────────────────
+   Computed entirely from local state (checkins + W), no network. The
+   numbers come from ChallengeEngine.weeklyDigest (pure, season-gated);
+   this function only turns them into sentences and paints them. */
+
+function renderArcDigest(sum){
+  const card=document.getElementById('arcDigestCard');
+  if(!card||!arcEnrolled())return;
+  const ctx=arcBuildCalCtx(); // one indexed context, shared with the calendar
+  const d=ChallengeEngine.weeklyDigest(ctx);
+  const g=ARC.goals||WinterArc.defaultGoals();
+
+  // Sentences, in plain words, one per line.
+  const lines=[];
+  lines.push({
+    icon:'dumbbell',
+    text: d.workouts>=d.workoutsGoal
+      ? `${d.workouts} workout${d.workouts===1?'':'s'} logged — weekly goal ${d.workoutsGoal} hit.`
+      : `${d.workouts} of ${d.workoutsGoal} workout${d.workoutsGoal===1?'':'s'} so far this week.`
+  });
+  if(d.sleepDays>0){
+    const diff=Math.round((d.sleepAvg-d.sleepGoal)*10)/10;
+    lines.push({
+      icon:'moon',
+      text: diff>=0
+        ? `Sleep averaged ${d.sleepAvg}h — ${diff===0?'right at':`${diff}h over`} your ${d.sleepGoal}h goal.`
+        : `Sleep averaged ${d.sleepAvg}h — ${Math.abs(diff)}h short of your ${d.sleepGoal}h goal.`
+    });
+  } else {
+    lines.push({icon:'moon',text:'No sleep logged yet this week.'});
+  }
+  if(d.bestDay){
+    lines.push({icon:'star',text:`Best day: ${arcFriendlyDate(d.bestDay.date)} — ${d.bestDay.objectivesDone} of ${sum.objectivesTotal||4} objectives.`});
+  }
+  if(d.weakest){
+    lines.push({
+      icon:'droplet',
+      text: d.weakest.loggedDays===0
+        ? `${d.weakest.label} hasn't been logged this week — that's the weakest habit right now.`
+        : `${d.weakest.label} is the weakest habit at ~${d.weakest.avgPct}% of goal.`
+    });
+  }
+  const st=sum.streak;
+  lines.push({
+    icon:'flame',
+    text: st.atRisk
+      ? `Streak is at risk — log something today to keep ${st.current} alive.`
+      : st.todayDone
+        ? `Streak safe for today — ${st.current} day${st.current===1?'':'s'} running.`
+        : `Streak at ${st.current}; today is still open.`
+  });
+
+  // Correlation nudges — pick the strongest local pairing this week.
+  const nudge=arcDigestNudge(ctx,g,d);
+  const html=`<div class="arc-digest-head">${arcIcon('star',14)}<span>Your week so far</span></div>`+
+    `<div class="arc-digest-lines">${lines.map(l=>
+      `<div class="arc-digest-line"><span class="arc-digest-ic">${arcIcon(l.icon,13)}</span><span>${esc(l.text)}</span></div>`
+    ).join('')}</div>`+
+    (nudge?`<div class="arc-digest-nudge">${esc(nudge)}</div>`:'');
+  card.innerHTML=html;
+}
+
+// At most one insight per week, only when the data supports it. Guarded
+// by "needs >=10 logged days" in the season so a sparse first-week record
+// doesn't pretend to say something it can't back.
+function arcDigestNudge(ctx,g,digest){
+  if(!ctx||!digest)return null;
+  const s=ctx.season;
+  // Count season-gated days with anything logged.
+  const inS=dd=>!s||(dd>=s.start&&dd<=s.end);
+  const logged=Object.keys(ctx.checkins||{}).filter(dd=>inS(dd));
+  if(logged.length<10)return null;
+  const from=WinterArc.addDays(ctx.today,-13);
+  const days=ChallengeEngine.daysIn({from,to:ctx.today}).filter(inS);
+  const f=d2=>ctx.facts[d2]||ChallengeEngine.dayFacts(null,null,ctx.goals);
+  const workoutDone=d2=>f(d2).workouts>0||f(d2).steps>=g.steps||f(d2).cardioMins>=15;
+
+  // Pair A: short sleep (< goal) vs missed Move next day.
+  let shortSleep=0, missedAfter=0;
+  // Pair B: steps-goal-met vs same-day quality sleep.
+  let stepsMet=0, stepsQuality=0, stepsMiss=0, stepsMissQuality=0;
+  days.forEach(dd=>{
+    const c=ctx.checkins[dd];
+    if(!c)return;
+    const sleepShort=(Number(c.sleepH)||0)< (g.sleepH||7);
+    const nxt=WinterArc.addDays(dd,1);
+    if(days.indexOf(nxt)>=0){
+      if(sleepShort){ shortSleep++; if(!workoutDone(nxt))missedAfter++; }
+    }
+    const stepsHit=(Number(c.steps)||0)>=(g.steps||8000);
+    const qualityGood=(Number(c.sleepQ)||0)>=4;
+    if(stepsHit){ stepsMet++; if(qualityGood)stepsQuality++; }
+    else { stepsMiss++; if(qualityGood)stepsMissQuality++; }
+  });
+
+  const nudges=[];
+  if(shortSleep>=3){
+    nudges.push({
+      strength:missedAfter/shortSleep,
+      text:`On ${missedAfter} of ${shortSleep} short-sleep nights, the next day's Move objective went missing. Protect the run after a late night.`
+    });
+  }
+  if(stepsMet>=3&&stepsMiss>=1){
+    const diff=Math.round(((stepsQuality/Math.max(1,stepsMet))-(stepsMissQuality/Math.max(1,stepsMiss)))*100);
+    if(diff>=15)nudges.push({strength:diff/100,text:`Days you hit ${g.steps||8000} steps come with better-rested sleep ratings (+${diff}%).`});
+  }
+  if(!nudges.length)return null;
+  nudges.sort((a,b)=>b.strength-a.strength);
+  return nudges[0].text;
 }
 
 /* ── Season Calendar ───────────────────────────────────────── */
@@ -2364,7 +3209,7 @@ function renderHeatmapCalendar(){
     selectDay(W[0].date);
   } else {
     const detailsEl = document.getElementById('heatmapDayDetails');
-    if (detailsEl) detailsEl.textContent = 'Tap a cell to view workout details & stats';
+    if (detailsEl) detailsEl.innerHTML = `Log your first session to start the streak. <button type="button" class="btn btn-primary btn-sm" style="margin-left:8px" onclick="document.querySelector('.bot-btn[data-v=&quot;Log&quot;]')&&document.querySelector('.bot-btn[data-v=&quot;Log&quot;]').click()">Start</button>`;
   }
 
   // On narrow screens the grid scrolls — land on the newest weeks so
@@ -3080,12 +3925,16 @@ function renderProfile(){
   if(ring){
     const deg=Math.max(Math.min(score/150,1)*360,8);
     ring.style.background=`conic-gradient(from 220deg, #FF7600, #FFB25A ${deg}deg, rgba(255,255,255,0.07) ${deg}deg)`;
+    upgradeProfileRing(ring,score);
   }
   const pill=document.getElementById('profScorePill');
   if(pill){
     pill.style.display='';
     const num=document.getElementById('profScoreNum');
-    if(num)num.textContent=score;
+    if(num){
+      num.textContent=score;
+      if(num.__mpCUP==null){num.__mpCUP=1;countUpTo(num,score);}
+    }
     pill.classList.toggle('approx',!bw);
     pill.title=bw
       ?`ASCA Score — weekly volume ÷ your body weight (${bw} kg): you moved ${score}× your body weight this week`
@@ -3101,6 +3950,18 @@ function renderProfile(){
   const el=document.getElementById('profFollowers');
   if(el)el.textContent=getFollowers().length;
   document.getElementById('profFollowing').textContent=cfg.following.length;
+  // First-paint delight: count up the hero stat row once, values except
+  // the volume label (its '8.3k' shorthand string would break a raw
+  // parseFloat). Subsequent renders stay snappy and plain.
+  if(!document.__heroStatsCounted){
+    document.__heroStatsCounted=1;
+    const heroPairs=[['profWorkouts',sessions.length],
+     ['profWeek',+periodStats(W).week||0],
+     ['profFollowers',getFollowers().length],
+     ['profFollowing',(cfg.following||[]).length]];
+    heroPairs.forEach(([id,v])=>{ const n=document.getElementById(id); if(n)n.textContent='0'; });
+    heroPairs.forEach(([id,v])=>{ const n=document.getElementById(id); if(n)countUpTo(n,v); });
+  }
 
   // Same GitHub-style activity monitor as Social/mini-profile, always
   // rebuilt from live local workouts so today's session shows instantly.
@@ -3181,12 +4042,17 @@ function buildLBRows(){
     stats.bw=bw;
     // Score follows the selected timeframe: that period's volume ÷ body weight
     stats.score=ascaScore(stats.volume,bw);
-    return {id,name,me,stats,workouts,bw};
+    // Signed up but never logged: no sessions and no session-bearing rest
+    // days. Ranked normally (zeros) but rendered as "waiting" — a friendly
+    // placeholder instead of an accusatory 0 score.
+    const pending=!me
+      &&!(workouts||[]).some(w=>w&&w.dayType!=='Rest Day'
+          &&Array.isArray(w.exercises)&&w.exercises.length);
+    return {id,name,me,stats,workouts,bw,pending};
   };
   return [mk(fb.userId,myName,true,W,myBW()),
     ...ids.map(id=>mk(id,cache.friends[id].name||id,false,cache.friends[id].workouts||[],cache.friends[id].bw||0))];
-}
-function metricVal(stats,m){
+}function metricVal(stats,m){
   const v={score:stats.score,vol7:stats.volume,week:stats.workouts,sets7:stats.sets,cardio:stats.cardioMins,consistency:stats.streak}[m];
   return v===undefined?stats.volume:v; // 0 is a real value (e.g. 0-day streak), not a miss
 }
@@ -3205,10 +4071,29 @@ function renderPodium(rows,metric){
     return `<div class="podium-item rank-${rank}" data-uid="${esc(r.id)}">
       <div class="podium-avatar" style="background:${avatarBgOf(r.id)}">${avatarHtmlOf(r.id,r.name)}<div class="podium-medal">${medals[origIdx]||''}</div></div>
       <div class="podium-name">${esc(r.name)}${r.me?' <span class="lb-you">You</span>':''}</div>
-      <div class="podium-val">${fmtStatNum(v)} <span>${metricLabel(metric)}</span></div>
+      <div class="podium-val">${r.pending?'<span class="lb-pending">not started yet</span>':`${fmtStatNum(v)} <span>${metricLabel(metric)}</span>`}</div>
       <div class="podium-pedestal"></div></div>`;
   }).join('');
   podium.querySelectorAll('.podium-item').forEach(el=>el.addEventListener('click',()=>showMiniProfile(el.dataset.uid)));
+  if(podium.__cuDone==null&&!prm()){
+    podium.__cuDone=1;
+    podium.querySelectorAll('.podium-val').forEach(el=>{
+      const txt=el.textContent;
+      const m=txt.match(/([\d,.]+)/);
+      if(!m)return;
+      const raw=m[0].replace(/,/g,'');
+      const suffix=txt.slice(txt.indexOf(m[0])+m[0].length);
+      if(raw.endsWith('k')){
+        const target=parseFloat(raw.slice(0,-1))*1000;
+        el.textContent=txt.replace(m[0],'0');
+        countUpTo(el,target,700,v=>fmtStatNum(v)+suffix);
+      }else{
+        const target=parseFloat(raw)||0;
+        el.textContent=txt.replace(m[0],'0');
+        countUpTo(el,target,700,v=>String(Math.round(v))+suffix);
+      }
+    });
+  }
 }
 
 function renderLeaderboardRows(rows,metric){
@@ -3226,11 +4111,34 @@ function renderLeaderboardRows(rows,metric){
       <div class="lb-avatar" style="background:${avatarBgOf(r.id)}">${avatarHtmlOf(r.id,r.name)}</div>
       <div class="lb-main">
         <div class="lb-name">${esc(r.name)}${r.me?'<span class="lb-you">You</span>':''}${sparklineSvg(r.stats.spark,r.me?'#FF6B00':'#0A84FF')}</div>
-        <div class="lb-bar"><div class="lb-fill" style="width:${Math.max((v/maxV)*100,2)}%"></div></div>
+        <div class="lb-bar"><div class="lb-fill" style="width:${r.pending?2:Math.max((v/maxV)*100,2)}%"></div></div>
       </div>
-      <div class="lb-val">${fmtStatNum(v)} <span>${metricLabel(metric)}</span></div></div>`;
+      <div class="lb-val">${r.pending?'<span class="lb-pending">Waiting for their first workout</span>':`${fmtStatNum(v)} <span>${metricLabel(metric)}</span>`}</div></div>`;
   }).join('');
   cmp.querySelectorAll('.lb-row').forEach(el=>el.addEventListener('click',()=>showMiniProfile(el.dataset.uid)));
+  if(cmp.__cuDone==null&&!prm()){
+    cmp.__cuDone=1;
+    cmp.querySelectorAll('.lb-val').forEach(el=>{
+      const html=el.innerHTML;const txt=el.textContent;
+      if(html.includes('lb-pending'))return;
+      const m=txt.match(/([\d,.]+)/);
+      if(!m)return;
+      const raw=m[0].replace(/,/g,'');
+      const label=el.querySelector('span');
+      const suffix=label?label.outerHTML:'';
+      if(raw.endsWith('k')){
+        const target=parseFloat(raw.slice(0,-1))*1000;
+        el.textContent='0';
+        if(suffix)el.insertAdjacentHTML('beforeend',suffix);
+        countUpTo(el.firstChild,target,700,v=>fmtStatNum(v));
+      }else{
+        const target=parseFloat(raw)||0;
+        el.textContent='0';
+        if(suffix)el.insertAdjacentHTML('beforeend',suffix);
+        countUpTo(el.firstChild,target,700,v=>String(Math.round(v)));
+      }
+    });
+  }
 }
 
 function gymHeatmapHtml(id,name,workouts,score,bare){
@@ -3253,7 +4161,7 @@ function gymHeatmapHtml(id,name,workouts,score,bare){
     // Cardio-only days count too — intensity is the stronger of the two ratios
     if(v>0||cm>0||dateSet.has(ds)){const r=Math.max(v/maxV,cm/maxC);lvl=r>0.7?'g-4':r>0.4?'g-3':r>0.15?'g-2':'g-1';}
     const tip=cm>0?`${ds} · ${cm} min cardio${v>0?` · ${Math.round(v)} kg`:''}`:v>0?`${ds} · ${Math.round(v)} kg`:ds;
-    dots+=`<div class="gym-heatmap-dot ${lvl}${cm>0?' g-cardio':''}" title="${tip}"></div>`;}
+    dots+=`<div class="gym-heatmap-dot ${lvl}${cm>0?' g-cardio':''}${ds===dayKey(today)?' today':''}" title="${tip}"></div>`;}
   const header=bare===true
     ?`<div class="gym-activity-header gym-activity-header-bare"><div class="gym-activity-streak">${streak?'🔥 '+streak+' day streak':''}</div></div>`
     :`<div class="gym-activity-header">
@@ -3403,7 +4311,7 @@ function renderActivityFeed(allRows){
           ${cd.kcal>0?`<div class="feed-stat feed-stat-cardio"><b>${cd.kcal}</b><span>kcal</span></div>`:''}
           <div class="feed-stat"><b>${sets}</b><span>sets</span></div>
           <div class="feed-stat"><b>${w.exercises.length}</b><span>exercise${w.exercises.length===1?'':'s'}</span></div>
-          ${prName?`<div class="feed-stat feed-stat-pr"><b>🏆 PR</b><span>${esc(prName)}</span></div>`:''}
+          ${prName?`<span class="pr-pill" title="Top lift of all time · ${esc(prName)}">🏆 New PR · ${esc(prName)}</span>`:''}
         </div>
         ${route?`<div class="feed-route"><span class="feed-route-dot" style="background:${dtc}"></span>${esc(route)}${w.exercises.length>3?` +${w.exercises.length-3}`:''}</div>`:''}
         <div class="feed-detail" style="display:none">${detail}</div>
@@ -3434,24 +4342,42 @@ function renderActivityFeed(allRows){
     el.classList.toggle('on',open);el.setAttribute('aria-expanded',open?'true':'false');
   }));
   hydrateFeedSocial(recent);
+  if(recent.__prRevealed==null&&!prm()){
+    recent.__prRevealed=1;
+    recent.querySelectorAll('.feed-stat-pr').forEach((el,i)=>{
+      setTimeout(()=>{ try{window.celebrate&&window.celebrate(el);}catch(_){}},i*120);
+    });
+  }
 }
 
 /* ── Feed social: kudos + comments (RTDB kudos/ + comments/ nodes) ──
    Reads are best-effort; if the extended DB rules aren't published yet
-   these no-op and the counts stay a dim dot. */
+   the read rejects and the count settles back to a dim dot carrying a
+   "sync rules limited" tooltip instead of pretending to be a zero. */
 function socialReady(){return typeof FirebaseSync!=='undefined'&&FirebaseSync.isConnected&&FirebaseSync.isConnected();}
 function hydrateFeedSocial(container){
-  if(!socialReady())return;
+  // The '·' placeholder is ambiguous — it reads as "zero" — so swap in an
+  // animated skeleton while the count loads, then resolve to the real
+  // number, or to the dim dot + tooltip when the rules deny the read.
+  container.querySelectorAll('.feed-kudo .kudo-count, .feed-comment .comment-count')
+    .forEach(c=>{if(c.textContent.trim()==='·')c.innerHTML='<i class="sk-dot"></i>';});
+  if(!socialReady()){
+    container.querySelectorAll('.feed-kudo .kudo-count, .feed-comment .comment-count').forEach(c=>{
+      c.textContent='·';c.title='sync rules limited';});
+    return;
+  }
   container.querySelectorAll('.feed-kudo').forEach(async btn=>{
+    const c=btn.querySelector('.kudo-count');
     try{const k=await FirebaseSync.readKudos(btn.dataset.owner,btn.dataset.date);
-      const c=btn.querySelector('.kudo-count');if(c)c.textContent=k.count;
+      if(c)c.textContent=k.count;
       btn.classList.toggle('on',!!k.mine);
-    }catch(_){}
+    }catch(_){if(c){c.textContent='·';c.title='sync rules limited';}}
   });
   container.querySelectorAll('.feed-comment').forEach(async btn=>{
+    const c=btn.querySelector('.comment-count');
     try{const list=await FirebaseSync.readComments(btn.dataset.owner,btn.dataset.date);
-      const c=btn.querySelector('.comment-count');if(c)c.textContent=list.length;
-    }catch(_){}
+      if(c)c.textContent=list.length;
+    }catch(_){if(c){c.textContent='·';c.title='sync rules limited';}}
   });
 }
 async function handleKudo(btn){
@@ -3521,7 +4447,15 @@ function showMiniProfile(userId){
   scrollHeatmapsToLatest(content);
   const followBtn=document.getElementById('mpFollow');const unfollowBtn=document.getElementById('mpUnfollow');
   if(followBtn)followBtn.addEventListener('click',()=>{const c=FirebaseSync.getConfig();if(!c.following.some(f=>f.id===userId)){FirebaseSync.updateConfig({following:[...c.following,{id:userId,name:name}]});toast('Following @'+userId,'success');closeMiniProfile();renderFriendsCard();fbPush(false);startRealtimeSync();fbPullFollowing(false);arcPullFollowingPublic();}});
-  if(unfollowBtn)unfollowBtn.addEventListener('click',()=>{const c=FirebaseSync.getConfig();FirebaseSync.updateConfig({following:c.following.filter(f=>f.id!==userId)});stopStream(userId);removeFriendEntry(userId);toast('Unfollowed @'+userId);closeMiniProfile();renderFriendsCard();fbPush(false);});
+  if(unfollowBtn)unfollowBtn.addEventListener('click',()=>{const c=FirebaseSync.getConfig();const entry=(c.following||[]).find(f=>f.id===userId)||{id:userId,name:name};FirebaseSync.updateConfig({following:c.following.filter(f=>f.id!==userId)});stopStream(userId);removeFriendEntry(userId);closeMiniProfile();renderFriendsCard();fbPush(false);
+    toastUndo('Unfollowed @'+userId,8,()=>{
+      const c2=FirebaseSync.getConfig();
+      if(c2.following.some(f=>f.id===userId))return;
+      FirebaseSync.updateConfig({following:[...c2.following,entry]});
+      renderFriendsCard();fbPush(false);startRealtimeSync();fbPullFollowing(false);
+      toast('Following @'+userId+' again','success');
+    });
+  });
   bg.classList.add('open');bg.addEventListener('click',e=>{if(e.target===bg)closeMiniProfile();},{once:true});
 }
 function closeMiniProfile(){const bg=document.getElementById('miniProfileBg');if(bg)bg.classList.remove('open');}
@@ -3783,10 +4717,10 @@ function renderSets(){
         </button>
         <div class="stepper-wrap">
           <button class="stepper-btn" data-i="${i}" data-d="-${stepVal}">−</button>
-          <input type="number" class="set-input" data-i="${i}" data-f="weight" value="${s.weight||''}" placeholder="${placeholder}" step="${isL ? 1 : 0.5}" inputmode="decimal" ${s.completed?'disabled':''}>
+          <input type="number" class="set-input" data-i="${i}" data-f="weight" value="${s.weight||''}" placeholder="${placeholder}" step="${isL ? 1 : 0.5}" inputmode="decimal" autocomplete="off" ${s.completed?'disabled':''}>
           <button class="stepper-btn" data-i="${i}" data-d="${stepVal}">+</button>
         </div>
-        <input type="number" class="set-input" data-i="${i}" data-f="reps" value="${s.reps||''}" placeholder="reps" inputmode="numeric" ${s.completed?'disabled':''}>
+        <input type="number" class="set-input" data-i="${i}" data-f="reps" value="${s.reps||''}" placeholder="reps" inputmode="numeric" autocomplete="off" ${s.completed?'disabled':''}>
         <button class="set-del" data-i="${i}" aria-label="Delete set">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -3806,7 +4740,10 @@ function renderSets(){
   g.querySelectorAll('.stepper-btn').forEach(b=>b.addEventListener('click',e=>{
     const idx=+e.currentTarget.dataset.i,d=parseFloat(e.currentTarget.dataset.d);
     eSets[idx].weight=Math.max(0,(eSets[idx].weight||0)+d);
-    renderSets();
+    // Update the row's numeric input in place — a full renderSets() rebuild
+    // here would yank focus/caret out of any notes textarea mid-edit.
+    const inp=g.querySelector(`.set-input[data-i="${idx}"][data-f="weight"]`);
+    if(inp)inp.value=eSets[idx].weight===0?'':eSets[idx].weight;
   }));
 
   g.querySelectorAll('.set-input').forEach(inp=>{
@@ -3827,11 +4764,23 @@ function renderSets(){
       const currentNote = eSets[idx].notes || '';
       if (currentNote.includes(val)) return;
       eSets[idx].notes = currentNote ? `${currentNote}, ${val}` : val;
-      renderSets();
+      // Append to the existing textarea in place (keeps its caret),
+      // growing it rather than paying a full renderSets() rebuild.
+      const ta=g.querySelector(`textarea.set-notes-input[data-i="${idx}"]`);
+      if(ta){ta.value=eSets[idx].notes;autoGrowNote(ta);}
     });
   });
 
-  g.querySelectorAll('.set-del').forEach(b=>b.addEventListener('click',e=>{eSets.splice(+e.currentTarget.dataset.i,1);renderSets();}));
+  g.querySelectorAll('.set-del').forEach(b=>b.addEventListener('click',()=>{
+    const wIdx=+b.dataset.i;
+    const removed=eSets.splice(wIdx,1)[0];
+    renderSets();
+    toastUndo('Set deleted',8,()=>{
+      eSets.splice(Math.min(wIdx,eSets.length),0,removed);
+      renderSets();
+      toast('Set restored','success');
+    });
+  }));
 
   g.querySelectorAll('.btn-set-check').forEach(btn => {
     btn.addEventListener('click', e => {
@@ -3869,9 +4818,9 @@ function renderCardioSets(g){
         <button class="btn-set-check ${s.completed?'completed':''}" data-i="${i}" aria-label="Toggle interval completion">
           ${s.completed?`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><polyline points="20 6 9 17 4 12"/></svg>`:i+1}
         </button>
-        <input type="number" class="set-input" data-i="${i}" data-f="mins" value="${s.mins||''}" placeholder="min" min="0" step="1" inputmode="decimal" ${s.completed?'disabled':''}>
-        <input type="number" class="set-input" data-i="${i}" data-f="km" value="${s.km||''}" placeholder="km" min="0" step="0.1" inputmode="decimal" ${s.completed?'disabled':''}>
-        <input type="number" class="set-input" data-i="${i}" data-f="kcal" value="${s.kcal||''}" placeholder="kcal" min="0" step="1" inputmode="numeric" ${s.completed?'disabled':''}>
+        <input type="number" class="set-input" data-i="${i}" data-f="mins" value="${s.mins||''}" placeholder="min" min="0" step="1" inputmode="decimal" autocomplete="off" ${s.completed?'disabled':''}>
+        <input type="number" class="set-input" data-i="${i}" data-f="km" value="${s.km||''}" placeholder="km" min="0" step="0.1" inputmode="decimal" autocomplete="off" ${s.completed?'disabled':''}>
+        <input type="number" class="set-input" data-i="${i}" data-f="kcal" value="${s.kcal||''}" placeholder="kcal" min="0" step="1" inputmode="numeric" autocomplete="off" ${s.completed?'disabled':''}>
         <button class="set-del" data-i="${i}" aria-label="Delete interval">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -3879,9 +4828,9 @@ function renderCardioSets(g){
         </button>
       </div>
       <div class="cardio-extra-row">
-        <div class="cardio-extra-field"><span>Speed</span><input type="number" class="set-input" data-i="${i}" data-f="speed" value="${s.speed||''}" placeholder="km/h" min="0" step="0.1" inputmode="decimal" ${s.completed?'disabled':''}></div>
-        <div class="cardio-extra-field"><span>Incline</span><input type="number" class="set-input" data-i="${i}" data-f="incline" value="${s.incline||''}" placeholder="%" min="0" step="0.5" inputmode="decimal" ${s.completed?'disabled':''}></div>
-        <div class="cardio-extra-field"><span>Avg HR</span><input type="number" class="set-input" data-i="${i}" data-f="hr" value="${s.hr||''}" placeholder="bpm" min="0" step="1" inputmode="numeric" ${s.completed?'disabled':''}></div>
+        <div class="cardio-extra-field"><span>Speed</span><input type="number" class="set-input" data-i="${i}" data-f="speed" value="${s.speed||''}" placeholder="km/h" min="0" step="0.1" inputmode="decimal" autocomplete="off" ${s.completed?'disabled':''}></div>
+        <div class="cardio-extra-field"><span>Incline</span><input type="number" class="set-input" data-i="${i}" data-f="incline" value="${s.incline||''}" placeholder="%" min="0" step="0.5" inputmode="decimal" autocomplete="off" ${s.completed?'disabled':''}></div>
+        <div class="cardio-extra-field"><span>Avg HR</span><input type="number" class="set-input" data-i="${i}" data-f="hr" value="${s.hr||''}" placeholder="bpm" min="0" step="1" inputmode="numeric" autocomplete="off" ${s.completed?'disabled':''}></div>
         <div class="cardio-pace-badge">${pace?`⏱ ${pace}`:''}</div>
       </div>
       <div class="set-notes-wrap cardio-notes-wrap">
@@ -3911,10 +4860,22 @@ function renderCardioSets(g){
       const cur=eSets[idx].notes||'';
       if(cur.includes(val))return;
       eSets[idx].notes=cur?`${cur}, ${val}`:val;
-      renderSets();
+      // Same in-place update as the weight editor — a renderSets() rebuild
+      // here drops the notes caret mid-edit for no visual benefit.
+      const ta=g.querySelector(`textarea.set-notes-input[data-i="${idx}"]`);
+      if(ta){ta.value=eSets[idx].notes;autoGrowNote(ta);}
     });
   });
-  g.querySelectorAll('.set-del').forEach(b=>b.addEventListener('click',e=>{eSets.splice(+e.currentTarget.dataset.i,1);renderSets();}));
+  g.querySelectorAll('.set-del').forEach(b=>b.addEventListener('click',()=>{
+    const wIdx=+b.dataset.i;
+    const removed=eSets.splice(wIdx,1)[0];
+    renderSets();
+    toastUndo('Interval deleted',8,()=>{
+      eSets.splice(Math.min(wIdx,eSets.length),0,removed);
+      renderSets();
+      toast('Interval restored','success');
+    });
+  }));
   g.querySelectorAll('.btn-set-check').forEach(btn=>{
     btn.addEventListener('click',e=>{
       const idx=+e.currentTarget.dataset.i;
@@ -3987,14 +4948,199 @@ function renderLogged(){
     el.appendChild(c);
   });
   el.querySelectorAll('[data-rm]').forEach(b=>b.addEventListener('click',e=>{
-    SE.splice(+e.currentTarget.dataset.rm,1);persistSE();renderLogged();
+    const idx=+e.currentTarget.dataset.rm;
+    const removed=SE.splice(idx,1)[0];
+    persistSE();renderLogged();
     if(!SE.length)document.getElementById('acts').style.display='none';
+    toastUndo('Exercise removed',8,()=>{
+      SE.splice(Math.min(idx,SE.length),0,removed);
+      persistSE();renderLogged();
+      document.getElementById('acts').style.display='flex';
+      toast('Exercise restored','success');
+    });
   }));
   el.querySelectorAll('[data-tog]').forEach(b=>b.addEventListener('click',e=>{
     const idx=+e.currentTarget.dataset.tog;
     SE[idx].sets.forEach(s=>{s.isLevel=!s.isLevel;});
     persistSE();renderLogged();
   }));
+}
+
+/* ── Routines ────────────────────────────────────────────── */
+// LOCAL-ONLY by design. Routines stay under RK in localStorage (plain
+// JSON, like the SE session cache) and in the JSON export below; the
+// gym/{syncId} cloud doc is NOT extended. Write: FirebaseSync.writeDoc
+// builds its payload from a fixed field list, so an extra `routines`
+// key would mean touching the write path; read: normalizeDocData
+// whitelists keys and would have to re-emit them, else the next fbPush
+// under `ts` wins and silently wipes them; plus pushSignature and the
+// "no data loss" fbRestore merge would need routines-awareness. That is
+// schema work beyond an additive key — and database.rules.json gates
+// every child collection of gym/{userId} with its own validators, so a
+// tolerate-an-extra-key answer there is really "add validated child
+// nodes", a shared-rules change with the sibling Vault app. Not worth
+// it for MVP: routines are templates, not history.
+
+let RT=[], rtOpen=-1, rtEditing=null;
+const RT_CAP=8;
+
+function loadRoutines(){
+  RT=[];
+  try{const d=localStorage.getItem(RK);if(d)RT=JSON.parse(d)||[];}catch(_){RT=[];}
+  if(!Array.isArray(RT)||!RT.length)RT=(typeof DEFAULT_ROUTINES!=='undefined'?DEFAULT_ROUTINES:[]).map(r=>({...r}));
+  persistRoutines();
+}
+function persistRoutines(){try{localStorage.setItem(RK,JSON.stringify(RT));}catch(_){}}
+
+function renderRoutines(){
+  const chips=document.getElementById('rtChips');if(!chips)return;
+  chips.innerHTML='';
+  if(!RT.length){
+    chips.innerHTML='<span class="routine-chip rt-empty">No routines yet — the queue you repeat is a routine. Tap + New Routine.</span>';
+    rtOpen=-1;renderRtDetail();return;
+  }
+  RT.forEach((r,i)=>{
+    const b=document.createElement('button');
+    b.type='button';
+    b.className='routine-chip'+(i===rtOpen?' on':'');
+    const dd=document.createElement('span');
+    dd.className='rt-dot badge-'+dayC(r.name||'');
+    b.appendChild(dd);
+    const tn=document.createElement('span');
+    tn.textContent=r.name;
+    b.appendChild(tn);
+    b.addEventListener('click',()=>{rtOpen=(rtOpen===i)?-1:i;rtEditing=null;renderRoutines();});
+    chips.appendChild(b);
+  });
+  renderRtDetail();
+}
+
+function renderRtDetail(){
+  const d=document.getElementById('rtDetail');if(!d)return;
+  if(rtOpen<0||rtOpen>=RT.length){d.style.display='none';d.innerHTML='';return;}
+  const r=RT[rtOpen];
+  d.style.display='block';
+  d.innerHTML=`<div class="rt-detail">
+    <div style="margin-top:var(--space-3)">
+      <div class="rt-detail-title">${esc(r.name)}</div>
+      <div class="rt-detail-muscles">${esc(r.muscles||'')}${r.day?' · '+esc(r.day):''} · ${r.exercises.length} exercise${r.exercises.length===1?'':'s'}</div>
+    </div>
+    <div class="rt-form-list" style="margin-top:var(--space-3)">
+      ${r.exercises.map(n=>`<div class="routine-ex-row"><span class="routine-ex-name">${esc(n)}</span></div>`).join('')}
+    </div>
+    <div class="routine-detail-actions">
+      <button type="button" class="btn btn-primary rt-start">Start Routine</button>
+      <button type="button" class="btn btn-ghost btn-sm rt-edit">Edit</button>
+      <button type="button" class="btn btn-ghost btn-sm rt-del">Delete</button>
+    </div>
+  </div>`;
+  d.querySelector('.rt-start').addEventListener('click',()=>startRoutine(rtOpen));
+  d.querySelector('.rt-edit').addEventListener('click',()=>{rtEditing=JSON.parse(JSON.stringify(r));renderRoutineForm();});
+  d.querySelector('.rt-del').addEventListener('click',()=>{
+    showM(`Delete "${r.name}"?`,'This routine is removed from your list. Workouts already logged are untouched.',()=>{
+      RT.splice(rtOpen,1);persistRoutines();rtOpen=-1;renderRoutines();toast('Routine deleted');
+    });
+  });
+}
+
+function startRoutine(i){
+  const r=RT[i];if(!r)return;
+  const queue=r.exercises.filter(n=>!SE.some(e=>e.name===canonicalName(n)));
+  if(SE.length&&queue.length){
+    showM('Start "'+r.name+'"?','Starting a routine will keep your current sets and add these exercises.',()=>applyRoutine(r));
+  }else applyRoutine(r);
+}
+
+function applyRoutine(r){
+  r.exercises.forEach(n=>{
+    const name=canonicalName(n);
+    if(SE.some(e=>e.name===name))return;
+    if(isCardioExercise(name)){
+      const lc=lastCardio(name);
+      SE.push({name,sets:[{cardio:true,mins:lc.mins,km:lc.km,kcal:lc.kcal,speed:lc.speed,incline:lc.incline,hr:lc.hr,weight:null,reps:null,notes:''}]});
+    }else{
+      const lw=lastW(name);
+      SE.push({name,sets:[1,2,3].map(()=>({weight:lw,reps:null,notes:''}))});
+    }
+  });
+  persistSE();renderLogged();
+  document.getElementById('acts').style.display='flex';
+  buzz(10);toast('Routine added to session','success');
+}
+
+function renderRoutineForm(prefill){
+  openRtForm(prefill||null);
+}
+
+function renderRtRow(name,mus,day){
+  return {name,muscles:mus||'',day:day||'',exercises:[]};
+}
+
+function openRtForm(base){
+  const d=document.getElementById('rtDetail');if(!d)return;
+  const r=base?JSON.parse(JSON.stringify(base)):renderRtRow('','','');
+  const isNew=!base;
+  if(isNew&&RT.length>=RT_CAP){
+    toast(`Max ${RT_CAP} routines — delete one first`,'error');
+    return;
+  }
+  rtEditing=r;
+  rtOpen=-1;
+  if(isNew){
+    const chips=document.getElementById('rtChips');
+    if(chips)chips.querySelectorAll('.routine-chip.on').forEach(c=>c.classList.remove('on'));
+  }
+  d.style.display='block';
+  d.innerHTML=`<div class="rt-form">
+    <input type="text" class="input-field rt-f-name" placeholder="Routine name (e.g. Pull)" value="${esc(r.name)}" maxlength="30" style="margin-top:var(--space-3)">
+    <div class="form-row" style="margin-top:var(--space-3);margin-bottom:0">
+      <input type="text" class="input-field rt-f-muscles" placeholder="Muscles (e.g. Back + Biceps)" value="${esc(r.muscles||'')}" maxlength="40">
+      <input type="text" class="input-field rt-f-day" placeholder="Day (e.g. Monday)" value="${esc(r.day||'')}" maxlength="12">
+    </div>
+    <div class="rt-form-list" style="margin-top:var(--space-3)"></div>
+    <button type="button" class="btn btn-ghost btn-sm rt-add-btn">+ Add Exercise</button>
+    <div class="routine-detail-actions" style="margin-top:var(--space-3)">
+      <button type="button" class="btn btn-primary rt-start rt-save">Save</button>
+      <button type="button" class="btn btn-ghost btn-sm rt-cancel">Cancel</button>
+    </div>
+  </div>`;
+  const list=d.querySelector('.rt-form-list');
+  const addRow=(name)=>{
+    if(list.children.length>=12)return;
+    const row=document.createElement('div');
+    row.className='rt-form-ex';
+    row.innerHTML=`<input type="text" class="input-field" placeholder="Exercise name" value="${esc(name||'')}" maxlength="60"><button type="button" class="btn btn-ghost btn-sm rt-row-btn" title="Remove">✕</button>`;
+    row.querySelector('.rt-row-btn').addEventListener('click',()=>row.remove());
+    list.appendChild(row);
+    const inp=row.querySelector('input');
+    inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addRow('');}});
+    return inp;
+  };
+  (r.exercises.length?r.exercises:['']).forEach((n)=>{addRow(n);});
+  d.querySelector('.rt-add-btn').addEventListener('click',()=>{
+    const inp=addRow('');
+    if(inp)inp.focus();
+    if(list.children.length>12)toast('Keep routines to 12 exercises max','error');
+  });
+  d.querySelector('.rt-save').addEventListener('click',()=>{
+    const nm=d.querySelector('.rt-f-name').value.trim();
+    if(!nm){toast('Name the routine','error');return;}
+    const exs=[...list.querySelectorAll('input')].map(i=>i.value.trim()).filter(Boolean).map(canonicalName);
+    if(!exs.length){toast('Add at least one exercise','error');return;}
+    const nr={name:nm,muscles:d.querySelector('.rt-f-muscles').value.trim(),day:d.querySelector('.rt-f-day').value.trim(),exercises:exs};
+    if(isNew){if(RT.length>=RT_CAP){toast(`Max ${RT_CAP} routines — delete one first`,'error');return;}RT.push(nr);rtOpen=RT.length-1;}
+    else if(rtOpen<0){RT.push(nr);rtOpen=RT.length-1;}
+    else {RT[rtOpen]=nr;}
+    persistRoutines();rtEditing=null;renderRoutines();toast(isNew?'Routine created':'Routine updated','success');
+  });
+  d.querySelector('.rt-cancel').addEventListener('click',()=>{rtEditing=null;renderRoutines();});
+  setTimeout(()=>{const f=d.querySelector('.rt-f-name');if(f)f.focus();},60);
+}
+
+function bindRoutines(){
+  const b=document.getElementById('rtAddBtn');
+  if(b)b.addEventListener('click',()=>openRtForm(null));
+  renderRoutines();
 }
 
 /* ── Actions ───────────────────────────────────────────────── */
@@ -4027,12 +5173,18 @@ async function finish(){
   try{
     const wo={date:d,dayType:t,exercises:batch};
     const idx=W.findIndex(w=>w.date===d);
+    // Snapshot PRs BEFORE the merge mutates W, so the comparison basis
+    // (registry merged with a history scan) can't see the very sets
+    // under test. The day's own pre-existing sets still count as
+    // "previous", so the W scan simply excludes the target date.
+    const newPRs=detectSessionPRs(batch,W,d);
     if(idx>=0){wo.exercises=mergeExercises(W[idx].exercises,batch);W[idx]=wo;}else W.unshift(wo);
     W.sort((a,b)=>b.date.localeCompare(a.date));save();
     const synced=fbCfg().connected?await fbPush(false):false;
     toast(synced?'Saved & Synced':'Saved locally','success');
     // Session complete is the day's one real payoff — make it land.
     buzz([14,40,14]);
+    if(newPRs.length)celebratePRs(newPRs,d);
     eEx=null;eSets=[];document.getElementById('se').style.display='none';
     document.getElementById('acts').style.display='none';renderLogged();
     // renderFriendsCard covers the profile + Social leaderboard/activity
@@ -4055,6 +5207,115 @@ function mergeExercises(existing,batch){
     else out.push({...ex,sets:[...(ex.sets||[])]});
   });
   return out;
+}
+
+/* ── PR detection + celebrations ─────────────────────────── */
+/* A personal record is per canonical exercise, over three axes: heaviest
+   weight moved, best single-set estimate-of-1RM (Epley: w*(1+r/30)), and
+   best total set volume (w×r). Cardio sets never qualify. The comparison
+   basis is the last-PR registry merged with a scan of the rest of W, so a
+   record first set on another device (which wrote history but not this
+   browser's localStorage) is still respected. */
+const PR_KINDS={weight:'Heaviest lift',e1rm:'Est. 1-rep max',volume:'Best set volume'};
+function prBestOf(name,sets,best){
+  (sets||[]).forEach(s=>{
+    if(!s||isCardioSet(s))return;
+    const wv=getSetWeightVal(s),r=parseInt(s.reps)||0;
+    if(wv>0&&wv>best.weight)best.weight=wv;
+    if(wv>0&&r>0){
+      const e=wv*(1+r/30);
+      if(e>best.e1rm)best.e1rm=e;
+      if(wv*r>best.volume)best.volume=wv*r;
+    }
+  });
+  return best;
+}
+function prRegistryKey(name){return 'asca_gym_pr_'+String(name||'').toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');}
+function prRegistryLoad(key){
+  let reg=null;
+  try{const raw=localStorage.getItem(prRegistryKey(key));if(raw)reg=JSON.parse(raw);}catch(_){}
+  return (reg&&typeof reg==='object')?reg:null;
+}
+// Contract from the feature brief: compare `sets` against the merged best
+// for `exerciseName` and hand back each axis that moved as
+// {type:'weight'|'e1rm'|'volume',exercise,old,new}.
+function detectPRs(exerciseName,sets){
+  const key=canonicalName(exerciseName);
+  const basis={weight:0,e1rm:0,volume:0};
+  const reg=prRegistryLoad(key);
+  if(reg){basis.weight=Math.max(0,+reg.weight)||0;basis.e1rm=Math.max(0,+reg.e1rm)||0;basis.volume=Math.max(0,+reg.volume)||0;}
+  (W||[]).forEach(wo=>{if(!wo)return;(wo.exercises||[]).forEach(ex=>{if(canonicalName(ex.name)===key)prBestOf(key,ex.sets,basis);});});
+  const fresh=prBestOf(key,sets,{weight:0,e1rm:0,volume:0});
+  const isPR=[];
+  ['weight','e1rm','volume'].forEach(axis=>{
+    if(fresh[axis]>basis[axis]+1e-9)isPR.push({type:axis,exercise:key,old:+basis[axis].toFixed(2),new:+fresh[axis].toFixed(2)});
+  });
+  return {isPR};
+}
+// Finish-flow wrapper: runs BEFORE the session is merged into W, so the
+// history scan only fills the registry's blind spot — entries logged on
+// THIS device that a localStorage clear or a private window would hide.
+function detectSessionPRs(batch,history,date){
+  const newPRs=[];
+  (batch||[]).forEach(ex=>{
+    if(!ex||!ex.name)return;
+    const key=canonicalName(ex.name);
+    const basis={weight:0,e1rm:0,volume:0};
+    const reg=prRegistryLoad(key);
+    if(reg){basis.weight=Math.max(0,+reg.weight)||0;basis.e1rm=Math.max(0,+reg.e1rm)||0;basis.volume=Math.max(0,+reg.volume)||0;}
+    (history||[]).forEach(wo=>{if(!wo)return;
+      (wo.exercises||[]).forEach(e=>{if(canonicalName(e.name)===key)prBestOf(key,e.sets,basis);});});
+    const fresh=prBestOf(key,ex.sets,{weight:0,e1rm:0,volume:0});
+    ['weight','e1rm','volume'].forEach(axis=>{
+      if(fresh[axis]>basis[axis]+1e-9)newPRs.push({type:axis,exercise:key,old:+basis[axis].toFixed(2),new:+fresh[axis].toFixed(2)});
+    });
+    // Fold the newly best axis into the registry whether or not it beat
+    // the basis — the registry tracks the best KNOWN mark either way.
+    const next={weight:Math.max(basis.weight,fresh.weight),e1rm:Math.max(basis.e1rm,fresh.e1rm),
+      volume:Math.max(basis.volume,fresh.volume),date};
+    try{localStorage.setItem(prRegistryKey(key),JSON.stringify(next));}catch(_){}
+  });
+  return newPRs;
+}
+// Shared celebration hook: another agent ships window.celebrate(el) (a
+// confetti/scale-pop helper). While that hook is absent this installs a
+// minimal self-contained particle burst under the same name — guarded so
+// whichever definition lands first wins and nothing double-fires.
+if(!window.__celebrate){
+  window.__celebrate=1;
+  window.celebrate=window.celebrate||function(el){
+    try{
+      const anchor=(el&&el.getBoundingClientRect)?el.getBoundingClientRect():null;
+      const cx=anchor?anchor.left+anchor.width/2:window.innerWidth/2;
+      const cy=anchor?anchor.top+anchor.height/2:window.innerHeight*0.4;
+      const layer=document.createElement('div');layer.className='pr-confetti';
+      const colors=['#FFB300','#FF7600','#FF3B77','#64D2FF','#30D158'];
+      for(let i=0;i<16;i++){
+        const p=document.createElement('span');p.className='pr-confetti-p';
+        const ang=Math.random()*Math.PI*2,dist=44+Math.random()*72;
+        p.style.left=cx+'px';p.style.top=cy+'px';
+        p.style.background=colors[i%colors.length];
+        p.style.setProperty('--dx',(Math.cos(ang)*dist).toFixed(1)+'px');
+        p.style.setProperty('--dy',(Math.sin(ang)*dist-30).toFixed(1)+'px');
+        p.style.animationDelay=(Math.random()*0.06).toFixed(3)+'s';
+        layer.appendChild(p);
+      }
+      document.body.appendChild(layer);
+      setTimeout(()=>layer.remove(),800);
+    }catch(_){}
+  };
+}
+function celebratePRs(newPRs,date){
+  toast(`🏆 New PR${newPRs.length>1?'s':''} — ${newPRs.map(p=>{
+    const mark=p.type==='volume'?`${fmtStatNum(p.new)} kg total`:`${p.new}kg`;
+    return `${p.exercise} ${PR_KINDS[p.type]} ${mark}`;
+  }).join(' · ')}`.slice(0,140),'success');
+  try{
+    const finBtn=document.getElementById('fin');
+    (window.celebrate||function(){})(finBtn||document.body);
+    if(finBtn){finBtn.classList.remove('pr-pop');void finBtn.offsetWidth;finBtn.classList.add('pr-pop');}
+    buzz([20,50,20,50,40]);
+  }catch(_){}
 }
 
 // One-time repair for days already corrupted by the old double-append: an
@@ -4314,7 +5575,17 @@ function removeExerciseFromWorkout(date, exName){
     const wIdx = W.findIndex(w => w.date === date);
     if(wIdx >= 0){
       const eIdx = W[wIdx].exercises.findIndex(e => e.name === exName);
-      if(eIdx >= 0){W[wIdx].exercises.splice(eIdx, 1);save();renderHist();toast('Exercise removed','error');}
+      if(eIdx >= 0){
+        const removed=W[wIdx].exercises.splice(eIdx,1)[0];
+        save();renderHist();
+        toastUndo('Exercise removed',8,()=>{
+          const w=W.find(x=>x.date===date);
+          if(!w)return;
+          w.exercises.splice(Math.min(eIdx,w.exercises.length),0,removed);
+          save();renderHist();
+          toast('Exercise restored','success');
+        });
+      }
     }
   });
 }
@@ -5020,11 +6291,22 @@ function bindSettings(){
 
     function unfollow(id){
       const cfg=FirebaseSync.getConfig();
+      const entry=(cfg.following||[]).find(f=>f.id===id)||null;
       FirebaseSync.updateConfig({following:cfg.following.filter(f=>f.id!==id)});
       stopStream(id);           // or their stream re-adds them to the cache
       removeFriendEntry(id);
       renderFollowList();renderSearchResults();renderFriendsCard();renderSuggestions();
-      toast(`Unfollowed @${id}`);
+      toastUndo(`Unfollowed @${id}`,8,()=>{
+        if(!entry)return;
+        const c=FirebaseSync.getConfig();
+        if(c.following.some(f=>f.id===id))return; // already followed again
+        FirebaseSync.updateConfig({following:[...c.following,entry]});
+        renderFollowList();renderSearchResults();renderFriendsCard();renderSuggestions();
+        fbPush(false);
+        startRealtimeSync();
+        fbPullFollowing(false);
+        toast(`Following @${id} again`,'success');
+      });
       fbPush(false);
     }
 
@@ -5173,7 +6455,16 @@ function bindSettings(){
           renderSearchResults();
           if(!userDirectory){
             try{userDirectory=await FirebaseSync.listUsers();renderSuggestions();}
-            catch(_){searchResults.innerHTML='<p class="search-empty">Could not reach the athlete directory — check your connection.</p>';return;}
+            catch(_){
+              searchResults.innerHTML='<p class="search-empty">Could not reach the athlete directory — check your connection.</p><div style="text-align:center;margin-top:8px"><button type="button" class="btn btn-secondary btn-sm" id="dirRetryBtn">Retry</button></div>';
+              const rb=document.getElementById('dirRetryBtn');
+              if(rb)rb.addEventListener('click',async()=>{
+                rb.disabled=true;rb.textContent='Retrying…';
+                try{userDirectory=await FirebaseSync.listUsers();renderSuggestions();renderSearchResults();}
+                catch(e2){rb.disabled=false;rb.textContent='Retry';}
+              });
+              return;
+            }
           }
           renderSearchResults();
         },250);
@@ -5404,9 +6695,9 @@ function bindSettings(){
     t.addEventListener('click',()=>{t.closest('.connection-guide').classList.toggle('open');});
   });
 
-  document.getElementById('bExp').addEventListener('click',()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(W,null,2)],{type:'application/json'}));a.download=`asca_gym_${dayKey(new Date())}.json`;a.click();toast('Exported','success');});
+  document.getElementById('bExp').addEventListener('click',()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({workouts:W,routines:RT},null,2)],{type:'application/json'}));a.download=`asca_gym_${dayKey(new Date())}.json`;a.click();toast('Exported','success');});
   document.getElementById('bImp').addEventListener('click',()=>document.getElementById('fIn').click());
-  document.getElementById('fIn').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(!Array.isArray(d))throw 0;d.forEach(wo=>{if(!W.find(w=>w.date===wo.date&&w.dayType===wo.dayType))W.push(wo);});W.sort((a,b)=>b.date.localeCompare(a.date));save();toast(`Imported ${d.length} workouts`,'success');}catch(_){toast('Invalid file format','error');}};r.readAsText(f);e.target.value='';});
+  document.getElementById('fIn').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);const dws=Array.isArray(d)?d:(d&&Array.isArray(d.workouts)?d.workouts:null);if(!dws)throw 0;dws.forEach(wo=>{if(!W.find(w=>w.date===wo.date&&w.dayType===wo.dayType))W.push(wo);});W.sort((a,b)=>b.date.localeCompare(a.date));save();toast(`Imported ${dws.length} workouts`,'success');}catch(_){toast('Invalid file format','error');}};r.readAsText(f);e.target.value='';});
   document.getElementById('bRst').addEventListener('click',()=>showM('Reset Database?','This will permanently delete all workouts and custom exercise files from local memory.',()=>{W=[];save();toast('App data reset','error');}));
 }
 // One status, two badges: the profile pill and the header cloud icon
@@ -5478,7 +6769,7 @@ if (typeof document !== 'undefined') {
     else { _activeToasts.forEach(tt => tt.resume()); }
   });
 }
-function toast(msg,type=''){
+function toast(msg,type='',opts={}){
   const el=document.getElementById('tw'),t=document.createElement('div');
   t.className=`toast ${type}`;
   const svg = type === 'success'
@@ -5492,7 +6783,7 @@ function toast(msg,type=''){
   el.appendChild(t);
   requestAnimationFrame(()=>requestAnimationFrame(()=>t.classList.add('show')));
 
-  const DURATION=2500;
+  const DURATION=opts.durationMs||2500;
   let remaining=DURATION, timer=null, startedAt=0;
   const leave=()=>{
     _activeToasts.delete(entry);
@@ -5506,6 +6797,34 @@ function toast(msg,type=''){
   };
   _activeToasts.add(entry);
   arm();
+}
+
+// Undo toast — destructive confirmation, softened. The action already
+// happened (optimistic); Undo replays the inverse. The dismiss clock rides
+// the same visibility-paused discipline as toast() so a backgrounded phone
+// can't tick the window away.
+function toastUndo(msg,dur,undoFn){
+  const el=document.getElementById('tw');if(!el)return;
+  const t=document.createElement('div');t.className='toast toast-undo';
+  const body=document.createElement('div');body.textContent=msg;
+  const btn=document.createElement('button');btn.className='toast-undo-btn';btn.type='button';btn.textContent='Undo';
+  let dismissed=false;
+  const entry={
+    pause(){ if(!entry._timer)return; clearTimeout(entry._timer); entry._timer=null; entry._remaining-=Date.now()-entry._startedAt; },
+    resume(){ if(entry._timer||entry._remaining<=0)return; entry._startedAt=Date.now(); entry._timer=setTimeout(leave,entry._remaining); },
+    _remaining:(dur||8)*1000,_timer:null,_startedAt:Date.now()
+  };
+  function leave(){
+    if(dismissed)return;dismissed=true;
+    _activeToasts.delete(entry);
+    t.classList.add('leave');
+    setTimeout(()=>t.remove(),150);
+  }
+  btn.addEventListener('click',()=>{dismissed=true;clearTimeout(entry._timer);_activeToasts.delete(entry);t.remove();try{undoFn();}catch(e){console.warn('[Undo]',e);}});
+  t.appendChild(body);t.appendChild(btn);el.appendChild(t);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>t.classList.add('show')));
+  _activeToasts.add(entry);
+  entry._timer=setTimeout(leave,entry._remaining);
 }
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML.replace(/"/g,'&quot;');}
 
@@ -5592,7 +6911,12 @@ function bindTimer() {
 
   function updateDisplay() {
     const min=Math.floor(timerSecs/60);const sec=timerSecs%60;
-    display.textContent=`${min.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
+    const text=`${min.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
+    display.textContent=text;
+    // Glanceable mirror: the big fixed digits show the same countdown large
+    // enough to read from the rack; they move with the bar's show/hide state.
+    const big=bar.querySelector('.timer-bar-big');
+    if(big)big.textContent=text;
     if (timerTotal > 0) {const percentage=(timerSecs/timerTotal)*100;fill.setAttribute('stroke-dashoffset',100-percentage);}
     else fill.setAttribute('stroke-dashoffset',0);
   }
@@ -5880,14 +7204,22 @@ window.__arcDebug = {
   startApp, // normally only runs after a real sign-in via unlock() — exposed so
             // tests can reach bindArc() and friends without a live Firebase auth flow
   renderArc, bindArc, arcCheckin: arcApplyCheckin, arcEnroll, arcRecompute,
-  arcJoinChallenge, arcLeaveChallenge, renderChallengesBrowser,
+  arcJoinChallenge, arcLeaveChallenge, renderChallengesBrowser, bindFriendChallenges,
+  chSubmitCreate, chFriendName, arcInvitesRefresh,
   renderMonkMode, arcNextAction, arcUpdateGoals,
   renderArcCalendarFull, renderArcCalPreview, arcDayCell,
   arcPullFollowingPublic, renderArcLeaderboard,
   arcPublicProjection, arcHabitProjection, arcSleepScore,
   summary: () => ChallengeEngine.summary(arcInput()),
   state: () => ARC,
-  workouts: () => W
+  workouts: () => W,
+  // Motion & delight hooks (2026 polish) — test/devtools seams.
+  countUpTo, celebrate: window.celebrate, stampViewStagger, syncRingStrip,
+  // Test seam for the invite surfaces: rendering depends on chInvites[],
+  // which is module-private. Tests set it here rather than re-fetching
+  // from a network the sandbox doesn't have.
+  setInvites: inv => { chInvites = inv || []; renderChInvites(); return chInvites; },
+  setChTab: t => { chActiveTab = t; chDetailId = null; renderChallengesBrowser(); }
 };
 
 if (document.readyState === 'loading') {
