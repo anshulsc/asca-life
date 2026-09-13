@@ -140,7 +140,9 @@ comments are thorough and are the primary reference; this is only an index into 
   set-level helpers from `app.js` on purpose (that IIFE exposes neither) — `test/engine.js`
   asserts the mirrors stay exact.
 - **`arc-sync.js` — `ArcSync` global.** RTDB access for four new nodes: `arc/{userId}/{seasonId}`
-  (private), `arcPublic/{userId}/{seasonId}` (member-readable projection), `challenges/{cid}`
+  (private), `arcPublic/{userId}/{seasonId}` (member-readable projection — streak/level/
+  xp plus deliberately-social per-habit aggregates; never check-in notes, body weight or
+  set-level workout detail), `challenges/{cid}`
   (shared definitions), `challengeMembers/{cid}/{userId}` (each user writes only their own
   key). **Never calls `FirebaseSync.writeDoc()`** — that would replace the entire `gym/{id}`
   node on a single quick-add. Every write is a targeted PATCH to a specific subpath instead.

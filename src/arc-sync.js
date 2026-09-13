@@ -132,9 +132,12 @@ const ArcSync = (() => {
   }
 
   /* ── arcPublic/ — the narrow social projection ─────────────
-     Only what a group leaderboard needs. NEVER sleep/protein/water/
-     steps/body weight — those live only in arc/, which no one but the
-     owner can read. */
+     What the Arc social screen shows friends: streak, level, xp and —
+     by deliberate product decision — per-habit aggregates (today's
+     check-in values, per-habit streaks, 7-day aggregates, sleep score)
+     so the leaderboard can compare habits fairly. Still NEVER check-in
+     notes, body weight or set-level workout detail: those live only in
+     arc/, which no one but the owner can read. */
 
   function arcPublicPath(userId, seasonId) {
     return `arcPublic/${encodeURIComponent(userId)}/${encodeURIComponent(seasonId)}.json`;

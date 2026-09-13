@@ -1295,13 +1295,17 @@ function renderArcBadges(sum){
 }
 
 /* ── Winter Arc: Social leaderboard ───────────────────────────
-   Everyone's streak/level/activity, visible to the people who follow
-   them — reusing the Strava-style following model the Social tab
-   already has. Deliberately reads ONLY arcPublic/, never arc/: that
-   split is what keeps sleep, protein, water, steps and body weight
-   out of any social surface even if this code has a bug. */
+   Everyone's streak/level/activity, AND now per-habit aggregates
+   (today's check-in values, per-habit streaks, 7-day aggregates, a
+   sleep score) — visible to the people who follow them, reusing the
+   Strava-style following model the Social tab already has. Widening
+   arcPublic to carry those aggregates is a deliberate product decision
+   for the Arc social screen; social readers still ONLY read arcPublic/,
+   never arc/ — check-in NOTES, body weight and set-level workout detail
+   stay out of any social surface even if this code has a bug. */
 const AFCK='asca_gym_arc_friends_cache';
 let arcLbMetric='streak';
+let arcLbMode='week'; // 'week' = arcScore7 race | 'season' = xp standings
 
 function getArcFriendsCache(){
   try{
@@ -1318,8 +1322,12 @@ function saveArcFriendEntry(id,data){
 }
 
 // The narrow projection written to arcPublic/{id}/{seasonId} — every field
-// here is safe to show a follower; nothing from checkins/goals is ever
-// included, structurally (this function never reads ARC.checkins).
+// here is safe to show a follower by deliberate product decision. Includes
+// a `habits` block (today's check-in values, per-habit streaks, rolling
+// 7-day aggregates, sleep score) for the Arc social screen; still NEVER
+// check-in notes, body weight or set-level workout detail. Note the
+// boundary flipped with the habits block: the privacy guarantee lives in
+// WHAT GETS WRITTEN here, not (only) in who can read what.
 function arcPublicProjection(sum){
   return {
     day:sum.day||0,
@@ -1328,8 +1336,129 @@ function arcPublicProjection(sum){
     level:sum.level.level,
     xp:sum.xp,
     workoutsThisWeek:periodStats(W).week||0,
-    challengesDone:sum.challenges.filter(c=>c.done).length
+    challengesDone:sum.challenges.filter(c=>c.done).length,
+    habits:arcHabitProjection()
   };
+}
+
+/* ── Habit aggregates for arcPublic ────────────────────────────────
+   Pure local computation over ARC.checkins/W/ARC.goals — no network.
+   Streaks walk backwards with today pending-safe (same rule as the
+   engine's 'streak' aggregator: today unmet doesn't kill a run until
+   the day is over); windows beyond the checkin record count as missed,
+   so a backfilled day never rescues a streak it didn't earn. Everything
+   is gated to the enrolled season's date range so out-of-season data
+   never inflates the numbers friends see (matching summary()'s gating). */
+function arcHabitProjection(){
+  if(!ARC||!ARC.enrolled)return null;
+  const season=WinterArc.season(ARC.seasonId);
+  const inSeason=d=>!season||(d>=season.start&&d<=season.end);
+  const goals=Object.assign(WinterArc.defaultGoals(),ARC.goals||{});
+  const goalOf=h=>{
+    const n=Number(goals[h.key]);
+    return n>0?n:h.goal;
+  };
+  const g={};
+  WinterArc.HABITS.forEach(h=>{g[h.key]=goalOf(h);});
+
+  const today=WinterArc.todayStr();
+  const c0=ARC.checkins[today]||WinterArc.emptyCheckin();
+  const todayBlk={date:today,workout:arcHasWorkout(today,inSeason)};
+  WinterArc.HABITS.forEach(h=>{todayBlk[h.key]=Number(c0[h.key])||0;});
+  todayBlk.sleepQ=Number(c0.sleepQ)||0;
+
+  const streaks={};
+  WinterArc.HABITS.forEach(h=>{
+    const target=goalOf(h);
+    const met=d=>{
+      if(!inSeason(d))return false;
+      const c=ARC.checkins[d];
+      return !!c&&(Number(c[h.key])||0)>=target;
+    };
+    let run=0,d=today;
+    // Today pending doesn't end the run; march on from yesterday.
+    if(!met(d))d=WinterArc.addDays(d,-1);
+    while(d&&met(d)){run++;d=WinterArc.addDays(d,-1);}
+    streaks[h.key]=run;
+  });
+
+  // Rolling last 7 days INCLUDING today, from the checkins that exist —
+  // avg divides by the days we hold, not a flat 7, so metrics don't sag
+  // on friends whose record starts mid-window.
+  const w7={sleepHAvg:0,sleepQAvg:0,stepsTotal:0,waterMlAvg:0,
+            proteinGAvg:0,mobilityMinTotal:0,workouts:0};
+  let arcDays=0;
+  for(let i=0;i<7;i++){
+    const d=WinterArc.addDays(today,-i);
+    if(!inSeason(d))continue;
+    const c=ARC.checkins[d];
+    if(c){
+      arcDays++;
+      w7.sleepHAvg+=Number(c.sleepH)||0;
+      w7.sleepQAvg+=Number(c.sleepQ)||0;
+      w7.stepsTotal+=Number(c.steps)||0;
+      w7.waterMlAvg+=Number(c.waterMl)||0;
+      w7.proteinGAvg+=Number(c.proteinG)||0;
+      w7.mobilityMinTotal+=Number(c.mobilityMin)||0;
+    }
+    if(arcHasWorkout(d,inSeason))w7.workouts++;
+  }
+  if(arcDays){
+    w7.sleepHAvg=Math.round((w7.sleepHAvg/arcDays)*10)/10;
+    w7.sleepQAvg=Math.round((w7.sleepQAvg/arcDays)*10)/10;
+    w7.waterMlAvg=Math.round(w7.waterMlAvg/arcDays);
+    w7.proteinGAvg=Math.round(w7.proteinGAvg/arcDays);
+  }
+
+  const sleepScore=arcSleepScore(ARC.checkins,g.sleepH,inSeason);
+  let arcScore7=0;
+  for(let i=0;i<7;i++){
+    const d=WinterArc.addDays(today,-i);
+    if(!inSeason(d))continue;
+    const c=ARC.checkins[d];
+    let s=0;
+    if(c&&WinterArc.checkinTouched(c)){
+      WinterArc.HABITS.forEach(h=>{
+        s+=100*Math.min((Number(c[h.key])||0)/goalOf(h),2);
+      });
+    }
+    if(arcHasWorkout(d,inSeason))s+=200;
+    arcScore7+=s;
+  }
+
+  return {goals:g,today:todayBlk,streaks,w7,sleepScore,arcScore7:Math.round(arcScore7)};
+}
+
+// A real (non-"Rest Day") workout logged on that exact date.
+function arcHasWorkout(date,inSeason){
+  if(inSeason&&!inSeason(date))return false;
+  return (W||[]).some(w=>w&&w.date===date&&w.dayType!=='Rest Day');
+}
+
+// Most recent day with sleepH or sleepQ logged -> 0-100 score: hours are
+// 70% of it (capped at goal), quality the other 30. null = never logged.
+function arcSleepScore(checkins,sleepGoalH,inSeason){
+  const goal=Number(sleepGoalH)>0?Number(sleepGoalH):7;
+  const dates=Object.keys(checkins||{}).sort().reverse();
+  for(const d of dates){
+    if(inSeason&&!inSeason(d))continue;
+    const c=checkins[d];
+    if(!c)continue;
+    const h=Number(c.sleepH)||0,q=Number(c.sleepQ)||0;
+    if(h>0||q>0){
+      return Math.max(0,Math.min(100,Math.round(70*Math.min(h/goal,1)+30*(q/5))));
+    }
+  }
+  return null;
+}
+
+// Sleep-score band thresholds, shared by the leaderboard rows and the
+// Everyone-today strip. 'none' renders as a dimmed em-dash.
+function arcSleepBand(score){
+  if(score==null)return{cls:'none',dotCls:'none',label:'—'};
+  if(score>=85)return{cls:'optimal',dotCls:'optimal',label:'Optimal'};
+  if(score>=70)return{cls:'good',dotCls:'good',label:'Good'};
+  return{cls:'tired',dotCls:'tired',label:'Tired'};
 }
 
 // Pull my own + every followed friend's arcPublic doc in parallel, same
@@ -1369,29 +1498,73 @@ function bindArcLeaderboard(){
     tabs.querySelectorAll('.seg-tab').forEach(x=>x.classList.remove('on'));
     t.classList.add('on');
     arcLbMetric=t.dataset.arcMetric;
-    // Brief dim-out -> re-render -> settle-in, instead of a hard snap.
-    // innerHTML rewrite is the render model here; two .arc-lb-rows classes
-    // coordinate with CSS keyframes below. Reduced-motion skips the dance —
-    // instant swap is the respectful version there.
-    const rowsEl=document.getElementById('arcLbRows');
-    if(rowsEl&&!prm()){
-      rowsEl.classList.add('switching');
-      requestAnimationFrame(()=>{
-        renderArcLeaderboard();
-        rowsEl.classList.remove('switching');
-        rowsEl.classList.add('switching-in');
-        setTimeout(()=>rowsEl.classList.remove('switching-in'),340);
-      });
-    } else {
-      renderArcLeaderboard();
-    }
+    arcLbSwapRows();
+  });
+  const mode=document.getElementById('arcLbHeroMode');
+  if(mode)mode.addEventListener('click',e=>{
+    const t=e.target.closest('.seg-tab');
+    if(!t||t.classList.contains('on'))return;
+    mode.querySelectorAll('.seg-tab').forEach(x=>x.classList.remove('on'));
+    t.classList.add('on');
+    arcLbMode=t.dataset.arcHeroMode==='season'?'season':'week';
+    arcLbSwapRows();
   });
 }
 
+// Brief dim-out -> re-render -> settle-in, instead of a hard snap.
+// innerHTML rewrite is the render model here; two .arc-lb-rows classes
+// coordinate with the CSS keyframes in the leaderboard section of
+// style.css. Reduced-motion skips the dance — instant swap is the
+// respectful version there.
+function arcLbSwapRows(){
+  const rowsEl=document.getElementById('arcLbRows');
+  if(rowsEl&&!prm()){
+    rowsEl.classList.add('switching');
+    requestAnimationFrame(()=>{
+      renderArcLeaderboard();
+      rowsEl.classList.remove('switching');
+      rowsEl.classList.add('switching-in');
+      setTimeout(()=>rowsEl.classList.remove('switching-in'),340);
+    });
+  } else {
+    renderArcLeaderboard();
+  }
+}
+
+// ▲/▼/— movement vs the last-seen rank for this member+metric, persisted
+// inside the AFCK cache as friends[id].lastRanks[metric]. Read the old
+// rank BEFORE writing the new one — the comparison is across renders, so
+// persistence has to happen between two passes.
+function arcRank(prev,id,metricKey,rank){
+  const c=getArcFriendsCache();
+  // My row is recomputed fresh from local state (never pulled into a doc
+  // entry), so give it a scratch entry for lastRanks rather than
+  // conjuring an arcPublic-shaped doc that could later be read as data.
+  if(!c.friends[id]&&(id===fbCfg().userId||id==='me'))c.friends[id]={scratch:true};
+  const e=c.friends[id]||(c.friends[id]={});
+  e.lastRanks=e.lastRanks||{};
+  const old=Number(e.lastRanks[metricKey])||0;
+  e.lastRanks[metricKey]=rank;
+  try{localStorage.setItem(AFCK,JSON.stringify(c));}catch(_){}
+  return old>0&&old!==rank?(old>rank?'up':'down'):'flat';
+}
+
+const ARC_METRIC_TABS=[
+  {k:'streak',label:'Streak'},{k:'level',label:'Level'},{k:'week',label:'Week'},
+  {k:'sleep',label:'Sleep'},{k:'steps',label:'Steps'},{k:'water',label:'Water'},
+  {k:'protein',label:'Protein'},{k:'mobility',label:'Mobility'}
+];
+
+/* Replace the whole card so seg tabs keep working when a friend is on
+   an older client (their habits{} block is simply absent; those metrics
+   sort as 0 and their cells render '—'). My row is always present when
+   I'm enrolled, pinned to the bottom if I fall outside the top-3. */
 function renderArcLeaderboard(){
   const label=document.getElementById('arcLbLabel');
   const card=document.getElementById('arcLbCard');
   const rowsEl=document.getElementById('arcLbRows');
+  const heroEl=document.getElementById('arcLbHero');
+  const stripEl=document.getElementById('arcLbStrip');
   const updatedEl=document.getElementById('arcLbUpdated');
   const noteEl=document.getElementById('arcLbNote');
   if(!card)return;
@@ -1428,6 +1601,8 @@ function renderArcLeaderboard(){
   if(!rows.length){
     if(denied){
       label.style.display='block';card.style.display='block';
+      if(heroEl)heroEl.innerHTML='';
+      if(stripEl)stripEl.style.display='none';
       rowsEl.innerHTML='';updatedEl.textContent='';
     }else{label.style.display='none';card.style.display='none';}
     return;
@@ -1435,32 +1610,210 @@ function renderArcLeaderboard(){
   label.style.display='block';
   card.style.display='block';
 
-  const metricVal=r=>({streak:r.data.streak||0,level:r.data.level||0,week:r.data.workoutsThisWeek||0}[arcLbMetric]||0);
-  rows.sort((a,b)=>metricVal(b)-metricVal(a));
-
-  // Only reachable when I've joined but nobody I follow has (yet) —
-  // anyone I follow who IS running it always has a real row above, joined
-  // or not, so this is never "there's nothing here," only "invite people."
-  if(rows.length===1&&iAmEnrolled){
-    rowsEl.innerHTML='<div class="arc-lb-empty">Follow friends who are also running the Arc to see them here.</div>';
+  // A crew of one is a mirror, not a leaderboard — invite someone.
+  if(rows.length<2){
+    if(heroEl)heroEl.innerHTML=arcHeroShellHtml()+'<div class="arc-lb-empty">Winter Arc is better with a crew — add friends from Settings &gt; Find Friends.</div>';
+    if(stripEl)stripEl.style.display='none';
+    rowsEl.innerHTML='';
     updatedEl.textContent='';
     return;
   }
 
-  rowsEl.innerHTML=rows.map((r,i)=>{
-    const rank=i+1;
-    const rankCls=rank===1?'top1':rank===2?'top2':rank===3?'top3':'';
-    return `<div class="arc-lb-row${r.me?' me':''}">
-      <div class="arc-lb-rank ${rankCls}">${rank}</div>
-      <div class="arc-lb-avatar" style="background:${avatarBgOf(r.id)}">${avatarHtmlOf(r.id,r.name)}</div>
-      <div class="arc-lb-name">${esc(r.name)}${r.me?'<span class="arc-lb-you-chip">You</span>':''}</div>
-      <div class="arc-lb-val">${metricVal(r)}${arcLbMetric==='level'?' L':arcLbMetric==='streak'?' 🔥':''}</div>
-    </div>`;
+  /* (a) Who's winning: week = arcScore7 race, season = lifetime xp. */
+  rows.forEach(r=>{
+    const h=r.data&&r.data.habits;
+    r.heroVal=arcLbMode==='season'
+      ?(r.data.xp||0)
+      :Math.round((h&&h.arcScore7)||0);
+  });
+  rows.sort((a,b)=>b.heroVal-a.heroVal);
+  const heroMetric='hero-'+arcLbMode;
+  const leader=rows[0];
+  const me=rows.find(r=>r.me);
+  arcHeroCelebrate(leader,me);
+  let heroHtml=arcHeroShellHtml();
+  heroHtml+=rows.slice(0,3).map((r,i)=>{
+    const mv=arcRank(r.id,heroMetric,i+1);
+    return arcRowHtml(r,i+1,mv,esc(String(r.heroVal))+' pts',arcLbMode==='season'?'season XP':'last 7 days');
   }).join('');
+  if(me){
+    const meRank=rows.indexOf(me)+1;
+    if(meRank>3)heroHtml+=arcRowHtml(me,meRank,arcRank(me.id,heroMetric,meRank),esc(String(me.heroVal))+' pts','you');
+  }
+  heroHtml+=arcHeroMicroHtml(rows);
+  if(heroEl)heroEl.innerHTML=heroHtml;
+
+  /* (c) Everyone today: five %-of-own-goal mini rings off the habits
+     block + a workout tick + the sleep score beneath, me pinned first. */
+  if(stripEl){
+    const strip=[...rows].sort((a,b)=>(b.me?1:0)-(a.me?1:0));
+    stripEl.innerHTML=strip.map(r=>arcTodayCardHtml(r)).join('');
+    stripEl.style.display='';
+  }
+
+  /* (b) Per-stat leaderboard. Old metrics unchanged; habit metrics read
+     the new habits{} block, sorting missing/null values last. */
+  const met=ARC_METRIC_TABS.some(t=>t.k===arcLbMetric)?arcLbMetric:'streak';
+  const val0={streak:r=>r.data.streak||0,level:r=>r.data.level||0,week:r=>r.data.workoutsThisWeek||0,
+    sleep:r=>{const h=r.data.habits;return h&&h.sleepScore!=null?h.sleepScore:null;},
+    steps:r=>r.data.habits?r.data.habits.w7.stepsTotal:0,
+    water:r=>r.data.habits?r.data.habits.w7.waterMlAvg:0,
+    protein:r=>r.data.habits?r.data.habits.w7.proteinGAvg:0,
+    mobility:r=>r.data.habits?r.data.habits.w7.mobilityMinTotal:0}[met];
+  const metricVal=r=>{const v=val0(r);return v==null?0:v;};
+  rows.sort((a,b)=>{
+    const av=val0(a),bv=val0(b);
+    if(av==null&&bv==null)return 0;
+    if(av==null)return 1;   // nulls last, not zero-ranked first
+    if(bv==null)return -1;
+    return bv-av;
+  });
+  rows.forEach((r,i)=>{
+    r._cell=arcLbCellHtml(met,r);
+    r._move=arcRank(r.id,'tab-'+met,i+1);
+  });
+  rowsEl.innerHTML=rows.map((r,i)=>arcRowHtml(r,i+1,r._move,r._cell,'')).join('');
+
   // Freshness of the newest pulled doc, not "when this render happened" —
   // timeAgo(Date.now()) printed "just now" forever, even off a stale cache.
   const latestTs=rows.reduce((m,r)=>Math.max(m,r.ts||0,r.data&&r.data.ts||0),cacheObj.ts||0);
   updatedEl.textContent=latestTs?('Updated '+timeAgo(latestTs)):'';
+}
+
+// Mode toggle markup for the hero header; written every render because
+// the small crew state also hosts the toggle.
+function arcHeroShellHtml(){
+  return `<div class="arc-lb-hero-head">
+    <div class="arc-lb-hero-title">Who's winning</div>
+    <div class="seg-tabs arc-lb-hero-mode" id="arcLbHeroMode">
+      <div class="seg-tab${arcLbMode==='week'?' on':''}" data-arc-hero-mode="week">This week</div>
+      <div class="seg-tab${arcLbMode==='season'?' on':''}" data-arc-hero-mode="season">Season</div>
+    </div>
+  </div>`;
+}
+
+// One leaderboard row for hero and metric lists alike: rank + movement
+// arrow, avatar, name (you-chip for me), then a caller-supplied right cell.
+function arcRowHtml(r,rank,mv,cell,ctx){
+  const rankCls=rank===1?'top1':rank===2?'top2':rank===3?'top3':'';
+  const arrow=mv==='up'?'<span class="up">▲</span>':mv==='down'?'<span class="down">▼</span>':'<span class="flat">—</span>';
+  return `<div class="arc-lb-row${r.me?' me':''}">
+    <div class="arc-lb-rank ${rankCls}">${rank}</div>
+    <div class="arc-lb-move">${arrow}</div>
+    <div class="arc-lb-avatar" style="background:${avatarBgOf(r.id)}">${avatarHtmlOf(r.id,r.name)}</div>
+    <div class="arc-lb-name">${esc(r.name)}${r.me?'<span class="arc-lb-you-chip">You</span>':''}</div>
+    <div class="arc-lb-cell" data-ctx="${ctx}">${cell}</div>
+  </div>`;
+}
+
+// Microcopy under the hero: the gap says how catchable the person ahead
+// is (one perfect day = 5 habits x 200 + workout 200 = 1200 pts); leading
+// is a plain flex with the season clock. Small chip carries day/left for
+// both states, from the same WinterArc season primitives the masthead uses.
+function arcHeroMicroHtml(rows){
+  const me=rows.find(r=>r.me);
+  const season=WinterArc.season();
+  const dayChip=season
+    ?`<span class="arc-lb-chip">Day ${WinterArc.seasonDay()} · ${WinterArc.daysLeft()} left</span>`
+    :'';
+  let line='';
+  if(me){
+    const leader=rows[0];
+    if(leader.me){
+      line=`You're leading the Arc${season?` · ${WinterArc.daysLeft()} days left`:''}`;
+    }else{
+      const ahead=[...rows].sort((a,b)=>b.heroVal-a.heroVal).filter(r=>r.heroVal>me.heroVal);
+      const next=ahead.length?ahead[ahead.length-1]:null;
+      if(next){
+        const gap=Math.round(next.heroVal-me.heroVal);
+        line=`${gap} pts behind ${esc(next.name)} — ${gap<=1200?'one perfect day covers it':'two perfect days would flip it'}`;
+      }
+    }
+  }
+  return `<div class="arc-lb-hero-micro">${line}<br>${dayChip}</div>`;
+}
+
+// A friend's few-point lead shouldn't buzz forever; celebrate leading
+// only on the transition into it, once per hero mode.
+let arcLeadState={week:null,season:null};
+function arcHeroCelebrate(leader,me){
+  const k=arcLbMode;
+  const cur=leader?leader.id:null;
+  if(leader&&me&&leader.me&&arcLeadState[k]!=null&&arcLeadState[k]!==cur){
+    toast('You just took the Arc lead','success');
+  }
+  arcLeadState[k]=cur;
+}
+
+// Primary value + context for the metric seg list. Old metrics keep the
+// exact strings they always had; habit metrics read the habits{} block
+// and fall back to '—' when a friend's client hasn't pushed it yet.
+function arcLbCellHtml(met,r){
+  const h=r.data.habits;
+  const base=v=>`<div class="arc-lb-val">${v}</div>`;
+  if(met==='streak')return base((r.data.streak||0)+' 🔥');
+  if(met==='level')return base((r.data.level||0)+' L');
+  if(met==='week')return base(String(r.data.workoutsThisWeek||0));
+  if(met==='sleep'){
+    if(!h||h.sleepScore==null)return'<span class="arc-lb-sub">—</span>';
+    const b=arcSleepBand(h.sleepScore);
+    const q=h.today.sleepQ||0;
+    let dots='';
+    for(let i=1;i<=5;i++){
+      dots+=`<span class="arc-lb-dot${i<=q?' on':''}${i<=q?' '+b.dotCls:''}"></span>`;
+    }
+    return `<div class="arc-lb-valwrap">${base(h.sleepScore)}
+      <div class="arc-lb-dots" aria-hidden="true">${dots}</div>
+      <span class="arc-lb-band ${b.cls}">${b.label}</span></div>`;
+  }
+  const pct=v=>{
+    const g=h.goals[v]||0;
+    return g>0?Math.min(999,Math.round((h.w7[ARC_W7_KEY[v]]/g)*100)):0;
+  };
+  const habitCell=(val,key)=>{
+    if(!h)return'<span class="arc-lb-sub">—</span>';
+    return `<div class="arc-lb-valwrap">${base(esc(val))}
+      <span class="arc-lb-sub">${pct(key)}% of goal</span></div>`;
+  };
+  if(met==='steps')return habitCell(fmtStatNum(h?h.w7.stepsTotal:0),'steps');
+  if(met==='water')return habitCell(fmtStatNum(h?h.w7.waterMlAvg:0)+' ml','waterMl');
+  if(met==='protein')return habitCell(fmtStatNum(h?h.w7.proteinGAvg:0)+' g','proteinG');
+  if(met==='mobility')return habitCell(fmtStatNum(h?h.w7.mobilityMinTotal:0)+' min','mobilityMin');
+  return base('—');
+}
+// w7 field that backs each goal-relative metric tab (steps total; the
+// rest are per-day averages across the days the friend actually checked in).
+const ARC_W7_KEY={steps:'stepsTotal',waterMl:'waterMlAvg',proteinG:'proteinGAvg',mobilityMin:'mobilityMinTotal'};
+
+// (c) One card in the "Everyone today" strip. --p is %-of-own-goal capped
+// 100, set inline so the conic ring reads it; the sleep score number takes
+// its band colour when that friend has ever logged sleep.
+const ARC_RING_CHAR={sleepH:'z',waterMl:'w',proteinG:'p',steps:'s',mobilityMin:'m'};
+function arcTodayCardHtml(r){
+  const h=r.data.habits;
+  const chips=WinterArc.HABITS.map(hab=>{
+    let p=0,metGoal=false;
+    if(h){
+      const goal=Number(h.goals[hab.key])>0?Number(h.goals[hab.key]):hab.goal;
+      p=Math.max(0,Math.min(100,Math.round(((Number(h.today[hab.key])||0)/goal)*100)));
+      metGoal=p>=100;
+    }
+    return `<span class="arc-today-chip${metGoal?' met':''}" style="--p:${h?p:0}" title="${hab.label}: ${h?p+'% of goal':'no data'}"><i>${ARC_RING_CHAR[hab.key]}</i></span>`;
+  }).join('');
+  let score='';
+  if(h&&h.sleepScore!=null){
+    const b=arcSleepBand(h.sleepScore);
+    score=`<div class="arc-today-score ${b.cls}">${h.sleepScore}</div>`;
+  }
+  const tick=h&&h.today.workout
+    ?`<span class="arc-today-tick" title="Trained today">${arcIcon('check',11)}</span>`
+    :'';
+  return `<div class="arc-today-card${r.me?' me':''}">
+    <div class="arc-today-avatar" style="background:${avatarBgOf(r.id)}">${avatarHtmlOf(r.id,r.name)}</div>
+    <div class="arc-today-top"><span class="arc-today-name">${esc(r.name)}</span>${tick}</div>
+    <div class="arc-today-chips">${chips}</div>
+    ${score}
+  </div>`;
 }
 
 /* ── Locked In (monk mode) ────────────────────────────────────
@@ -4983,8 +5336,10 @@ function bindSettings(){
             }
           },
           // The narrow social projection of arc/: xp, level, streak, badge
-          // count. Member-readable like directory/. NEVER sleep, protein,
-          // water, steps or body weight — those stay in arc/ only.
+          // count — plus, by deliberate product decision, per-habit
+          // aggregates (today's check-in values, per-habit streaks, 7-day
+          // aggregates, sleep score) for the Arc social screen. Still NEVER
+          // check-in notes, body weight or set-level workout detail.
           arcPublic: {
             ".read": "auth != null",
             $userId: {
@@ -5529,6 +5884,7 @@ window.__arcDebug = {
   renderMonkMode, arcNextAction, arcUpdateGoals,
   renderArcCalendarFull, renderArcCalPreview, arcDayCell,
   arcPullFollowingPublic, renderArcLeaderboard,
+  arcPublicProjection, arcHabitProjection, arcSleepScore,
   summary: () => ChallengeEngine.summary(arcInput()),
   state: () => ARC,
   workouts: () => W

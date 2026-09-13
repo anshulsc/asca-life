@@ -116,6 +116,16 @@
   --dur-med:  300ms;
   --dur-slow: 500ms;
 
+  /* ── Motion recipe ──────────────────────────────────────────────
+     Tappables share ONE recipe: --dur-fast ease for colour/opacity/
+     shadow, --dur-fast --spring (transform) for movement, and this
+     press value on :active. Call-sites compose the tokens below —
+     nothing hardcodes its own 0.2s/scale anymore.
+       .tappable { transition: background-color var(--dur-fast) ease, …,
+                             transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease; }
+       .tappable:active { transform: scale(var(--press-scale)); }     */
+  --press-scale: 0.96;
+
   /* Spacing — 4px base; the arc/settle spacing story rides these, not
      one-off pixel values spread across the sheet. */
   --space-1: 4px;
@@ -433,7 +443,7 @@ body {
   padding: 6px 12px; border-radius: var(--r-full);
   font-size: 0.7rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.05em;
-  cursor: pointer; transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s;
+  cursor: pointer; transition: background-color var(--dur-med) ease, border-color var(--dur-med) ease, color var(--dur-med) ease, box-shadow var(--dur-med) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-med) ease;
   box-shadow: var(--specular-top);
 }
 
@@ -462,7 +472,7 @@ body {
 
 .view {
   display: none; opacity: 0;
-  flex-direction: column; gap: 16px;
+  flex-direction: column; gap: var(--space-4);
 }
 .view.on {
   display: flex;
@@ -493,14 +503,13 @@ body {
   background: var(--glass-surface);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
-  border: 1px solid rgba(var(--wht), 0.08);
+  border: 1px solid rgba(var(--wht), 0.075);
   border-radius: var(--r-l);
   padding: 18px;
-  box-shadow: var(--glass-shine),
-              var(--glass-glow);
+  box-shadow: var(--elev-1);
   position: relative;
   overflow: hidden;
-  transition: transform 0.3s var(--spring), border-color 0.3s, box-shadow 0.3s;
+  transition: transform var(--dur-med) var(--spring), border-color var(--dur-med), box-shadow var(--dur-med);
 }
 
 .setup-card {
@@ -520,9 +529,7 @@ body {
   .card:hover {
     border-color: rgba(var(--wht), 0.14);
     background: linear-gradient(135deg, rgba(var(--wht), 0.09) 0%, rgba(var(--wht), 0.03) 100%);
-    box-shadow: inset 0 1px 0 0 rgba(var(--wht), 0.38),
-                inset 0 0 0 0.5px rgba(var(--wht), 0.15),
-                0 12px 40px rgba(var(--blk), 0.55);
+    box-shadow: var(--elev-2);
   }
 }
 
@@ -543,14 +550,14 @@ body {
   font-size: 0.68rem; font-weight: 800;
   color: var(--t-3);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
 }
 
 .heatmap-legend {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 0.55rem;
+  font-size: 0.62rem;
   color: var(--t-4);
   font-weight: 600;
 }
@@ -588,7 +595,7 @@ body {
   grid-template-rows: repeat(7, 10px);
   gap: 3px;
   height: 88px;
-  font-size: 0.50rem;
+  font-size: 0.62rem;
   color: var(--t-4);
   font-weight: 600;
   align-items: center;
@@ -792,7 +799,7 @@ body {
 .form-row {
   display: grid;
   grid-template-columns: 1.1fr 1fr;
-  gap: 12px; margin-bottom: 16px;
+  gap: 12px; margin-bottom: var(--space-4);
 }
 
 .input-group { display: flex; flex-direction: column; gap: 6px; }
@@ -815,10 +822,13 @@ body {
   color: var(--t-1);
   font-size: 0.95rem; font-weight: 500;
   outline: none;
-  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.25s var(--spring), opacity 0.25s ease;
+  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease;
   -webkit-appearance: none;
   box-shadow: var(--specular-top),
               inset 0 2px 4px rgba(var(--blk), 0.25);
+  /* 44px hit floor (HIG): 22×2.36 ≈ 52px rendered, no visual change */
+  min-height: 44px;
+  box-sizing: border-box;
 }
 
 .input-field:focus {
@@ -935,12 +945,12 @@ select.input-field {
   background: var(--glass-surface);
   backdrop-filter: blur(20px) saturate(180%) brightness(1.1);
   -webkit-backdrop-filter: blur(20px) saturate(180%) brightness(1.1);
-  border: 1px solid rgba(var(--wht), 0.08);
+  border: 1px solid rgba(var(--wht), 0.075);
   border-radius: var(--r-l);
   margin-top: 18px;
   display: none;
   animation: setEditorOpen 0.35s var(--spring);
-  box-shadow: var(--glass-shine), var(--glass-glow);
+  box-shadow: var(--elev-1);
 }
 @keyframes setEditorOpen {
   from { opacity: 0; transform: translateY(12px) scale(0.98); }
@@ -977,7 +987,7 @@ select.input-field {
 
 .sets-grid-container {
   display: flex; flex-direction: column;
-  gap: 12px; margin-bottom: 16px;
+  gap: 12px; margin-bottom: var(--space-4);
 }
 
 .set-row-container {
@@ -1106,18 +1116,18 @@ select.input-field {
   }
 }
 
-.editor-actions { margin-top: 16px; }
+.editor-actions { margin-top: var(--space-4); }
 
 /* ── Buttons — Glossy Glass ──────────────────────────────── */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   font-family: var(--ff-sans); font-weight: 700;
   border: none; cursor: pointer;
-  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.25s var(--bounce), opacity 0.25s ease;
+  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease;
   user-select: none; outline: none;
   position: relative;
 }
-.btn:active { transform: scale(0.96); }
+.btn:active { transform: scale(var(--press-scale)); }
 
 .btn-primary {
   background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.35) 0%, rgba(255, 61, 0, 0.2) 100%);
@@ -1225,9 +1235,9 @@ select.input-field {
 
 .label {
   font-family: var(--ff-title);
-  font-size: 0.72rem; font-weight: 800;
+  font-size: 0.68rem; font-weight: 800;
   color: var(--t-3); text-transform: uppercase;
-  letter-spacing: 0.12em; margin-bottom: 12px;
+  letter-spacing: 0.08em; margin-bottom: 12px;
   display: flex; align-items: center; gap: 10px;
 }
 .label::after {
@@ -1241,11 +1251,11 @@ select.input-field {
   background: var(--glass-surface);
   backdrop-filter: blur(20px) saturate(180%) brightness(1.1);
   -webkit-backdrop-filter: blur(20px) saturate(180%) brightness(1.1);
-  border: 1px solid rgba(var(--wht), 0.08);
+  border: 1px solid rgba(var(--wht), 0.075);
   border-radius: var(--r-l);
   padding: 14px 16px;
   position: relative; transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s;
-  box-shadow: var(--glass-shine), var(--glass-glow);
+  box-shadow: var(--elev-1);
 }
 
 .logged-header {
@@ -1350,6 +1360,11 @@ select.input-field {
 
 .action-row { display: flex; gap: 10px; margin-top: 10px; }
 .action-row .btn { flex: 1; }
+/* Mid-workout controls: protect the Finish/Discard hit areas on phones —
+   52px on the logging flow's session-level commit row. */
+@media (max-width: 768px) {
+  .action-row .btn { min-height: 52px; padding-top: 14px; padding-bottom: 14px; }
+}
 
 /* ── Timeline History ────────────────────────────────────── */
 .filter-bar {
@@ -1623,8 +1638,8 @@ select.input-field {
 .pr-score { font-family: var(--ff-mono); font-size: 1.15rem; font-weight: 800; color: var(--c-orange); }
 
 /* Analytics Chart */
-.chart-card { padding: 16px; min-height: 290px; }
-.chart-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 16px; }
+.chart-card { padding: var(--space-4); min-height: 290px; }
+.chart-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: var(--space-4); }
 .chart-selectors { display: flex; flex-direction: column; gap: 4px; flex: 1; }
 
 .select-chart-ex {
@@ -2005,8 +2020,8 @@ canvas { width: 100%; height: 100%; }
 
 /* ── Suggested follows — horizontal athlete-card carousel ── */
 .suggest-label {
-  font-family: var(--ff-title); font-size: 0.62rem; font-weight: 800;
-  letter-spacing: 0.1em; text-transform: uppercase; color: var(--t-3);
+  font-family: var(--ff-title); font-size: 0.68rem; font-weight: 800;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--t-3);
   margin: 14px 2px 6px;
 }
 .soc-suggest { text-align: left; margin: 0 auto 16px; }
@@ -2091,6 +2106,7 @@ canvas { width: 100%; height: 100%; }
   text-align: center; position: relative;
   outline: none;
 }
+.seg-tab:active { transform: scale(var(--press-scale)); }
 .seg-tab.on {
   color: #fff;
   background: linear-gradient(135deg, rgba(var(--wht), 0.08) 0%, rgba(var(--wht), 0.03) 100%);
@@ -2124,7 +2140,7 @@ canvas { width: 100%; height: 100%; }
   color: var(--t-3, #888);
   border: 1px solid rgba(var(--wht),0.06);
   cursor: pointer; white-space: nowrap;
-  transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s;
+  transition: background-color var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast), box-shadow var(--dur-fast), transform var(--dur-fast) var(--spring), opacity var(--dur-fast);
   flex-shrink: 0;
 }
 .lb-metric-tab.on {
@@ -2146,7 +2162,7 @@ canvas { width: 100%; height: 100%; }
   color: var(--t-3, #888);
   border: 1px solid rgba(var(--wht),0.04);
   cursor: pointer; text-align: center;
-  transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s;
+  transition: background-color var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast), box-shadow var(--dur-fast), transform var(--dur-fast) var(--spring), opacity var(--dur-fast);
 }
 .lb-timeframe-tab.on {
   background: rgba(var(--wht),0.06);
@@ -2532,7 +2548,7 @@ canvas { width: 100%; height: 100%; }
 
 /* ── Follow Button Morphing ──────────────────────────────── */
 .user-row .btn {
-  transition: background-color 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: background-color var(--dur-fast) var(--bounce), border-color var(--dur-fast) var(--bounce), color var(--dur-fast) var(--bounce), box-shadow var(--dur-fast) var(--bounce), transform var(--dur-fast) var(--bounce), opacity var(--dur-fast) var(--bounce);
 }
 .user-row .btn:active {
   transform: scale(0.92);
@@ -2549,7 +2565,7 @@ canvas { width: 100%; height: 100%; }
   background: rgba(var(--wht), 0.01);
   border: 1px solid rgba(var(--wht), 0.03);
   border-radius: var(--r-s);
-  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.25s var(--spring), opacity 0.25s ease;
+  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease;
   cursor: pointer;
 }
 
@@ -2562,7 +2578,7 @@ canvas { width: 100%; height: 100%; }
   }
 }
 .feed-item:active {
-  transform: translateY(0) scale(0.97);
+  transform: translateY(0) scale(var(--press-scale));
 }
 
 
@@ -2591,8 +2607,9 @@ canvas { width: 100%; height: 100%; }
   gap: 4px; background: none; border: none;
   color: var(--t-3); font-size: 0.6rem;
   font-weight: 700; font-family: var(--ff-sans);
-  cursor: pointer; transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, transform 0.3s var(--spring), opacity 0.3s ease;
+  cursor: pointer; transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease;
   width: 56px; height: 48px;
+  min-width: 44px; min-height: 44px; /* 44px hit floor (HIG) — visual stays */
   border-radius: var(--r-m); outline: none;
   position: relative;
   z-index: 2;
@@ -2600,7 +2617,7 @@ canvas { width: 100%; height: 100%; }
 
 .tab-icon {
   width: 20px; height: 20px;
-  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, transform 0.3s var(--bounce), opacity 0.3s ease;
+  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease;
   color: var(--t-3);
   position: relative;
   z-index: 2;
@@ -2948,7 +2965,7 @@ canvas { width: 100%; height: 100%; }
   color: var(--t-2);
   padding: 4px 6px; border-radius: var(--r-s);
   font-size: 0.65rem; font-weight: 700;
-  cursor: pointer; transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s var(--spring), opacity 0.2s ease; outline: none;
+  cursor: pointer; transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease; outline: none;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -2966,7 +2983,7 @@ canvas { width: 100%; height: 100%; }
   backdrop-filter: blur(15px);
   -webkit-backdrop-filter: blur(15px);
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer; transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s var(--spring), opacity 0.2s ease; outline: none;
+  cursor: pointer; transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease; outline: none;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -3954,10 +3971,18 @@ canvas { width: 100%; height: 100%; }
 .arc-promo-sub { font-size: 0.72rem; color: var(--t-3); margin-top: 2px; line-height: 1.4; }
 
 /* ── Winter Arc: Social leaderboard ───────────────────────────
-   Sourced entirely from arcPublic/ (streak, level, xp, this-week count)
-   — the same node the "no sensitive data leaves arc/" design decision
-   makes safe to read for anyone you follow.                          */
-.arc-lb-tabs { margin-bottom: 12px; }
+   Sourced entirely from arcPublic/: streak, level, xp, this-week count
+   and — by deliberate product decision for this screen — per-habit
+   aggregates (today's check-in values, per-habit streaks, 7-day
+   aggregates, sleep score). Never check-in notes, body weight or
+   set-level workout detail: those live only in arc/.                  */
+.arc-lb-tabs {
+  margin-bottom: 12px;
+  display: flex; flex-wrap: nowrap;
+  overflow-x: auto; scrollbar-width: none;
+}
+.arc-lb-tabs::-webkit-scrollbar { display: none; }
+.arc-lb-tabs .seg-tab { flex: 0 0 auto; }
 .arc-lb-rows { display: flex; flex-direction: column; gap: 2px; }
 .arc-lb-row {
   display: flex; align-items: center; gap: 10px;
@@ -3969,12 +3994,95 @@ canvas { width: 100%; height: 100%; }
 .arc-lb-rank.top1 { color: #FFD700; }
 .arc-lb-rank.top2 { color: #C0C0C0; }
 .arc-lb-rank.top3 { color: #CD7F32; }
+.arc-lb-move { width: 12px; flex: 0 0 auto; text-align: center; font-size: 0.58rem; }
+.arc-lb-move .up { color: var(--c-green); }
+.arc-lb-move .down { color: var(--c-red); }
+.arc-lb-move .flat { color: var(--t-4); }
 .arc-lb-avatar { width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 700; color: #fff; overflow: hidden; }
 .arc-lb-name { flex: 1; min-width: 0; font-size: 0.82rem; font-weight: 700; color: var(--t-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .arc-lb-you-chip { font-size: 0.6rem; font-weight: 700; color: var(--accent); background: var(--accent-bg); border-radius: var(--r-full); padding: 1px 6px; margin-left: 6px; }
-.arc-lb-val { font-family: var(--ff-mono); font-size: 0.86rem; font-weight: 700; color: var(--t-1); flex: 0 0 auto; }
+.arc-lb-cell { flex: 0 0 auto; text-align: right; }
+.arc-lb-val { font-family: var(--ff-mono); font-size: 0.86rem; font-weight: 700; color: var(--t-1); flex: 0 0 auto; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+.arc-lb-valwrap { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.arc-lb-sub { font-size: 0.6rem; font-weight: 600; color: var(--t-3); font-variant-numeric: tabular-nums; }
 .arc-lb-empty { padding: 20px 4px; text-align: center; color: var(--t-3); font-size: 0.8rem; }
 .arc-lb-updated { text-align: center; font-size: 0.62rem; color: var(--t-4); margin-top: 10px; }
+
+/* Sleep dots + band chip: semantic tokens, not hard-coded hues — the
+   bands are Optimal/Good/Tired, which are success/warn/danger. */
+.arc-lb-dots { display: flex; gap: 2px; }
+.arc-lb-dot { width: 5px; height: 5px; border-radius: 50%; background: rgba(var(--wht), 0.12); }
+.arc-lb-dot.on.optimal { background: var(--c-green); }
+.arc-lb-dot.on.good { background: var(--c-orange); }
+.arc-lb-dot.on.tired { background: var(--c-red); }
+.arc-lb-band { font-size: 0.56rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; border-radius: var(--r-full); padding: 1px 6px; }
+.arc-lb-band.optimal { color: var(--c-green); background: var(--c-green-bg); }
+.arc-lb-band.good { color: var(--c-orange); background: var(--c-orange-bg); }
+.arc-lb-band.tired { color: var(--c-red); background: var(--c-red-bg); }
+
+/* (a) Who's winning — the race at the top of the card. Mode toggle is a
+   mini seg-tabs pair; rows reuse the shared .arc-lb-row recipe so hero
+   and metric lists stay visually one list. */
+.arc-lb-hero { margin-bottom: 14px; }
+.arc-lb-hero-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.arc-lb-hero-title { font-family: var(--ff-title); font-weight: 800; font-size: 0.92rem; color: var(--t-1); }
+.arc-lb-hero-mode { margin-bottom: 0; }
+.arc-lb-hero-mode .seg-tab { font-size: 0.62rem; padding: 4px 10px; }
+.arc-lb-hero-micro { margin-top: 10px; text-align: center; font-size: 0.68rem; font-weight: 600; color: var(--t-2); line-height: 1.5; }
+.arc-lb-chip { display: inline-block; font-family: var(--ff-mono); font-size: 0.6rem; font-weight: 700; color: var(--t-3); background: rgba(var(--wht), 0.06); border: 1px solid rgba(var(--wht), 0.08); border-radius: var(--r-full); padding: 2px 8px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+/* (c) Everyone today — horizontal strip, me first. Chips are conic rings:
+   --p is the %-of-own-goal (set inline from JS, capped 100); the mask
+   carves the ring so the letter sits in the empty middle. */
+.arc-lb-strip {
+  display: flex; gap: 8px;
+  overflow-x: auto; scrollbar-width: none;
+  margin: 0 -4px 14px; padding: 2px 4px 6px;
+}
+.arc-lb-strip::-webkit-scrollbar { display: none; }
+.arc-today-card {
+  /* --p lives on the card (default 0); each chip reads its own --p,
+     stamped inline from JS as the member's %-of-own-goal, capped 100. */
+  --p: 0;
+  flex: 0 0 auto; width: 118px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 10px 8px;
+  border-radius: var(--r-m);
+  background: var(--glass-1);
+  border: 1px solid rgba(var(--wht), 0.08);
+}
+.arc-today-card.me { background: var(--accent-bg); border-color: rgba(var(--accent-rgb), 0.25); }
+.arc-today-avatar { width: 34px; height: 34px; border-radius: 50%; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; font-size: 0.76rem; font-weight: 700; color: #fff; overflow: hidden; }
+.arc-today-top { display: flex; align-items: center; gap: 4px; max-width: 100%; }
+.arc-today-name { font-size: 0.68rem; font-weight: 700; color: var(--t-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arc-today-tick { display: inline-flex; color: var(--c-green); flex: 0 0 auto; }
+.arc-today-chips { display: flex; gap: 4px; }
+.arc-today-chip {
+  /* Conic ring: the gradient paints the arc of progress, the mask carves
+     the ring so the habit letter shows through the middle. */
+  width: 17px; height: 17px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) calc(var(--p) * 1%), rgba(var(--wht), 0.08) 0);
+  -webkit-mask: radial-gradient(closest-side, transparent 62%, #000 63%);
+          mask: radial-gradient(closest-side, transparent 62%, #000 63%);
+}
+.arc-today-chip.met { /* goal hit: solid coin instead of a ring */
+  background: var(--accent);
+  -webkit-mask: none; mask: none;
+}
+.arc-today-chip.met i { color: #020407; }
+.arc-today-chip i {
+  font-style: normal; font-family: var(--ff-mono);
+  font-size: 0.44rem; font-weight: 700; color: var(--t-3);
+  /* The letter sits inside the ring's hole — the chip's mask covers it,
+     so it counter-renders on top with the mask explicitly lifted. */
+  -webkit-mask: none; mask: none;
+}
+.arc-today-score { font-family: var(--ff-mono); font-size: 0.8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.arc-today-score.optimal { color: var(--c-green); }
+.arc-today-score.good { color: var(--c-orange); }
+.arc-today-score.tired { color: var(--c-red); }
 
 /* Tab-switch cross-fade: the seg tabs in the leaderboard use these two —
    the JS in bindArcLeaderboard toggles them around each render. */
@@ -4170,7 +4278,7 @@ canvas { width: 100%; height: 100%; }
    and drops the weight since Bebas Neue has no true "light" cut.) */
 :root[data-theme="winter"] .label,
 :root[data-theme="winter"] .settings-section-header {
-  letter-spacing: 0.16em;
+  letter-spacing: 0.12em;
 }
 
 /* Nav labels are seen on every screen, every session — worth the same
@@ -4304,6 +4412,20 @@ canvas { width: 100%; height: 100%; }
   :root[data-theme="winter"] .gradient-mesh::after { background-size: 260px 260px; opacity: 0.32; }
   :root[data-theme="winter"] .mesh-blob { filter: blur(60px); }
 }
+
+/* ── Utilities ─────────────────────────────────────────────── */
+/* Spacer micro-utilities — replace one-off inline style attributes on
+   stacked form groups and section cards. Rides --space-* so the 4px
+   scale stays the source of truth. */
+.u-mb-3 { margin-bottom: var(--space-3); }
+.u-mb-4 { margin-bottom: var(--space-4); }
+.u-mb-6 { margin-bottom: var(--space-6); }
+.u-mt-2 { margin-top: var(--space-2); }
+.u-mt-4 { margin-top: var(--space-4); }
+/* Body-weight hero input in the Log BW modal. */
+.bw-hero-input { text-align: center; font-size: 1.4rem; font-weight: 800; }
+/* Centered text on the lock-screen credentials. */
+.lock-input { text-align: center; }
 
 /* ── Lock Screen Overlay ─────────────────────────────────── */
 .lock-screen {
@@ -4743,9 +4865,9 @@ canvas { width: 100%; height: 100%; }
 }
 .settings-list-item {
   display: flex; align-items: center; gap: 14px;
-  padding: 16px 20px;
+  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid rgba(var(--wht), 0.05);
-  cursor: pointer; transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s var(--spring), opacity 0.2s ease;
+  cursor: pointer; transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease;
   position: relative;
 }
 .settings-list-item:last-child {
@@ -4781,7 +4903,7 @@ canvas { width: 100%; height: 100%; }
   color: var(--t-4); display: flex; align-items: center;
 }
 .settings-list-chevron svg {
-  width: 18px; height: 18px; transition: transform 0.2s;
+  width: 18px; height: 18px; transition: transform var(--dur-fast) var(--spring);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -4928,7 +5050,7 @@ canvas { width: 100%; height: 100%; }
   padding: 4px 10px; border-radius: 8px;
   font-size: 0.68rem; font-weight: 700;
   color: var(--t-2); text-decoration: none;
-  margin-top: 8px; transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s var(--spring), opacity 0.2s ease;
+  margin-top: 8px; transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -5104,11 +5226,17 @@ html, body { max-width: 100%; overflow-x: hidden; }
     border-radius: 10px;
     font-size: 0.9rem;
     color: var(--t-2);
-    transition: background 0.2s var(--spring), color 0.2s var(--spring);
+    transition: background var(--dur-fast) var(--spring), color var(--dur-fast) var(--spring);
   }
   .bot-btn span { font-size: 0.9rem; font-weight: 700; }
   .bot-btn .tab-icon { width: 22px; height: 22px; }
+}
+/* Hover gated behind hover-capable pointers — a bare :hover inside a
+   viewport media query leaves stale hover on touch desktops. */
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
   .bot-btn:hover { background: rgba(var(--wht), 0.05); color: var(--t-1); }
+}
+@media (min-width: 1024px) {
   .bot-btn.on {
     background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.16), rgba(var(--accent-rgb), 0.05));
     box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.28);
@@ -5255,9 +5383,12 @@ html, body { max-width: 100%; overflow-x: hidden; }
    figures, leaderboards, streaks — so digits don't jitter width while
    animating or reflowing. Class-only; the font stays the body face. */
 .lb-val, .arc-lb-val, .mini-profile-stat-val, .mini-profile-score,
-.podium-score, .stat-val, .arc-lb-rank, .hm-count, .lock-heatmap-legend {
+.podium-score, .stat-val, .arc-lb-rank, .hm-count, .lock-heatmap-legend,
+.vol-widget-value, .ring-value, .w-val, .pr-score, .chart-val,
+.feed-stat b, .tl-stat-v, .timer-text, .monk-streak-num, .monk-stat-val, .mp-tile-vol {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
+  letter-spacing: 0;
 }
 
 /* Arc leaderboard rank accent — the podium colors already exist above
@@ -5289,11 +5420,11 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
 /* Focus: a visible ring for keyboard users without changing the touch
    experience. Chromium/Safari both honor :focus-visible — taps don't
-   trigger it. */
+   trigger it. Offset-only, no forced border-radius: the outline follows
+   each control's own shape, so round controls keep a round ring. */
 :focus-visible {
-  outline: 2px solid rgba(var(--accent-rgb), 0.55);
+  outline: 2px solid rgba(var(--accent-rgb), 0.65);
   outline-offset: 2px;
-  border-radius: var(--r-s);
 }
 .btn:focus-visible, .seg-tab:focus-visible, .bot-btn:focus-visible {
   outline-offset: 3px;

@@ -88,7 +88,7 @@
         <input type="password" class="lock-input" id="loginPassword" placeholder="Password" autocomplete="current-password" style="text-align: center;">
       </div>
       <p class="lock-setup-desc" id="loginError" style="display: none; color: #FF453A;"></p>
-      <button class="lock-btn" id="btnLogin" style="margin-top: 8px;">Sign In</button>
+      <button class="lock-btn u-mt-2" id="btnLogin">Sign In</button>
     </div>
 
     <div class="lock-reset-link" id="loginModeToggle">
@@ -124,8 +124,8 @@
   <div class="modal card">
     <div class="modal-title">Log Body Weight</div>
     <div class="modal-msg">Enter your current weight in kg</div>
-    <div class="input-group" style="margin-bottom:16px">
-      <input type="number" class="input-field" id="bwInput" placeholder="e.g. 75" step="0.1" inputmode="decimal" style="text-align:center;font-size:1.4rem;font-weight:800">
+    <div class="input-group u-mb-4">
+      <input type="number" class="input-field bw-hero-input" id="bwInput" placeholder="e.g. 75" step="0.1" inputmode="decimal">
     </div>
     <div class="modal-acts">
       <button class="btn btn-secondary btn-full" id="bwCancel">Cancel</button>
@@ -139,10 +139,10 @@
   <div class="modal card">
     <div class="modal-title">New Progress Pic</div>
     <div class="ppx-preview-wrap"><img id="ppxPreview" class="ppx-preview" alt="Preview"></div>
-    <div class="input-group" style="margin-bottom:12px">
+    <div class="input-group u-mb-3">
       <input type="text" class="input-field" id="ppxCaption" maxlength="80" placeholder="Caption (optional)">
     </div>
-    <div class="input-group" style="margin-bottom:16px">
+    <div class="input-group u-mb-4">
       <input type="number" class="input-field" id="ppxBw" step="0.1" inputmode="decimal" placeholder="Body weight kg (optional)">
     </div>
     <div class="modal-acts">
@@ -635,19 +635,29 @@
         <p class="view-subtitle">Leaderboard & activity feed</p>
       </div>
 
-      <!-- Winter Arc leaderboard — only ever shows what arcPublic/ carries
-           (streak, level, xp, this-week workout count): never sleep,
-           protein, water, steps or body weight. Visible the moment
-           there's a row to show, NOT gated on your own enrollment — a
-           friend you follow who's running the Arc shows up here even if
-           you've never joined it yourself. Hidden only when there's
-           truly nobody: you haven't joined AND nobody you follow has. -->
+      <!-- Winter Arc social — shows only what arcPublic/ carries: streak,
+           level, xp, this-week workout count AND, by deliberate product
+           decision, per-habit aggregates (today's check-in values, per-habit
+           streaks, 7-day aggregates, sleep score) for the social surface:
+           never check-in notes, never body weight, never set-level workout
+           detail. Visible the moment there's a row to show, NOT gated on
+           your own enrollment — a friend you follow who's running the Arc
+           shows up here even if you've never joined it yourself. Hidden only
+           when there's truly nobody: you haven't joined AND nobody you
+           follow has. -->
       <div class="label" id="arcLbLabel" style="display:none">Winter Arc</div>
       <div class="card glass-card arc-lb-card" id="arcLbCard" style="display:none">
+        <div class="arc-lb-hero" id="arcLbHero"></div>
+        <div class="arc-lb-strip" id="arcLbStrip" style="display:none"></div>
         <div class="seg-tabs arc-lb-tabs" id="arcLbTabs">
           <div class="seg-tab on" data-arc-metric="streak">Streak</div>
           <div class="seg-tab" data-arc-metric="level">Level</div>
           <div class="seg-tab" data-arc-metric="week">This Week</div>
+          <div class="seg-tab" data-arc-metric="sleep">Sleep</div>
+          <div class="seg-tab" data-arc-metric="steps">Steps</div>
+          <div class="seg-tab" data-arc-metric="water">Water</div>
+          <div class="seg-tab" data-arc-metric="protein">Protein</div>
+          <div class="seg-tab" data-arc-metric="mobility">Mobility</div>
         </div>
         <div class="arc-lb-note" id="arcLbNote" style="display:none"></div>
         <div class="arc-lb-rows" id="arcLbRows"></div>
@@ -816,7 +826,7 @@
       <!-- SECTION 1: ACCOUNT CONNECTION -->
       <!-- SECTION 0: APPEARANCE & SEASON -->
       <div class="settings-section-header">Appearance &amp; Season</div>
-      <div class="card glass-card settings-list-card" style="margin-bottom: 16px;">
+      <div class="card glass-card settings-list-card u-mb-4">
         <div class="settings-list-item" id="themeRow">
           <div class="settings-list-icon" style="background: linear-gradient(135deg, #5FD3FF, #8A7CFF); color: #fff;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -856,7 +866,7 @@
       </div>
 
       <div class="settings-section-header">Account Connection</div>
-      <div class="card glass-card settings-list-card" style="margin-bottom: 16px;">
+      <div class="card glass-card settings-list-card u-mb-4">
         <!-- Account Status Row -->
         <div class="settings-list-item">
           <div class="settings-list-icon" style="background: linear-gradient(135deg, #0A84FF, #30A2FF); color: #fff;">
@@ -877,7 +887,7 @@
 
       <!-- SECTION 2: CLOUD SYNCHRONIZATION -->
       <div class="settings-section-header">Cloud Synchronization</div>
-      <div class="card glass-card settings-list-card" style="margin-bottom: 16px;">
+      <div class="card glass-card settings-list-card u-mb-4">
         <!-- Cloud Backup -->
         <div class="settings-list-item" id="bFbBackup">
           <div class="settings-list-icon" style="background: linear-gradient(135deg, #30D158, #58E57C); color: #fff;">
@@ -927,7 +937,7 @@
 
       <!-- SECTION 3: LOCAL STORAGE TOOLS -->
       <div class="settings-section-header">Local Storage Tools</div>
-      <div class="card glass-card settings-list-card" style="margin-bottom: 16px;">
+      <div class="card glass-card settings-list-card u-mb-4">
         <!-- Export JSON file -->
         <div class="settings-list-item" id="bExp">
           <div class="settings-list-icon" style="background: linear-gradient(135deg, #BF5AF2, #D697FF); color: #fff;">
@@ -1002,7 +1012,7 @@
 
       <!-- SECTION 4: DEVELOPER CONSOLE -->
       <div class="settings-section-header">Developer Console</div>
-      <div class="card glass-card settings-list-card" style="margin-bottom: 24px;">
+      <div class="card glass-card settings-list-card u-mb-6">
         <div class="connection-guide" style="padding: 14px 20px 20px 20px;">
           <div class="guide-toggle" style="font-size:0.76rem">
             <span>One-Time Backend Setup (maintainer only)</span>
@@ -1164,7 +1174,7 @@
         <input type="number" class="arc-num" inputmode="numeric" min="0" max="14" id="goalWorkoutsPerWeek" value="5">
       </div>
       <div class="arc-goal-grid" id="goalsEditGrid"></div>
-      <button class="btn btn-primary btn-full arc-num" id="goalsSaveBtn" style="margin-top:16px">Save Goals</button>
+      <button class="btn btn-primary btn-full arc-num u-mt-4" id="goalsSaveBtn">Save Goals</button>
     </div>
   </div>
 
