@@ -185,6 +185,16 @@ const AscaNutrition = (() => {
     { id: 'seed-egg', name: 'Egg', basis: 'piece', pieceSize: 55, source: 'estimated',
       per100: { kcal: 70, protein: 6.3, carbs: 0.4, fat: 4.8, fiber: 0, micros: {} } }
   ];
+  /* Recipes built from the starter foods above. Same id/name dedupe:
+     a user's edit or delete of the seeded recipe wins and is never
+     silently resurrected on another boot or device. */
+  const STARTER_RECIPES = [
+    { id: 'seed-french-toast', name: 'French Toast', servings: 1,
+      ingredients: [
+        { foodId: 'seed-toast', qty: 4, unit: 'slice' },
+        { foodId: 'seed-egg', qty: 2, unit: 'egg' }
+      ] }
+  ];
   let seededStarter = false; // once per boot — protect seedsWith on later renders
 
   function seedsWith(list, f) {
@@ -205,6 +215,14 @@ const AscaNutrition = (() => {
       state.foods[f.id] = Object.assign({ source: 'user', ts: Date.now() }, f);
       foods.push(f); // subsequent seeds see this one too
       markDirty(`foods/${f.id}`);
+      added++;
+    }
+    const recipes = Object.values(state.recipes);
+    for (const r of STARTER_RECIPES) {
+      if (seedsWith(recipes, r)) continue;
+      state.recipes[r.id] = Object.assign({ ts: Date.now() }, r);
+      recipes.push(r);
+      markDirty(`recipes/${r.id}`);
       added++;
     }
     if (added) render();
