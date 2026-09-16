@@ -83,6 +83,12 @@ COMMENTS = {
         "their own inbox (accept = join elsewhere + delete; decline =",
         "delete). Mirrors the gym-node-owner trick used by directory/.",
     ],
+    'nutrition': [
+        "Calorie & nutrition tracker: profile, goals, saved foods,",
+        "recipes, day logs, weight and measurement history. Owner-only",
+        "like budget/ and for the same reason — intake and body data are",
+        "not social data and never appear in directory/ or arcPublic/.",
+    ],
 }
 
 def key_repr(k):

@@ -524,6 +524,315 @@
       </div>
     </section>
 
+    <!-- ═══ NUTRITION / CALORIE TRACKER VIEW ═══
+         Owns sections 1-23 of the nutrition spec except the deferred
+         AI logger. All math comes from NutritionEngine; this markup is
+         structure only — every number below starts as a placeholder
+         and is filled by AscaNutrition.render*(). -->
+    <section class="view" id="vNut">
+      <div class="view-header">
+        <h2 class="view-title">Nutrition</h2>
+        <p class="view-subtitle">Calories, macros &amp; weight trend</p>
+      </div>
+
+      <div class="seg-tabs nut-subtabs" id="nutSubTabs">
+        <button class="seg-tab on" data-nut="today">Today</button>
+        <button class="seg-tab" data-nut="trends">Trends</button>
+        <button class="seg-tab" data-nut="foods">Foods</button>
+        <button class="seg-tab" data-nut="plan">Plan</button>
+      </div>
+
+      <!-- ── TODAY ── -->
+      <div id="nutPaneToday">
+        <div class="nut-datenav">
+          <button class="arc-seeall-btn" id="nutPrevDay" aria-label="Previous day">‹</button>
+          <span class="nut-datenav-label" id="nutDateLabel">Today</span>
+          <button class="arc-seeall-btn" id="nutNextDay" aria-label="Next day">›</button>
+        </div>
+
+        <div class="card glass-card nut-kcal-card">
+          <div class="nut-kcal-ring-wrap">
+            <svg class="progress-ring-svg" viewBox="0 0 64 64">
+              <circle class="ring-bg" cx="32" cy="32" r="26"/>
+              <circle class="ring-fill" id="nutKcalRingFill" cx="32" cy="32" r="26" stroke-dasharray="163.36 163.36" stroke-dashoffset="163.36"/>
+            </svg>
+            <div class="nut-kcal-ring-center">
+              <span class="nut-num" id="nutKcalNum">0</span>
+              <span class="nut-kcal-target" id="nutKcalTarget">/ — kcal</span>
+            </div>
+          </div>
+          <div class="nut-kcal-side">
+            <div class="nut-kcal-remain" id="nutKcalRemain">Set up your plan for a target</div>
+            <div class="nut-sync-note" id="nutSyncNote" style="display:none">Cloud sync paused — database rules need a republish (Settings → Developer Console).</div>
+          </div>
+        </div>
+
+        <div class="card glass-card nut-macros-card">
+          <div class="nut-macro" id="nutMacroP"><div class="nut-macro-top"><span>Protein</span><span class="nut-macro-nums nut-num">0 / — g</span></div><div class="nut-macro-bar"><div class="nut-macro-fill protein"></div></div></div>
+          <div class="nut-macro" id="nutMacroC"><div class="nut-macro-top"><span>Carbs</span><span class="nut-macro-nums nut-num">0 / — g</span></div><div class="nut-macro-bar"><div class="nut-macro-fill carbs"></div></div></div>
+          <div class="nut-macro" id="nutMacroF"><div class="nut-macro-top"><span>Fat</span><span class="nut-macro-nums nut-num">0 / — g</span></div><div class="nut-macro-bar"><div class="nut-macro-fill fat"></div></div></div>
+          <div class="nut-macro" id="nutMacroFi"><div class="nut-macro-top"><span>Fiber</span><span class="nut-macro-nums nut-num">0 / — g</span></div><div class="nut-macro-bar"><div class="nut-macro-fill fiber"></div></div></div>
+        </div>
+
+        <div class="nut-actions-card">
+          <button class="btn btn-primary btn-sm" id="nutAddFoodBtn">+ Food</button>
+          <button class="btn btn-secondary btn-sm" id="nutAddRecipeBtn">+ Recipe</button>
+          <button class="btn btn-secondary btn-sm" id="nutQuickAddBtn">Quick add</button>
+          <button class="btn btn-secondary btn-sm" id="nutWeightBtn">+ Weight</button>
+        </div>
+        <div class="nut-quickpresets" id="nutQuickPresets">
+          <span class="nut-quickpresets-label">Fast log:</span>
+          <button class="btn-timer-chip" data-kcal="100">+100</button>
+          <button class="btn-timer-chip" data-kcal="250">+250</button>
+          <button class="btn-timer-chip" data-kcal="500">+500</button>
+        </div>
+
+        <div class="arc-section-head">
+          <div class="arc-section-title" style="flex:1">Meals</div>
+          <button class="arc-seeall-btn" id="nutAddMealBtn">+ Custom meal</button>
+        </div>
+        <div id="nutMealList"></div>
+
+        <div class="card glass-card volume-widget nut-weight-widget" id="nutWeightOpen" style="cursor:pointer">
+          <div class="vol-widget-left">
+            <span class="vol-widget-label">Body weight</span>
+            <span class="vol-widget-period" id="nutWeightTrend">Log your weight daily</span>
+          </div>
+          <div class="vol-widget-right">
+            <span class="vol-widget-value" id="nutWeightNow">—</span>
+          </div>
+        </div>
+
+        <div class="card glass-card nut-goal-strip" id="nutGoalStrip" style="display:none"></div>
+      </div>
+
+      <!-- ── TRENDS ── -->
+      <div id="nutPaneTrends" style="display:none">
+        <div class="label">This week</div>
+        <div class="card glass-card nut-card-pad" id="nutWeekAvg"></div>
+
+        <div class="label">Maintenance — formula vs observed</div>
+        <div class="card glass-card nut-card-pad" id="nutTdeeCompare"></div>
+
+        <div class="label">Weight</div>
+        <div class="card glass-card nut-card-pad" id="nutWeightStats"></div>
+        <div class="card glass-card chart-card">
+          <div class="chart-header"><span class="heatmap-cal-title">Daily weight + 7-day average</span></div>
+          <div class="chart-wrap nut-chart-wrap"><canvas id="nutChartWeight"></canvas></div>
+        </div>
+
+        <div class="label">Intake</div>
+        <div class="card glass-card chart-card">
+          <div class="chart-header"><span class="heatmap-cal-title">Calories per day — last 30</span></div>
+          <div class="chart-wrap nut-chart-wrap"><canvas id="nutChartKcal"></canvas></div>
+        </div>
+
+        <div class="card glass-card nut-card-pad nut-goal-card" id="nutGoalCard" style="display:none"></div>
+
+        <div class="label">Measurements</div>
+        <div class="card glass-card nut-card-pad">
+          <select class="input-field" id="nutMeasureSelect">
+            <option value="waist">Waist</option>
+            <option value="neck">Neck</option>
+            <option value="chest">Chest</option>
+            <option value="arms">Arms</option>
+            <option value="hips">Hips</option>
+            <option value="thighs">Thighs</option>
+          </select>
+          <div id="nutMeasureLatest" style="margin-top:10px"></div>
+          <div class="chart-wrap nut-chart-wrap" style="margin-top:8px"><canvas id="nutChartMeasure"></canvas></div>
+        </div>
+      </div>
+
+      <!-- ── FOODS ── -->
+      <div id="nutPaneFoods" style="display:none">
+        <div class="input-group search-group nut-food-search-wrap">
+          <div class="search-wrap">
+            <span class="search-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </span>
+            <input type="text" class="input-field" id="nutFoodSearch" placeholder="Search saved foods &amp; recipes…" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="arc-section-head">
+          <div class="arc-section-title" style="flex:1">Saved foods</div>
+          <button class="arc-seeall-btn" id="nutNewFoodBtn">+ New food</button>
+        </div>
+        <div id="nutFoodList"></div>
+
+        <div class="arc-section-head">
+          <div class="arc-section-title" style="flex:1">Recipes</div>
+          <button class="arc-seeall-btn" id="nutNewRecipeBtn">+ New recipe</button>
+        </div>
+        <div id="nutRecipeList"></div>
+      </div>
+
+      <!-- ── PLAN ── -->
+      <div id="nutPanePlan" style="display:none">
+        <div class="label">Body &amp; profile</div>
+        <div class="card glass-card nut-card-pad">
+          <div class="form-row">
+            <div class="input-group">
+              <label class="input-label" for="nutSex">Sex</label>
+              <select class="input-field" id="nutSex"><option value="m">Male</option><option value="f">Female</option></select>
+            </div>
+            <div class="input-group">
+              <label class="input-label" for="nutAge">Age</label>
+              <input type="number" class="input-field" id="nutAge" inputmode="numeric" min="10" max="100" placeholder="e.g. 28">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="input-group">
+              <label class="input-label" for="nutHeight">Height (cm)</label>
+              <input type="number" class="input-field" id="nutHeight" inputmode="decimal" placeholder="e.g. 178">
+            </div>
+            <div class="input-group">
+              <label class="input-label" for="nutProfileWeight">Current weight (kg)</label>
+              <input type="number" class="input-field" id="nutProfileWeight" inputmode="decimal" step="0.1" placeholder="latest weigh-in">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="input-group">
+              <label class="input-label" for="nutTargetWeight">Target weight (kg)</label>
+              <input type="number" class="input-field" id="nutTargetWeight" inputmode="decimal" step="0.1" placeholder="optional">
+            </div>
+            <div class="input-group">
+              <label class="input-label" for="nutBodyFat">Body fat % <span style="font-weight:400;color:var(--t-3)">(optional)</span></label>
+              <input type="number" class="input-field" id="nutBodyFat" inputmode="decimal" step="0.1" placeholder="enables Katch–McArdle">
+            </div>
+          </div>
+          <button class="btn btn-primary btn-full" id="nutProfileSave">Save profile</button>
+          <button class="btn btn-secondary btn-full u-mt-2" id="nutMeasureBtn">+ Log measurements (waist, neck, …)</button>
+        </div>
+
+        <div class="label">Activity</div>
+        <div class="card glass-card nut-card-pad">
+          <div class="nut-act-grid" id="nutActivityOpts">
+            <button class="nut-act-btn on" data-act="sedentary">Sedentary</button>
+            <button class="nut-act-btn" data-act="light">Lightly active</button>
+            <button class="nut-act-btn" data-act="moderate">Moderately active</button>
+            <button class="nut-act-btn" data-act="very">Very active</button>
+            <button class="nut-act-btn" data-act="extreme">Extremely active</button>
+            <button class="nut-act-btn" data-act="detailed">Detailed…</button>
+          </div>
+          <div id="nutActivityDetail" style="display:none">
+            <div class="form-row">
+              <div class="input-group">
+                <label class="input-label" for="nutSteps">Avg steps / day</label>
+                <input type="number" class="input-field" id="nutSteps" inputmode="numeric" placeholder="e.g. 8000">
+              </div>
+              <div class="input-group">
+                <label class="input-label" for="nutGymPerWeek">Gym sessions / week</label>
+                <input type="number" class="input-field" id="nutGymPerWeek" inputmode="numeric" placeholder="e.g. 4">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="input-group">
+                <label class="input-label" for="nutGymMin">Gym minutes / session</label>
+                <input type="number" class="input-field" id="nutGymMin" inputmode="numeric" placeholder="e.g. 60">
+              </div>
+              <div class="input-group">
+                <label class="input-label" for="nutCardioPerWeek">Cardio sessions / week</label>
+                <input type="number" class="input-field" id="nutCardioPerWeek" inputmode="numeric" placeholder="e.g. 2">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="input-group">
+                <label class="input-label" for="nutCardioMin">Cardio minutes / session</label>
+                <input type="number" class="input-field" id="nutCardioMin" inputmode="numeric" placeholder="e.g. 30">
+              </div>
+              <div class="input-group">
+                <label class="input-label" for="nutCardioInt">Cardio intensity</label>
+                <select class="input-field" id="nutCardioInt"><option value="light">Light</option><option value="moderate" selected>Moderate</option><option value="hard">Hard</option></select>
+              </div>
+            </div>
+            <div class="nut-muted">Each line's kcal contribution is shown in the estimate below — nothing is folded into a black-box multiplier.</div>
+          </div>
+        </div>
+
+        <div class="label">Estimated maintenance</div>
+        <div class="card glass-card nut-card-pad" id="nutTdeeCard"></div>
+
+        <div class="label">Goal</div>
+        <div class="card glass-card nut-card-pad">
+          <div class="nut-act-grid" id="nutGoalKind">
+            <button class="nut-act-btn on" data-goal="maintain">Maintain</button>
+            <button class="nut-act-btn" data-goal="lose">Lose</button>
+            <button class="nut-act-btn" data-goal="gain">Gain</button>
+            <button class="nut-act-btn" data-goal="custom">Custom kcal</button>
+          </div>
+          <div id="nutGoalLoseOpts" style="display:none">
+            <div class="form-row">
+              <div class="input-group">
+                <label class="input-label" for="nutRateSel">Target rate</label>
+                <select class="input-field" id="nutRateSel">
+                  <option value="">By rate…</option>
+                  <option value="0.25">0.25 kg/week</option>
+                  <option value="0.5">0.5 kg/week</option>
+                  <option value="0.75">0.75 kg/week</option>
+                  <option value="1">1 kg/week</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label class="input-label" for="nutDeficitSel">…or daily deficit</label>
+                <select class="input-field" id="nutDeficitSel">
+                  <option value="">By deficit…</option>
+                  <option value="200">200 kcal/day</option>
+                  <option value="300">300 kcal/day</option>
+                  <option value="500">500 kcal/day</option>
+                  <option value="750">750 kcal/day</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div id="nutGoalGainOpts" style="display:none">
+            <div class="input-group">
+              <label class="input-label" for="nutSurplusSel">Surplus</label>
+              <select class="input-field" id="nutSurplusSel">
+                <option value="300kcal">Lean — 300 kcal/day</option>
+                <option value="500kcal">Faster — 500 kcal/day</option>
+                <option value="0.25">0.25 kg/week</option>
+                <option value="0.5">0.5 kg/week</option>
+              </select>
+            </div>
+          </div>
+          <div id="nutGoalCustomOpts" style="display:none">
+            <div class="input-group">
+              <label class="input-label" for="nutCustomKcal">Daily calorie target</label>
+              <input type="number" class="input-field" id="nutCustomKcal" inputmode="numeric" placeholder="e.g. 2400">
+            </div>
+          </div>
+          <div id="nutGoalOut" style="margin-top:6px"></div>
+        </div>
+
+        <div class="label">Macro targets</div>
+        <div class="card glass-card nut-card-pad">
+          <div class="form-row">
+            <div class="input-group">
+              <label class="input-label" for="nutProteinTarget">Protein (g)</label>
+              <input type="number" class="input-field" id="nutProteinTarget" inputmode="numeric">
+            </div>
+            <div class="input-group">
+              <label class="input-label" for="nutCarbsTarget">Carbs (g)</label>
+              <input type="number" class="input-field" id="nutCarbsTarget" inputmode="numeric">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="input-group">
+              <label class="input-label" for="nutFatTarget">Fat (g)</label>
+              <input type="number" class="input-field" id="nutFatTarget" inputmode="numeric">
+            </div>
+            <div class="input-group">
+              <label class="input-label" for="nutFiberTarget">Fiber (g)</label>
+              <input type="number" class="input-field" id="nutFiberTarget" inputmode="numeric">
+            </div>
+          </div>
+          <div class="nut-muted" id="nutMacroNote"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- ═══ TIMELINE HISTORY VIEW ═══ -->
     <section class="view" id="vHist">
       <div class="view-header">
@@ -1119,6 +1428,12 @@
       </svg>
       <span>Log</span>
     </button>
+    <button class="bot-btn" data-v="Nut">
+      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+      </svg>
+      <span>Nutrition</span>
+    </button>
     <button class="bot-btn" data-v="Hist">
       <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="10"/>
@@ -1150,6 +1465,227 @@
       <span>Account</span>
     </button>
   </nav>
+
+  <!-- ═══ NUTRITION SHEETS — same mini-profile sheet idiom; all ids
+       referenced from nutrition.js only. ═══ -->
+
+  <!-- Add Food: search → pick → quantity → live preview → save -->
+  <div class="mini-profile-bg" id="nutAddSheetBg">
+    <div class="mini-profile-sheet ch-sheet">
+      <div class="mini-profile-handle"></div>
+      <div class="ch-sheet-head">
+        <div class="ch-sheet-title">Add food</div>
+        <button class="btn-close" data-nut-close="nutAddSheetBg" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="input-group search-input-wrap">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" class="input-field search-input" id="afSearch" placeholder="Search your saved foods…" autocomplete="off">
+      </div>
+      <div class="nut-pick-list" id="afResults"></div>
+      <button class="btn btn-ghost btn-sm btn-full" id="afNewFood">+ Save a new food first</button>
+      <div class="form-row u-mt-2">
+        <div class="input-group">
+          <label class="input-label" for="afQty">Quantity</label>
+          <input type="number" class="input-field" id="afQty" inputmode="decimal" min="0" placeholder="e.g. 80">
+        </div>
+        <div class="input-group">
+          <label class="input-label" for="afUnit">Unit</label>
+          <select class="input-field" id="afUnit"></select>
+        </div>
+      </div>
+      <div id="afPreview" class="nut-preview"></div>
+      <button class="btn btn-primary btn-full" id="afSave">Add to meal</button>
+    </div>
+  </div>
+
+  <!-- Quick Add (section 12) -->
+  <div class="mini-profile-bg" id="nutQuickSheetBg">
+    <div class="mini-profile-sheet ch-sheet">
+      <div class="mini-profile-handle"></div>
+      <div class="ch-sheet-head">
+        <div class="ch-sheet-title">Quick add</div>
+        <button class="btn-close" data-nut-close="nutQuickSheetBg" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="input-group">
+        <label class="input-label" for="qaKcal">Calories (kcal)</label>
+        <input type="number" class="input-field" id="qaKcal" inputmode="numeric" min="0" placeholder="e.g. 500">
+      </div>
+      <div class="nut-muted u-mb-2">Macros optional — what you skip just stays uncounted.</div>
+      <div class="form-row">
+        <div class="input-group"><label class="input-label" for="qaP">Protein (g)</label><input type="number" class="input-field" id="qaP" inputmode="decimal" min="0"></div>
+        <div class="input-group"><label class="input-label" for="qaC">Carbs (g)</label><input type="number" class="input-field" id="qaC" inputmode="decimal" min="0"></div>
+        <div class="input-group"><label class="input-label" for="qaF">Fat (g)</label><input type="number" class="input-field" id="qaF" inputmode="decimal" min="0"></div>
+      </div>
+      <button class="btn btn-primary btn-full" id="qaSave">Add to today</button>
+    </div>
+  </div>
+
+  <!-- Weight logger (section 17) -->
+  <div class="mini-profile-bg" id="nutWeightSheetBg">
+    <div class="mini-profile-sheet ch-sheet">
+      <div class="mini-profile-handle"></div>
+      <div class="ch-sheet-head">
+        <div class="ch-sheet-title">Log body weight</div>
+        <button class="btn-close" data-nut-close="nutWeightSheetBg" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="nut-muted u-mb-2">Daily weigh-ins build the trend — single days move with water, glycogen and sodium; the 7-day average is the number that matters.</div>
+      <div class="form-row">
+        <div class="input-group"><label class="input-label" for="nwDate">Date</label><input type="date" class="input-field" id="nwDate"></div>
+        <div class="input-group"><label class="input-label" for="nwKg">Weight (kg) — empty removes that day</label><input type="number" class="input-field" id="nwKg" inputmode="decimal" step="0.1" placeholder="e.g. 74.8"></div>
+      </div>
+      <button class="btn btn-primary btn-full" id="nwSave">Save weigh-in</button>
+    </div>
+  </div>
+
+  <!-- Measurements (section 1) -->
+  <div class="mini-profile-bg" id="nutMeasureSheetBg">
+    <div class="mini-profile-sheet ch-sheet">
+      <div class="mini-profile-handle"></div>
+      <div class="ch-sheet-head">
+        <div class="ch-sheet-title">Measurements</div>
+        <button class="btn-close" data-nut-close="nutMeasureSheetBg" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="input-group"><label class="input-label" for="nmDate">Date</label><input type="date" class="input-field" id="nmDate"></div>
+      <div class="nut-muted u-mb-2">All optional — fill what you measured. Stored as history; trends live in the Trends tab.</div>
+      <div class="form-row">
+        <div class="input-group"><label class="input-label" for="nmWaist">Waist (cm)</label><input type="number" class="input-field" id="nmWaist" inputmode="decimal" step="0.1"></div>
+        <div class="input-group"><label class="input-label" for="nmNeck">Neck (cm)</label><input type="number" class="input-field" id="nmNeck" inputmode="decimal" step="0.1"></div>
+      </div>
+      <div class="form-row">
+        <div class="input-group"><label class="input-label" for="nmChest">Chest (cm)</label><input type="number" class="input-field" id="nmChest" inputmode="decimal" step="0.1"></div>
+        <div class="input-group"><label class="input-label" for="nmArms">Arms (cm)</label><input type="number" class="input-field" id="nmArms" inputmode="decimal" step="0.1"></div>
+      </div>
+      <div class="form-row">
+        <div class="input-group"><label class="input-label" for="nmHips">Hips (cm)</label><input type="number" class="input-field" id="nmHips" inputmode="decimal" step="0.1"></div>
+        <div class="input-group"><label class="input-label" for="nmThighs">Thighs (cm)</label><input type="number" class="input-field" id="nmThighs" inputmode="decimal" step="0.1"></div>
+      </div>
+      <button class="btn btn-primary btn-full" id="nmSave">Save measurements</button>
+    </div>
+  </div>
+
+  <!-- Food editor (sections 6/7/8/10/15) -->
+  <div class="mini-profile-bg" id="nutFoodSheetBg">
+    <div class="mini-profile-sheet ch-sheet">
+      <div class="mini-profile-handle"></div>
+      <div class="ch-sheet-head">
+        <div class="ch-sheet-title" id="nutFoodSheetTitle">New food</div>
+        <button class="btn-close" data-nut-close="nutFoodSheetBg" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="input-group"><label class="input-label" for="nfName">Name</label><input type="text" class="input-field" id="nfName" placeholder="e.g. My oats" maxlength="60"></div>
+      <div class="form-row">
+        <div class="input-group">
+          <label class="input-label" for="nfBasis">Values are per…</label>
+          <select class="input-field" id="nfBasis">
+            <option value="per100g">100 g (package label)</option>
+            <option value="perServing">one serving</option>
+            <option value="piece">one piece</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label class="input-label" for="nfSource">Source</label>
+          <select class="input-field" id="nfSource">
+            <option value="package">Package label</option>
+            <option value="estimated">Estimated / database</option>
+          </select>
+        </div>
+      </div>
+      <div class="nut-muted u-mb-2" id="nfBasisHint"></div>
+      <div class="form-row">
+        <div class="input-group"><label class="input-label" for="nfKcal">Calories (kcal)</label><input type="number" class="input-field" id="nfKcal" inputmode="decimal" min="0" placeholder="250"></div>
+        <div class="input-group"><label class="input-label" for="nfProtein">Protein (g)</label><input type="number" class="input-field" id="nfProtein" inputmode="decimal" min="0" placeholder="9"></div>
+      </div>
+      <div class="form-row">
+        <div class="input-group"><label class="input-label" for="nfCarbs">Carbs (g)</label><input type="number" class="input-field" id="nfCarbs" inputmode="decimal" min="0" placeholder="42"></div>
+        <div class="input-group"><label class="input-label" for="nfFat">Fat (g)</label><input type="number" class="input-field" id="nfFat" inputmode="decimal" min="0" placeholder="3.5"></div>
+      </div>
+      <div class="form-row">
+        <div class="input-group"><label class="input-label" for="nfFiber">Fiber (g)</label><input type="number" class="input-field" id="nfFiber" inputmode="decimal" min="0" placeholder="optional"></div>
+        <div class="input-group"><label class="input-label" for="nfSodium">Sodium (mg) <span style="font-weight:400;color:var(--t-3)">optional</span></label><input type="number" class="input-field" id="nfSodium" inputmode="decimal" min="0"></div>
+      </div>
+      <div class="form-row" id="nfServingRow" style="display:none">
+        <div class="input-group"><label class="input-label" for="nfServing">Serving size (g)</label><input type="number" class="input-field" id="nfServing" inputmode="decimal" min="0" placeholder="e.g. 30"></div>
+      </div>
+      <div class="form-row" id="nfPieceRow" style="display:none">
+        <div class="input-group"><label class="input-label" for="nfPiece">Piece weight (g)</label><input type="number" class="input-field" id="nfPiece" inputmode="decimal" min="0" placeholder="e.g. 55 for one egg"></div>
+      </div>
+      <div class="form-row">
+        <div class="input-group"><label class="input-label" for="nfTbsp">Grams per tablespoon <span style="font-weight:400;color:var(--t-3)">optional</span></label><input type="number" class="input-field" id="nfTbsp" inputmode="decimal" min="0" placeholder="enables tbsp/tsp units"></div>
+        <div class="input-group"><label class="input-label" for="nfBarcode">Barcode <span style="font-weight:400;color:var(--t-3)">optional, future lookup</span></label><input type="text" class="input-field" id="nfBarcode" inputmode="numeric" autocapitalize="off"></div>
+      </div>
+      <div class="nut-muted u-mb-1">Raw → cooked (optional, for rice/pasta/chicken-style weight change). Calories are conserved — only the water moves, so per-100 g cooked is derived from the raw batch.</div>
+      <div class="form-row">
+        <div class="input-group"><label class="input-label" for="nfRawG">Raw batch (g)</label><input type="number" class="input-field" id="nfRawG" inputmode="decimal" min="0" placeholder="e.g. 500"></div>
+        <div class="input-group"><label class="input-label" for="nfCookedG">Cooked batch (g)</label><input type="number" class="input-field" id="nfCookedG" inputmode="decimal" min="0" placeholder="e.g. 1400"></div>
+      </div>
+      <button class="btn btn-primary btn-full" id="nfSave">Save food</button>
+    </div>
+  </div>
+
+  <!-- Recipe builder (section 9) -->
+  <div class="mini-profile-bg" id="nutRecipeSheetBg">
+    <div class="mini-profile-sheet ch-sheet">
+      <div class="mini-profile-handle"></div>
+      <div class="ch-sheet-head">
+        <div class="ch-sheet-title">Recipe</div>
+        <button class="btn-close" data-nut-close="nutRecipeSheetBg" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="form-row">
+        <div class="input-group"><label class="input-label" for="nrName">Name</label><input type="text" class="input-field" id="nrName" placeholder="e.g. Chicken Rice" maxlength="60"></div>
+        <div class="input-group"><label class="input-label" for="nrServings">Makes (servings)</label><input type="number" class="input-field" id="nrServings" inputmode="decimal" min="1" step="0.5" value="1"></div>
+      </div>
+      <div class="form-row">
+        <div class="input-group" style="flex:2"><select class="input-field" id="nrFoodPick"></select></div>
+        <div class="input-group"><input type="number" class="input-field" id="nrQty" inputmode="decimal" min="0" placeholder="qty"></div>
+        <div class="input-group"><select class="input-field" id="nrUnit"><option value="g">g</option></select></div>
+      </div>
+      <button class="btn btn-secondary btn-sm btn-full" id="nrAddIng">+ Add ingredient</button>
+      <div id="nrIngredients" class="u-mt-2"></div>
+      <div id="nrTotals" class="nut-preview"></div>
+      <button class="btn btn-primary btn-full" id="nrSave">Save recipe</button>
+    </div>
+  </div>
+
+  <!-- Recipe log sheet -->
+  <div class="mini-profile-bg" id="nutRecipeLogBg">
+    <div class="mini-profile-sheet ch-sheet">
+      <div class="mini-profile-handle"></div>
+      <div class="ch-sheet-head">
+        <div class="ch-sheet-title" id="rlName">Log recipe</div>
+        <button class="btn-close" data-nut-close="nutRecipeLogBg" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="input-group"><label class="input-label" for="rlServings">Servings eaten</label><input type="number" class="input-field" id="rlServings" inputmode="decimal" min="0.25" step="0.25" value="1"></div>
+      <div id="rlPreview" class="nut-preview"></div>
+      <button class="btn btn-primary btn-full" id="rlSave">Log it</button>
+    </div>
+  </div>
+
+  <!-- Recipe picker (Today quick action when recipes exist) -->
+  <div class="mini-profile-bg" id="nutRecipePickBg">
+    <div class="mini-profile-sheet ch-sheet">
+      <div class="mini-profile-handle"></div>
+      <div class="ch-sheet-head">
+        <div class="ch-sheet-title">Log a recipe</div>
+        <button class="btn-close" data-nut-close="nutRecipePickBg" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="nut-pick-list" id="rpList"></div>
+    </div>
+  </div>
 
   <!-- Mini Profile Bottom Sheet -->
   <div class="mini-profile-bg" id="miniProfileBg">

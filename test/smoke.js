@@ -43,8 +43,8 @@ const payload = JSON.parse(decodeURIComponent(escape(Buffer.from(m[1], 'base64')
 // The order here must mirror boot() in build.js. If a chunk is added to the
 // payload but not injected (or injected in the wrong place), this list is
 // where it gets noticed.
-const INJECTION_ORDER = ['data', 'winter', 'challenges', 'fsync', 'arcSync', 'wrapped', 'app'];
-const EXPECTED_GLOBALS = ['HISTORICAL_DATA', 'EXERCISE_LIBRARY', 'DAY_TYPES', 'WinterArc', 'ChallengeEngine', 'FirebaseSync', 'ArcSync', 'Wrapped'];
+const INJECTION_ORDER = ['data', 'winter', 'challenges', 'fsync', 'arcSync', 'nutEngine', 'nutSync', 'nutrition', 'wrapped', 'app'];
+const EXPECTED_GLOBALS = ['HISTORICAL_DATA', 'EXERCISE_LIBRARY', 'DAY_TYPES', 'WinterArc', 'ChallengeEngine', 'FirebaseSync', 'ArcSync', 'NutritionEngine', 'NutritionSync', 'AscaNutrition', 'Wrapped'];
 
 let failed = 0;
 const bad = msg => { console.log(`  \x1b[31m✗\x1b[0m ${msg}`); failed++; };
@@ -165,6 +165,13 @@ const probe = `
   out.__wrapped = (typeof Wrapped !== 'undefined')
     ? { hasCompute: typeof Wrapped.compute === 'function', hasOpen: typeof Wrapped.openWrapped === 'function' }
     : null;
+  out.__nutrition = (typeof NutritionEngine !== 'undefined')
+    ? (() => {
+        const n = NutritionEngine.nutrientsForPortion(
+          { name: 't', basis: 'per100g', per100: { kcal: 250, protein: 9, carbs: 42, fat: 3.5, fiber: 6 } }, 180, 'g');
+        return { kcal: Math.round(n.kcal), bmr: Math.round(NutritionEngine.bmrMifflin({ sex: 'm', age: 28, heightCm: 178, weight: 75 })), fns: Object.keys(NutritionEngine).length };
+      })()
+    : null;
   out;
 `;
 const seen = vm.runInContext(probe, ctx, { filename: 'probe.js' });
@@ -200,7 +207,17 @@ if (seen.__wrapped != null) {
   if (!seen.__wrapped.hasCompute || !seen.__wrapped.hasOpen) bad('Wrapped missing compute/openWrapped on its public surface');
   else good('Wrapped live: compute() + openWrapped() exposed');
 } else {
-  bad('Wrapped did not load');
+  bad('Wrapped did not load or exposed nothing');
+}
+
+if (seen.__nutrition != null) {
+  const n = seen.__nutrition;
+  if (n.kcal !== 450) bad(`NutritionEngine.nutrientsForPortion(180g of 250kcal/100g) = ${n.kcal}, expected 450`);
+  if (!n.bmr || n.bmr < 1600 || n.bmr > 1850) bad(`NutritionEngine.bmrMifflin implausible: ${n.bmr}`);
+  if (n.fns < 30) bad(`NutritionEngine exposes only ${n.fns} members`);
+  if (!failed) good(`NutritionEngine live: 180g scaling → ${n.kcal} kcal, Mifflin BMR ${n.bmr}`);
+} else {
+  bad('NutritionEngine did not load or exposed nothing');
 }
 
 console.log('');

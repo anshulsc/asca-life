@@ -140,6 +140,28 @@
           ".validate": "!newData.exists() || (newData.hasChildren(['fromUid','ts']) && newData.child('fromUid').val() === auth.uid && newData.child('ts').isNumber())"
         }
       }
+    },
+    "nutrition": {
+      "$userId": {
+        ".read": "auth != null && root.child('gym').child($userId).child('uid').val() === auth.uid",
+        ".write": "auth != null && root.child('gym').child($userId).child('uid').val() === auth.uid",
+        "profile": {
+          ".validate": "!newData.exists() || (newData.child('uid').val() === auth.uid && newData.child('ts').isNumber())"
+        },
+        "goals": {
+          ".validate": "!newData.exists() || (newData.child('uid').val() === auth.uid && newData.child('ts').isNumber())"
+        },
+        "foods": {
+          "$foodId": {
+            ".validate": "!newData.exists() || (newData.child('uid').val() === auth.uid && newData.child('ts').isNumber())"
+          }
+        },
+        "recipes": {
+          "$recipeId": {
+            ".validate": "!newData.exists() || (newData.child('uid').val() === auth.uid && newData.child('ts').isNumber())"
+          }
+        }
+      }
     }
   }
 }

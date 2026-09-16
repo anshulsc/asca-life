@@ -15,6 +15,12 @@ const arcSyncJs = fs.readFileSync(path.join(srcDir, 'arc-sync.js'), 'utf8');
 const winterJs = fs.readFileSync(path.join(srcDir, 'winter.js'), 'utf8');
 const challengesJs = fs.readFileSync(path.join(srcDir, 'challenges.js'), 'utf8');
 const wrappedJs = fs.readFileSync(path.join(srcDir, 'wrapped.js'), 'utf8');
+// Nutrition subsystem — pure engine first, then REST sync, then the UI
+// layer; all three land between winter.js (date helpers) and app.js,
+// same contract as the Winter Arc trio.
+const nutritionEngineJs = fs.readFileSync(path.join(srcDir, 'nutrition-engine.js'), 'utf8');
+const nutritionSyncJs = fs.readFileSync(path.join(srcDir, 'nutrition-sync.js'), 'utf8');
+const nutritionJs = fs.readFileSync(path.join(srcDir, 'nutrition.js'), 'utf8');
 const appJs = fs.readFileSync(path.join(srcDir, 'app.js'), 'utf8');
 
 // Access control is Firebase Authentication now (see firebase-sync.js) —
@@ -265,6 +271,9 @@ const payload = {
   challenges: challengesJs,
   fsync: firebaseSyncJs,
   arcSync: arcSyncJs,
+  nutEngine: nutritionEngineJs,
+  nutSync: nutritionSyncJs,
+  nutrition: nutritionJs,
   wrapped: wrappedJs,
   app: appJs
 };
@@ -315,6 +324,9 @@ ${lockScreenHtmlWithPreview.trim()}
     if (payload.challenges) injectScript(payload.challenges);
     if (payload.fsync) injectScript(payload.fsync);
     if (payload.arcSync) injectScript(payload.arcSync);
+    if (payload.nutEngine) injectScript(payload.nutEngine);
+    if (payload.nutSync) injectScript(payload.nutSync);
+    if (payload.nutrition) injectScript(payload.nutrition);
     if (payload.wrapped) injectScript(payload.wrapped);
     injectScript(payload.app);
   }

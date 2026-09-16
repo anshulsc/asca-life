@@ -4899,6 +4899,175 @@ canvas { width: 100%; height: 100%; }
   .arc-level-chip.arc-level-up { animation: none; }
 }
 
+/* ── Nutrition (Calorie & Macro Tracker) ───────────────────
+   Owns the #vNut tab and its sheets. Reuses the app's glass tokens,
+   .seg-tabs, volume-widget rows, arc-xp-style bars and chart cards —
+   only genuinely new shapes get nut- classes. Mono numerals use the
+   app's existing .nut-num (JetBrains Mono) convention. */
+
+.nut-num { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.nut-muted { font-size: 0.76rem; line-height: 1.45; color: var(--t-2); }
+.nut-card-pad { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.nut-empty { font-size: 0.82rem; line-height: 1.5; color: var(--t-3); padding: 10px 4px; text-align: center; }
+.nut-warn {
+  font-size: 0.78rem; line-height: 1.45; color: var(--c-orange);
+  background: var(--c-orange-bg); border: 1px solid rgba(255, 159, 10, 0.25);
+  border-radius: 10px; padding: 8px 10px; margin-top: 6px;
+}
+
+.nut-subtabs { margin-bottom: 14px; }
+
+.nut-datenav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.nut-datenav-label { font-size: 0.95rem; font-weight: 700; color: var(--t-1); }
+
+/* Calorie ring card — mirrors the Insights progress-ring anatomy. */
+.nut-kcal-card { display: flex; align-items: center; gap: 16px; padding: 14px 16px; }
+.nut-kcal-ring-wrap { position: relative; width: 92px; height: 92px; flex: 0 0 auto; }
+.nut-kcal-ring-wrap .progress-ring-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.nut-kcal-ring-center {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 1px;
+}
+.nut-kcal-ring-center .nut-num { font-size: 1.35rem; font-weight: 800; color: var(--t-1); line-height: 1; }
+.nut-kcal-target { font-size: 0.62rem; color: var(--t-3); }
+.nut-kcal-side { flex: 1; min-width: 0; }
+.nut-kcal-remain { font-size: 0.88rem; font-weight: 600; color: var(--c-green); }
+.nut-kcal-remain.over { color: var(--c-red); }
+.nut-sync-note { margin-top: 6px; font-size: 0.72rem; color: var(--c-orange); line-height: 1.4; }
+
+/* Macro bars. */
+.nut-macros-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; }
+.nut-macro-top {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 0.78rem; font-weight: 600; color: var(--t-1);
+}
+.nut-macro-nums { font-size: 0.72rem; color: var(--t-3); font-weight: 600; }
+.nut-macro-bar {
+  margin-top: 4px; height: 6px; border-radius: 3px;
+  background: var(--glass-2); overflow: hidden;
+}
+.nut-macro-fill { height: 100%; border-radius: 3px; width: 0; transition: width 0.35s ease; }
+.nut-macro-fill.protein { background: linear-gradient(90deg, #30D158, #58E57C); }
+.nut-macro-fill.carbs { background: linear-gradient(90deg, #0A84FF, #64D2FF); }
+.nut-macro-fill.fat { background: linear-gradient(90deg, #FF9F0A, #FFBE5C); }
+.nut-macro-fill.fiber { background: linear-gradient(90deg, #BF5AF2, #D697FF); }
+.nut-macro-fill.over { background: linear-gradient(90deg, #FF453A, #FF6961); }
+
+/* Quick actions + fast presets. */
+.nut-actions-card { display: flex; gap: 8px; margin: 12px 0 8px; }
+.nut-actions-card .btn { flex: 1; }
+.nut-quickpresets { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.nut-quickpresets-label { font-size: 0.72rem; color: var(--t-3); font-weight: 600; }
+
+/* Meal groups + entries. */
+.nut-meal { margin-bottom: 10px; }
+.nut-meal-head {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 6px 2px;
+}
+.nut-meal-name { font-size: 0.88rem; font-weight: 700; color: var(--t-1); flex: 1; }
+.nut-meal-kcal { font-size: 0.74rem; color: var(--t-3); }
+.nut-meal-add {
+  background: none; border: none; cursor: pointer;
+  font-size: 0.76rem; font-weight: 700; color: var(--accent, var(--c-blue));
+}
+.nut-entry {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; margin: 4px 0;
+  background: var(--glass-1, rgba(255,255,255,0.04));
+  border: 1px solid var(--glass-2); border-radius: 12px;
+}
+.nut-entry-name { flex: 1; font-size: 0.82rem; color: var(--t-1); min-width: 0; overflow-wrap: anywhere; }
+.nut-entry-kcal { font-size: 0.76rem; color: var(--t-2); white-space: nowrap; }
+.nut-entry-del, .nut-ing-del, .nut-qa-del {
+  background: none; border: none; cursor: pointer; flex: 0 0 auto;
+  font-size: 1rem; line-height: 1; color: var(--t-3); padding: 2px 6px;
+}
+.nut-entry-del:hover, .nut-ing-del:hover, .nut-qa-del:hover { color: var(--c-red); }
+
+.nut-src-badge {
+  font-size: 0.58rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 1px 5px; margin-left: 6px; border-radius: 5px; vertical-align: middle;
+  background: var(--c-green-bg); color: var(--c-green);
+}
+.nut-src-badge.est { background: var(--c-orange-bg); color: var(--c-orange); }
+
+.nut-weight-widget { margin-top: 6px; }
+.nut-goal-strip { padding: 10px 14px; font-size: 0.8rem; color: var(--t-2); line-height: 1.5; }
+
+/* Trends. */
+.nut-statgrid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px 8px; }
+.nut-stat { display: flex; flex-direction: column; gap: 1px; }
+.nut-stat-val { font-size: 1.02rem; font-weight: 800; color: var(--t-1); }
+.nut-stat-label { font-size: 0.64rem; color: var(--t-3); font-weight: 600; }
+.nut-tdee-line { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 0.82rem; color: var(--t-2); }
+.nut-tdee-line b { color: var(--t-1); font-weight: 700; }
+.nut-tdee-line.strong { padding-top: 6px; border-top: 1px solid var(--glass-2); }
+.nut-tdee-line.strong b { color: var(--c-blue); }
+.nut-chart-wrap { height: 130px; }
+.nut-goal-card .nut-goal-nums { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.nut-goal-card .nut-num { font-size: 1.05rem; font-weight: 800; color: var(--t-1); }
+.nut-goal-card .nut-num.big { font-size: 1.5rem; color: var(--c-blue); }
+.nut-goal-card em { font-style: normal; font-size: 0.66rem; color: var(--t-3); margin-right: 4px; }
+.nut-goal-card .nut-arrow { color: var(--t-3); }
+.nut-goal-left { font-size: 0.86rem; font-weight: 700; color: var(--t-1); }
+
+/* Foods & recipes lists. */
+.nut-food-search-wrap { margin-bottom: 12px; }
+.nut-food-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; margin: 6px 0;
+  background: var(--glass-1, rgba(255,255,255,0.04));
+  border: 1px solid var(--glass-2); border-radius: 12px;
+}
+.nut-food-name { flex: 1; font-size: 0.84rem; font-weight: 600; color: var(--t-1); min-width: 0; overflow-wrap: anywhere; }
+.nut-food-meta { font-size: 0.7rem; color: var(--t-3); white-space: nowrap; }
+.nut-food-edit, .nut-recipe-log {
+  background: none; border: none; cursor: pointer;
+  font-size: 0.72rem; font-weight: 700; color: var(--c-blue); padding: 2px 4px;
+}
+.nut-food-del {
+  background: none; border: none; cursor: pointer; flex: 0 0 auto;
+  font-size: 1rem; line-height: 1; color: var(--t-3); padding: 2px 6px;
+}
+.nut-food-del:hover { color: var(--c-red); }
+
+/* Picker lists inside sheets. */
+.nut-pick-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.nut-pick {
+  border: 1px solid var(--glass-2); border-radius: 999px;
+  background: var(--glass-1, rgba(255,255,255,0.04));
+  color: var(--t-1); font-size: 0.78rem; font-weight: 600;
+  padding: 6px 12px; cursor: pointer;
+}
+.nut-pick.on { border-color: var(--c-blue); color: var(--c-blue); background: var(--c-blue-bg); }
+.nut-pick.wide { width: 100%; border-radius: 12px; text-align: left; padding: 10px 12px; }
+
+.nut-preview { margin: 10px 0; min-height: 18px; }
+.nut-preview-nums { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; font-size: 0.8rem; color: var(--t-2); }
+.nut-preview-nums b { font-size: 1.05rem; color: var(--t-1); }
+
+.nut-ing-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 7px 12px; margin: 4px 0; font-size: 0.8rem; color: var(--t-1);
+  background: var(--glass-1, rgba(255,255,255,0.04));
+  border: 1px solid var(--glass-2); border-radius: 10px;
+}
+
+/* Plan: activity/goal grids. */
+.nut-act-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.nut-act-btn {
+  border: 1px solid var(--glass-2); border-radius: 999px;
+  background: var(--glass-1, rgba(255,255,255,0.04));
+  color: var(--t-2); font-size: 0.76rem; font-weight: 700;
+  padding: 7px 13px; cursor: pointer;
+}
+.nut-act-btn.on { border-color: var(--c-blue); color: var(--c-blue); background: var(--c-blue-bg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .nut-macro-fill { transition: none; }
+}
+
 /* ── Lock Screen Overlay ─────────────────────────────────── */
 .lock-screen {
   position: fixed;

@@ -209,6 +209,13 @@ eq('custom goals are respected',
    W.habitsMet(Object.assign(W.emptyCheckin(), { steps: 5000 }), Object.assign({}, goals, { steps: 4000 })), 1);
 eq('habitsMet tolerates a missing check-in', W.habitsMet(null, goals), 0);
 
+/* ── Nutrition engine ────────────────────────────────────────
+   Same pure-function discipline as winter.js: the whole calculation
+   core of the nutrition tab lives in src/nutrition-engine.js with no
+   DOM and no Date.now() of its own, so it runs here unchanged. */
+
+require(path.join(__dirname, 'nutrition.js'))({ eq, ok, section, W });
+
 /* ── Day-type maps mirror app.js exactly ───────────────────── */
 
 section('day-type maps mirror app.js');

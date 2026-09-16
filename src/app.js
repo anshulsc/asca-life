@@ -32,6 +32,21 @@ function startApp() {
   setToday();renderRecent();renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderProfile();renderArc();chBoot();
   restoreSE();
   bindCardSpotlights();
+
+  // Nutrition tab — own module (src/nutrition.js); app.js only hands it
+  // the helpers it needs and drives restore/flush alongside the Arc's.
+  if(typeof AscaNutrition!=='undefined'){
+    AscaNutrition.init({
+      toast, encryptStr, decryptStr,
+      // New dated weigh-ins feed the legacy single-value bw (ASCA Score /
+      // Log-tab widget / directory) so both weight surfaces agree.
+      noteBodyWeight: kg=>{
+        localStorage.setItem(BWK,encryptStr(JSON.stringify({weight:kg,timestamp:Date.now()})));
+        renderBodyWeight();renderProfile();
+        if(typeof fbPush==='function'&&fbCfg().connected)fbPush(false);
+      }
+    });
+  }
   
   // Backend-first boot: the RTDB is the source of truth. Merge my cloud
   // doc and pull every followed athlete immediately, then the EventSource
@@ -62,6 +77,9 @@ function startApp() {
       renderArcLeaderboard();
       arcPullFollowingPublic();
     }).catch(()=>{});
+    // Same boot pattern for nutrition: hydrate from nutrition/{userId}
+    // (local wins on overlap), then render with whatever landed.
+    if(typeof AscaNutrition!=='undefined')AscaNutrition.restore();
   }
   
   document.addEventListener('visibilitychange',()=>{
@@ -75,6 +93,7 @@ function startApp() {
     }else{
       stopRealtimeSync();
       arcFlush();
+      if(typeof AscaNutrition!=='undefined')AscaNutrition.flush();
     }
   });
 
@@ -605,6 +624,7 @@ function bindTabs(){
       if(tgt==='Hist')renderHist();
       if(tgt==='Ana')refreshAna();
       if(tgt==='Soc'){renderFriendsCard();renderArcLeaderboard();arcPullFollowingPublic();}
+      if(tgt==='Nut'){AscaNutrition.render();}
       if(tgt==='Set'){renderProfile();renderProgressPics();} // keep the account heatmap/stats live
       if(tgt==='Log'){renderBodyWeight();renderHeatmapCalendar();renderVolWidget();}
       
@@ -6509,7 +6529,7 @@ function bindSettings(){
   if(copyRulesBtn){
     copyRulesBtn.addEventListener('click',()=>{
       const rules=JSON.stringify({
-        rules: {
+          rules: {
           // Any signed-in member can read (Strava-style); only the owner
           // (uid) may write, and the payload is validated + size-capped so
           // a hostile client can't store malformed or oversized data.
@@ -6615,10 +6635,6 @@ function bindSettings(){
           // leave this node, which is what makes the social surfaces safe.
           arc: {
             $userId: {
-              // Writes typically target deep subpaths (checkins/<date>), so a
-              // first-ever check-in PATCH must also pass BEFORE uid/ts land at
-              // $seasonId. Same gym-node fallback arcPublic uses, for both the
-              // exists() and new branches. Read mirrors it for older calls.
               ".read": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid || root.child('gym').child($userId).child('uid').val() === auth.uid)",
               ".write": "auth != null && (data.exists() ? (data.child('uid').val() === auth.uid || root.child('gym').child($userId).child('uid').val() === auth.uid) : (newData.child('uid').val() === auth.uid || root.child('gym').child($userId).child('uid').val() === auth.uid))",
               $seasonId: {
@@ -6627,10 +6643,8 @@ function bindSettings(){
             }
           },
           // The narrow social projection of arc/: xp, level, streak, badge
-          // count — plus, by deliberate product decision, per-habit
-          // aggregates (today's check-in values, per-habit streaks, 7-day
-          // aggregates, sleep score) for the Arc social screen. Still NEVER
-          // check-in notes, body weight or set-level workout detail.
+          // count. Member-readable like directory/. NEVER sleep, protein,
+          // water, steps or body weight — those stay in arc/ only.
           arcPublic: {
             ".read": "auth != null",
             $userId: {
@@ -6684,9 +6698,35 @@ function bindSettings(){
                 ".validate": "!newData.exists() || (newData.hasChildren(['fromUid','ts']) && newData.child('fromUid').val() === auth.uid && newData.child('ts').isNumber())"
               }
             }
+          },
+          // Calorie & nutrition tracker: profile, goals, saved foods,
+          // recipes, day logs, weight and measurement history. Owner-only
+          // like budget/ and for the same reason — intake and body data are
+          // not social data and never appear in directory/ or arcPublic/.
+          nutrition: {
+            $userId: {
+              ".read": "auth != null && root.child('gym').child($userId).child('uid').val() === auth.uid",
+              ".write": "auth != null && root.child('gym').child($userId).child('uid').val() === auth.uid",
+              profile: {
+                ".validate": "!newData.exists() || (newData.child('uid').val() === auth.uid && newData.child('ts').isNumber())"
+              },
+              goals: {
+                ".validate": "!newData.exists() || (newData.child('uid').val() === auth.uid && newData.child('ts').isNumber())"
+              },
+              foods: {
+                $foodId: {
+                  ".validate": "!newData.exists() || (newData.child('uid').val() === auth.uid && newData.child('ts').isNumber())"
+                }
+              },
+              recipes: {
+                $recipeId: {
+                  ".validate": "!newData.exists() || (newData.child('uid').val() === auth.uid && newData.child('ts').isNumber())"
+                }
+              }
+            }
           }
         }
-      }, null, 2);
+        }, null, 2);
       navigator.clipboard.writeText(rules).then(()=>{toast('Database Rules copied!','success');}).catch(()=>{toast('Failed to copy','error');});
     });
   }

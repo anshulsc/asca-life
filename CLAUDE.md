@@ -55,6 +55,9 @@ src/
   winter.js                WinterArc — season/date primitives, pure, no DOM (see below)
   challenges.js             ChallengeEngine — pure challenge-progress engine (see below)
   arc-sync.js               ArcSync — RTDB access for the Winter Arc nodes (see below)
+  nutrition-engine.js        NutritionEngine — pure calorie/TDEE/trend math (see below)
+  nutrition-sync.js          NutritionSync — RTDB access for the nutrition/ node (see below)
+  nutrition.js               AscaNutrition — nutrition tab state/DOM/wiring (see below)
   admin.js, admin.html      maintainer-only dashboard (see below)
 test/                    run.js is the entry point; engine.js, ui.js, css.js, rules.js,
                           smoke.js are what it exercises. `node test/run.js` from repo root.
@@ -150,6 +153,44 @@ comments are thorough and are the primary reference; this is only an index into 
 `node test/run.js` is the entry point for exercising this layer; the app has no other test
 runner and, per `test/run.js`'s own comment, that's staying that way — these pure functions
 are what's worth testing, not the DOM.
+
+## Nutrition (`nutrition-engine.js`, `nutrition-sync.js`, `nutrition.js`)
+
+The Calorie & Nutrition Tracker — its own tab between Log and History. Same three-layer
+discipline as the Winter Arc trio, same file-header-first documentation style:
+
+- **`nutrition-engine.js` — `NutritionEngine` global.** Every formula in exactly one place
+  (`scaleNutrients`, `toGrams`, `nutrientsForPortion`, `recipeTotals`/`perServingNutrients`,
+  `cookedPer100` with calorie conservation, `bmrMifflin`/`bmrKatch`, `tdeeReport`,
+  `goalPlan` with the aggressive-deficit warnings, `macroTargets`, `rollingAverage`,
+  `trendSlopeKgPerWeek`, `observedTDEE`, `weeklyAverages`). Deliberately pure like
+  `challenges.js` — date math arrives as injected `addDays`/`daysBetween` (WinterArc's in
+  the app) so `node test/nutrition.js` exercises the real arithmetic. Day keys are local
+  `YYYY-MM-DD`, never `toISOString()`.
+- **`nutrition-sync.js` — `NutritionSync` global.** Plain-REST, no-SDK, **targeted PATCH
+  only, never `FirebaseSync.writeDoc()`** against the new owner-private `nutrition/{userId}`
+  node (profile, goals, foods, recipes, days, weights, measurements). Mirrors `arc-sync.js`'s
+  shape on purpose; `mergeCloud` implements the same "local wins on overlap" boot merge as
+  `fbRestore`. A 401/403 (rules predate the node) sticks as `wasDenied()` and surfaces a
+  UI note rather than failing silently.
+- **`nutrition.js` — `AscaNutrition` global.** State, localStorage cache (`asca_gym_nutrition`,
+  encryptStr'd), DOM rendering and event wiring for the whole tab. Receives its app
+  dependencies (`toast`, `encryptStr`, `noteBodyWeight` — the hook that feeds new weigh-ins
+  back into the legacy single-value `gym/{id}/bw` so ASCA Score stays live) via `init(deps)`
+  from `app.js`, which changes for it are: one line in `bindTabs()`, the `init()` call in
+  `startApp()`, a boot `restore()` next to `arcRestore()`, and a `flush()` next to
+  `arcFlush()` on hide. Logged entries snapshot their nutrients at log time — editing a food
+  later never rewrites a past day.
+
+The `nutrition/` rules node is owner-read AND owner-write only (unlike `gym/`, which any
+member reads) — intake and body data never join the social surface. The node was added to
+`database.rules.json` and both apps' "Copy Database Rules" literals together;
+`node test/rules.js` is the guard that all three still agree. Markup lives in
+`src/index.html` (`#vNut` + eight `nut*SheetBg` mini-profile-sheet-style bottoms), CSS in
+the `/* ── Nutrition (Calorie & Macro Tracker)` section of `src/style.css` (before the
+lock-screen marker, `nut-`-prefixed, reusing `.card glass-card` / `.seg-tabs` / arc-bar
+tokens), and `build.js` injects the trio between `arc-sync` and `wrapped` in the payload;
+`test/smoke.js` asserts the order.
 
 ## Admin console (`admin.js`, `admin.html`, `admin/`)
 
