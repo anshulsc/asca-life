@@ -61,6 +61,7 @@ const AscaNutrition = (() => {
   let curDate = null;       // selected day on the Today screen
   let curSection = 'today'; // today | trends | foods | plan
   let sheet = null;         // open bottom-sheet context
+  let afSearchT = null;     // debounce handle for the Add-Food search input
 
   /* ── Persistence ──────────────────────────────────────────── */
 
@@ -151,7 +152,12 @@ const AscaNutrition = (() => {
         Object.keys(state.weights).forEach(d => dirty[`weights/${d}`] = true);
         scheduleFlush();
       }
-      render();
+      // Skip the re-render when the merge was a no-op — the common case
+      // (local wins on overlap) was causing a full second renderToday()
+      // on every boot just to rebuild the same meal list (audit-render #2).
+      // Dirty marks tell us the merge actually changed something;
+      // seedStarterFoods() re-renders itself when it added a seed.
+      if (Object.keys(dirty).length) render();
     } catch (_) {}
   }
 
@@ -1243,7 +1249,10 @@ const AscaNutrition = (() => {
     });
 
     // Add-food sheet.
-    on('afSearch', 'input', e => renderAddFoodResults(e.target.value));
+    on('afSearch', 'input', e => {
+      if (afSearchT) clearTimeout(afSearchT);
+      afSearchT = setTimeout(() => renderAddFoodResults(e.target.value), 80);
+    });
     on('afResults', 'click', e => {
       const b = e.target.closest('[data-pick]');
       if (b) { sheet.foodId = b.dataset.pick; renderAddFoodResults($('afSearch').value); }
@@ -1262,7 +1271,14 @@ const AscaNutrition = (() => {
     on('nfBasis', 'change', syncFoodEditorBasis);
     on('nfSave', 'click', saveFoodEditor);
     on('nutNewFoodBtn', 'click', () => openFoodEditor(null));
-    on('nutFoodSearch', 'input', renderFoods);
+    // Debounce the search-driven rebuild of the whole Foods tab — every
+    // keystroke was triggering a full innerHTML rewrite of both lists
+    // plus per-recipe perServingNutrients recomputes (audit-render #1).
+    let nutFoodSearchT = null;
+    on('nutFoodSearch', 'input', () => {
+      if (nutFoodSearchT) clearTimeout(nutFoodSearchT);
+      nutFoodSearchT = setTimeout(renderFoods, 120);
+    });
     $('nutFoodList').addEventListener('click', e => {
       const del = e.target.closest('.nut-food-del');
       if (del) {

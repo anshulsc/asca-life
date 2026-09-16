@@ -26,13 +26,23 @@ function init(){
   arcInvitesRefresh(); // paints cached-empty instantly; real fetch lands post-restore
 }
 
+let appBooted=false; // startApp() can fire more than once (unlock() + the
+// __arcDebug seam); binds and the first paint are one-shot, the refresh side
+// below stays idempotent per call.
 function startApp() {
-  load();loadCX();fillTypes();bindTabs();bindSearch();bindSets();bindActs();
-  bindHist();bindAna();bindSettings();bindModal();bindLibraryModal();bindVolInsights();bindTimer();bindBodyWeight();bindFriend();bindProgressPics();bindArc();bindChallengesBrowser();bindMonkMode();bindArcPromo();bindArcLeaderboard();bindArcCalendar();bindArcGoals();bindRoutines();
-  setToday();renderRecent();renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderProfile();renderArc();chBoot();
-  restoreSE();
-  bindCardSpotlights();
+  const appBoot=!appBooted; // captured before the flag flips below
+  if(appBoot){
+    appBooted=true;
+    load();loadCX();fillTypes();bindTabs();bindSearch();bindSets();bindActs();
+    bindHist();bindAna();bindSettings();bindModal();bindLibraryModal();bindVolInsights();bindTimer();bindBodyWeight();bindFriend();bindProgressPics();bindArc();bindChallengesBrowser();bindMonkMode();bindArcPromo();bindArcLeaderboard();bindArcCalendar();bindArcGoals();bindRoutines();
+    setToday();renderRecent();renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderProfile();renderArc();chBoot();
+    restoreSE();
+    bindCardSpotlights();
+  }else{
+    refreshAllUI();
+  }
 
+  if(appBoot){
   // Nutrition tab — own module (src/nutrition.js); app.js only hands it
   // the helpers it needs and drives restore/flush alongside the Arc's.
   if(typeof AscaNutrition!=='undefined'){
@@ -102,8 +112,9 @@ function startApp() {
     // (local wins on overlap), then render with whatever landed.
     if(typeof AscaNutrition!=='undefined')AscaNutrition.restore();
   }
-  
-  document.addEventListener('visibilitychange',()=>{
+  } // appBoot — binding/sync boot runs on the first startApp() only
+
+  if(appBoot)document.addEventListener('visibilitychange',()=>{
     if(!document.hidden){
       stopRealtimeSync();
       startRealtimeSync();
@@ -3437,6 +3448,27 @@ async function fbPush(interactive=true){
   }
 }
 
+// rAF-coalesced repaint — same __raf idiom as syncRingStrip / bindTabs'
+// scroll handler. The gym-doc stream and the visibilitychange wake can land
+// several data events inside one frame; instead of N full innerHTML rebuilds
+// (renderHist alone rewrites every timeline card), each surface renders at
+// most once per animation frame. Light setters stay synchronous so callers
+// that read the DOM right after (e.g. tab setup) never see a stale frame.
+function scheduleRender(scope,key,fn){
+  let slots=scheduleRender._s||(scheduleRender._s={});
+  const k=scope?key:'_once';
+  if(!(scope in slots))slots[scope]={};
+  const slot=slots[scope];
+  if(k in slot){slot[k]=fn;return;}
+  slot[k]=fn;
+  slot.__raf=requestAnimationFrame(()=>{
+    slot.__raf=null;
+    const fns=Object.entries(slot).filter(([k2])=>k2!=='__raf');
+    for(const k2 in slot)delete slot[k2];
+    fns.forEach(([,f])=>{try{f();}catch(e){console.warn('[render]',e);}});
+  });
+}
+
 function refreshAllUI() {
   if(arcEnrolled())renderArc();
   renderArcLeaderboard();
@@ -3446,12 +3478,8 @@ function refreshAllUI() {
   renderWeeklyRing();
   renderProfile();
   renderFriendsCard();
-  renderHist();
-  renderVolInsights();
-  renderSG();
-  renderPRs();
-  renderRanks();
-  renderChart();
+  scheduleRender('hist','refresh',()=>{renderHist();});
+  scheduleRender('ana','refresh',()=>{renderVolInsights();renderSG();renderPRs();renderRanks();renderChart();});
 }
 
 let activeStreams={};              // id (or "_directory") -> EventSource
@@ -3499,7 +3527,8 @@ function startRealtimeSync(){
           if(payload.github)up.github=payload.github;
           if(Object.keys(up).length>0)FirebaseSync.updateConfig(up);
           stripSeededHistory();
-          refreshAllUI();
+          refreshAllUI(); // rAF-coalesced internally — back-to-back SSE puts
+                          // cost one repaint, not one per event
         }
       }).catch(console.warn);
     }
@@ -3522,7 +3551,8 @@ function startRealtimeSync(){
           workouts:p.workouts
         });
         updateFollowName(f.id,p.name);
-        renderFriendsCard();
+        scheduleRender('friends','stream',renderFriendsCard); // N followers
+              // replying in one frame ⇒ one friend-card rebuild, not N
       }).catch(console.warn);
     });
   });
@@ -3674,7 +3704,7 @@ function listenToDirectory(){
         const d=users.find(u=>u.id===f.id);
         if(d)updateFollowName(f.id,d.name);
       });
-      renderFriendsCard();
+      scheduleRender('friends','stream',renderFriendsCard);
       if(dirChangedHook)dirChangedHook(users);
     };
     source.addEventListener('open',()=>{dirMeta.retries=0;});
