@@ -453,7 +453,11 @@ body {
 .views-container {
   position: relative; z-index: 1; flex: 1;
   overflow-y: auto; overflow-x: hidden;
-  padding: 20px 18px calc(95px + var(--sab)) 18px;
+  /* Bottom clearance must cover the FLOATING bar's full footprint —
+     64px pill + 10px float offset + the active-tab indicator that hangs
+     ~8px below the Account chip — plus one row of visual breathing room
+     so the last card never kisses the glass. */
+  padding: 20px 18px calc(118px + var(--sab)) 18px;
   scroll-behavior: smooth;
   scrollbar-width: none;
 }
@@ -4993,7 +4997,7 @@ canvas { width: 100%; height: 100%; }
 .nut-macro-fill.over { background: linear-gradient(90deg, #FF453A, #FF6961); }
 
 /* Quick actions + fast presets. */
-.nut-actions-card { display: flex; gap: 8px; margin: 12px 0 8px; }
+.nut-actions-card { display: flex; gap: 8px; margin: 12px 0 10px; }
 .nut-actions-card .btn { flex: 1; }
 .nut-quickpresets { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
 .nut-quickpresets-label { font-size: 0.72rem; color: var(--t-3); font-weight: 600; }
@@ -5809,7 +5813,8 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .phone-frame { height: auto; min-height: 100dvh; }
   .app-header { padding-top: calc(10px + var(--sat)); padding-bottom: 10px; }
   .bottom-bar { height: 54px; bottom: calc(6px + var(--sab)); }
-  .views-container { padding-bottom: calc(78px + var(--sab)); }
+  /* 54px bar + 6px float + 8px indicator + breathing room */
+  .views-container { padding-bottom: calc(96px + var(--sab)); }
 }
 
 /* ── Tablet 768–1023 — centered wide column, no device chrome ─── */
