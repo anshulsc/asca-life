@@ -137,6 +137,7 @@ const AscaNutrition = (() => {
         state.startedWeight = cloud.startedWeight;
       }
       persist();
+      seedStarterFoods();
       if (!hadLocal && (cloud.profile || cloud.days)) {
         // Fresh device: push the merged union back so nothing cloud-only
         // (e.g. foods from another device) is missing anywhere.
@@ -157,6 +158,57 @@ const AscaNutrition = (() => {
   /* ── Small state helpers ──────────────────────────────────── */
 
   function uid() { return 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  /* Starter pack — my own staples, entered from the photographed package
+     labels (2026-09-16) and marked source:user (section 14). Keyed by
+     owner so nobody else's library is touched; stable ids keep the seed
+     idempotent across devices (merge dedupes by id, not by name). User
+     edits/deletes win over the seed everywhere:
+       same device: name-match skip
+       fresh device (local empty): cloud copy — edited or not — survives
+         and the name-skip blocks the untouched original from duplicating
+       deleted on a fresh device: gone — no local copy exists to merge
+         back up, so a re-seed can't resurrect it.
+     Eggs use a standard per-large-egg value (source:estimated, labeled
+     as such in the UI) until the package gets photographed. */
+  const STARTER_OWNER = 'anshulsc';
+  const STARTER_FOODS = [
+    { id: 'seed-toast', name: 'Whole Wheat Toast (EDEKA Weizenvollkorntoast)', basis: 'per100g', pieceSize: 25,
+      per100: { kcal: 234, protein: 10.0, carbs: 40.5, fat: 2.0, fiber: 10.0,
+        micros: { satfat_g: 0.3, sugar_g: 4.5, sodium_mg: 400 } } },
+    { id: 'seed-muesli', name: 'Vollkorn Müsli (Lidl)', basis: 'per100g',
+      per100: { kcal: 372, protein: 13.5, carbs: 58.7, fat: 7.0, fiber: 10.0,
+        micros: { satfat_g: 1.3, sugar_g: 10.0, sodium_mg: 5 } } },
+    { id: 'seed-milk', name: 'Fettarme Milch 1.5% (EDEKA)', basis: 'per100g',
+      per100: { kcal: 47, protein: 3.5, carbs: 4.9, fat: 1.5, fiber: 0,
+        micros: { satfat_g: 1.0, sugar_g: 4.9, sodium_mg: 52 } } },
+    { id: 'seed-egg', name: 'Egg', basis: 'piece', pieceSize: 55, source: 'estimated',
+      per100: { kcal: 70, protein: 6.3, carbs: 0.4, fat: 4.8, fiber: 0, micros: {} } }
+  ];
+  let seededStarter = false; // once per boot — protect seedsWith on later renders
+
+  function seedsWith(list, f) {
+    return list.some(x => x.id === f.id) ||
+      list.some(x => x.name.toLowerCase() === f.name.toLowerCase());
+  }
+
+  function seedStarterFoods() {
+    if (seededStarter) return;
+    seededStarter = true;
+    let uid = '';
+    try { uid = (NutritionSync.myId && NutritionSync.myId()) || ''; } catch (_) {}
+    if (uid !== STARTER_OWNER) return;
+    const foods = Object.values(state.foods);
+    let added = 0;
+    for (const f of STARTER_FOODS) {
+      if (seedsWith(foods, f)) continue;
+      state.foods[f.id] = Object.assign({ source: 'user', ts: Date.now() }, f);
+      foods.push(f); // subsequent seeds see this one too
+      markDirty(`foods/${f.id}`);
+      added++;
+    }
+    if (added) render();
+  }
 
   function dayRecord(date) {
     if (!state.days[date]) state.days[date] = { meals: {}, quickAdds: [] };
@@ -1301,6 +1353,7 @@ const AscaNutrition = (() => {
       const b = e.target.closest('[data-rlog]');
       if (b) { closeSheet('nutRecipePickBg'); openLogRecipe(b.dataset.rlog); }
     });
+    seedStarterFoods(); // offline-first: local now, cloud merges in restore()
     render();
   }
 

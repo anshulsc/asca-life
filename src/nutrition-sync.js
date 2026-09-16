@@ -161,7 +161,7 @@ const NutritionSync = (() => {
   }
 
   return Object.freeze({
-    connected, wasDenied, readAll,
+    connected, wasDenied, readAll, myId,
     writeProfile, writeGoals,
     writeFood, deleteFood, writeRecipe, deleteRecipe,
     writeDay, writeWeight, deleteWeight, writeMeasurements, writeMeta,
