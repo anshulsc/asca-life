@@ -408,7 +408,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: calc(20px + var(--sat)) 20px 14px 20px;
+  padding: calc(16px + var(--sat)) 16px 12px 16px;
   background: linear-gradient(180deg, rgba(var(--wht), 0.06) 0%, rgba(var(--wht), 0.02) 100%);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
@@ -416,7 +416,7 @@ body {
   box-shadow: var(--specular-top), 0 4px 20px rgba(var(--blk), 0.25);
 }
 
-.brand { display: flex; align-items: center; gap: 10px; }
+.brand { display: flex; align-items: center; gap: 8px; }
 
 .brand-logo {
   width: 22px; height: 22px;
@@ -426,7 +426,7 @@ body {
 
 .brand-text {
   font-family: var(--ff-title);
-  font-weight: 800; font-size: 1.25rem;
+  font-weight: 800; font-size: 1.16rem;
   letter-spacing: -0.02em;
 }
 
@@ -437,7 +437,14 @@ body {
 }
 
 .status-badge {
-  display: flex; align-items: center; gap: 8px;
+  /* The header SYNCED/OFFLINE pill is removed from view by design — the
+     element must stay in the DOM because app.js drives #dConn/#dConnT
+     (it doubles as the sync-retry button), so suppress it here on the
+     class rather than deleting the markup. The base rule's
+     `display: flex` is the only visible-path display value, and !important
+     holds it hidden through every hover/active/pressed state. */
+  display: none !important;
+  align-items: center; gap: 8px;
   background: var(--glass-2);
   border: 1px solid var(--border-light);
   padding: 6px 12px; border-radius: var(--r-full);
@@ -465,10 +472,10 @@ body {
   position: relative; z-index: 1; flex: 1;
   overflow-y: auto; overflow-x: hidden;
   /* Bottom clearance must cover the FLOATING bar's full footprint —
-     64px pill + 10px float offset + the active-tab indicator that hangs
+     58px pill + 10px float offset + the active-tab indicator that hangs
      ~8px below the Account chip — plus one row of visual breathing room
      so the last card never kisses the glass. */
-  padding: 20px 18px calc(118px + var(--sab)) 18px;
+  padding: 16px 16px calc(106px + var(--sab)) 16px;
   scroll-behavior: smooth;
   scrollbar-width: none;
 }
@@ -509,7 +516,7 @@ body {
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   border: 1px solid rgba(var(--wht), 0.075);
   border-radius: var(--r-l);
-  padding: 18px;
+  padding: var(--space-4);
   box-shadow: var(--elev-1);
   position: relative;
   overflow: hidden;
@@ -989,7 +996,7 @@ select.input-field {
 
 .sets-grid-container {
   display: flex; flex-direction: column;
-  gap: 12px; margin-bottom: var(--space-4);
+  gap: 8px; margin-bottom: var(--space-4);
 }
 
 .set-row-container {
@@ -2370,13 +2377,13 @@ canvas { width: 100%; height: 100%; }
   border-top: 1px solid rgba(var(--wht),0.1);
   transform: translateY(100%);
   transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
-  padding: 12px 20px 28px;
+  padding: 10px 20px 24px;
 }
 .mini-profile-bg.open .mini-profile-sheet { transform: translateY(0); }
 .mini-profile-handle {
   width: 36px; height: 4px; border-radius: 2px;
   background: rgba(var(--wht),0.2);
-  margin: 0 auto 16px;
+  margin: 0 auto 12px;
 }
 .mini-profile-hero {
   text-align: center; margin-bottom: 16px;
@@ -2445,8 +2452,8 @@ canvas { width: 100%; height: 100%; }
 .bottom-bar {
   position: absolute;
   bottom: calc(10px + var(--sab));
-  left: 16px; right: 16px;
-  height: 64px;
+  left: 12px; right: 12px;
+  height: 58px;
   background: linear-gradient(180deg, rgba(var(--wht), 0.08) 0%, rgba(var(--wht), 0.02) 100%);
   backdrop-filter: blur(20px) saturate(210%) brightness(1.1);
   -webkit-backdrop-filter: blur(20px) saturate(210%) brightness(1.1);
@@ -2463,12 +2470,13 @@ canvas { width: 100%; height: 100%; }
 
 .bot-btn {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 4px; background: none; border: none;
-  color: var(--t-3); font-size: 0.6rem;
+  gap: 3px; background: none; border: none;
+  color: var(--t-3); font-size: 0.58rem;
   font-weight: 700; font-family: var(--ff-sans);
   cursor: pointer; transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease;
-  width: 56px; height: 48px;
-  min-width: 44px; min-height: 44px; /* 44px hit floor (HIG) — visual stays */
+  width: 58px; height: 46px;
+  min-height: 44px; /* HIG hit floor: the pill shrank to 58px so the
+    button's visual height drops to 46, still ≥ the 44px tap minimum. */
   border-radius: var(--r-m); outline: none;
   position: relative;
   z-index: 2;
@@ -2487,7 +2495,7 @@ canvas { width: 100%; height: 100%; }
 .nav-lens {
   position: absolute;
   width: 54px;
-  height: 48px;
+  height: 44px;
   border-radius: 14px;
   background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.16) 0%, rgba(var(--accent-rgb), 0.06) 100%);
   backdrop-filter: blur(12px) brightness(1.2) saturate(140%);
@@ -2941,7 +2949,7 @@ canvas { width: 100%; height: 100%; }
 .editor-heatmap-wrap .anatomy-view-label { display: none; }
 
 /* ── Exercise Library Dialog ──────────────────────────────── */
-.header-actions { display: flex; align-items: center; gap: 8px; }
+.header-actions { display: flex; align-items: center; gap: 6px; }
 
 /* Header icon buttons — mini glass chips, not bare glyphs. Same recipe
    as the tab bar + glass cards (translucent fill, hairline border,
@@ -2949,7 +2957,7 @@ canvas { width: 100%; height: 100%; }
    of one system; --dur-fast/--spring transitions per the motion recipe. */
 .btn-lib-icon {
   position: relative;
-  width: 38px; height: 38px;
+  width: 36px; height: 36px;
   background: linear-gradient(180deg, rgba(var(--wht), 0.10), rgba(var(--wht), 0.03));
   border: 1px solid rgba(var(--wht), 0.11);
   border-radius: 12px;
@@ -5568,7 +5576,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .view-title { font-size: 1.62rem; }
   .view-subtitle { font-size: 0.76rem; }
   .bottom-bar { left: 8px; right: 8px; padding: 0 4px; }
-  .bot-btn { width: 50px; font-size: 0.55rem; }
+  .bot-btn { width: 54px; font-size: 0.55rem; }
   .h2h-radar-wrap svg { max-width: 100%; height: auto; }
   .lb-podium, .friend-compare, .vol-insight-list, .pr-grid { min-width: 0; }
   .modal { width: 94%; }
