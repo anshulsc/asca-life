@@ -3082,33 +3082,69 @@ canvas { width: 100%; height: 100%; }
 .editor-heatmap-wrap .anatomy-view-label { display: none; }
 
 /* ── Exercise Library Dialog ──────────────────────────────── */
-.header-actions { display: flex; align-items: center; gap: 10px; }
+.header-actions { display: flex; align-items: center; gap: 8px; }
 
+/* Header icon buttons — mini glass chips, not bare glyphs. Same recipe
+   as the tab bar + glass cards (translucent fill, hairline border,
+   specular top edge) so the Social/Library/Account trio reads as part
+   of one system; --dur-fast/--spring transitions per the motion recipe. */
 .btn-lib-icon {
-  background: transparent; border: none;
+  position: relative;
+  width: 38px; height: 38px;
+  background: linear-gradient(180deg, rgba(var(--wht), 0.10), rgba(var(--wht), 0.03));
+  border: 1px solid rgba(var(--wht), 0.11);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(var(--wht), 0.20), 0 2px 8px rgba(var(--blk), 0.20);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
   color: var(--t-2); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  padding: 8px; border-radius: 50%;
-  transition: background 0.25s var(--spring), color 0.25s var(--spring);
+  transition: background-color var(--dur-fast) ease,
+              border-color var(--dur-fast) ease,
+              color var(--dur-fast) ease,
+              box-shadow var(--dur-fast) ease,
+              transform var(--dur-fast) var(--spring),
+              opacity var(--dur-fast) ease;
+  -webkit-tap-highlight-color: transparent;
 }
+.btn-lib-icon:active { transform: scale(0.88); }
 
 @media (hover: hover) and (pointer: fine) {
-  .btn-lib-icon:hover {   background: rgba(var(--wht), 0.08); color: var(--accent);
+  .btn-lib-icon:hover {
+    color: var(--t-1);
+    background: linear-gradient(180deg, rgba(var(--wht), 0.16), rgba(var(--wht), 0.06));
+    border-color: rgba(var(--wht), 0.18);
+    transform: translateY(-1px);
+    box-shadow: inset 0 1px 0 rgba(var(--wht), 0.24), 0 4px 14px rgba(var(--blk), 0.30);
   }
 }
 
-/* Header Social/Account buttons are also tab targets (.bot-btn) — the
-   bar's .on styling is sized for a labelled pill, so give the header
-   pair their own active state: an accent halo ring + tinted fill that
-   matches the tab bar's language at icon scale. */
+/* Active tab in the header: the same accent language the bar uses
+   (tinted fill + glow), plus a small indicator dot underneath so the
+   state reads at a glance even with the winter theme's dimmed icons. */
 .btn-lib-icon.bot-btn.on {
   color: var(--accent);
-  background: rgba(var(--accent-rgb), 0.14);
-  box-shadow: inset 0 0 0 1.5px rgba(var(--accent-rgb), 0.45);
+  background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.22), rgba(var(--accent-rgb), 0.08));
+  border-color: rgba(var(--accent-rgb), 0.45);
+  box-shadow: inset 0 1px 0 rgba(var(--wht), 0.22),
+              0 2px 10px rgba(var(--accent-rgb), 0.25);
+}
+.btn-lib-icon.bot-btn.on::after {
+  content: "";
+  position: absolute; left: 50%; bottom: -7px;
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--accent);
+  transform: translateX(-50%);
+  box-shadow: 0 0 6px rgba(var(--accent-rgb), 0.8);
 }
 .btn-lib-icon.bot-btn.on .tab-icon { transform: none; filter: none; }
-.btn-lib-icon svg { width: 20px; height: 20px; }
-.nav-account-btn .tab-icon { color: inherit; position: static; }
+.btn-lib-icon svg { width: 19px; height: 19px; }
+.btn-lib-icon .tab-icon { color: inherit; position: static; }
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-lib-icon { transition: none; }
+  .btn-lib-icon:active { transform: none; }
+}
 
 .lib-card {
   width: 92%; max-width: 420px; max-height: 82vh;
