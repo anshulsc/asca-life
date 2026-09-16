@@ -225,15 +225,16 @@ const AscaNutrition = (() => {
       c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
   function on(id, ev, fn) { const el = $(id); if (el) el.addEventListener(ev, fn); }
-  function openSheet(id) { const b = $(id); if (b) b.classList.add('show'); }
-  function closeSheet(id) { const b = $(id); if (b) b.classList.remove('show'); }
+  function openSheet(id) { const b = $(id); if (b) b.classList.add('open'); }
+  function closeSheet(id) { const b = $(id); if (b) b.classList.remove('open'); }
 
   /* Sheet backgrounds close on backdrop tap — same convention as the
-     mini-profile sheet in app.js. */
+     mini-profile sheet in app.js (the sheet system is .open, matching
+     .mini-profile-bg.open in the stylesheet). */
   function bindSheetBackdrop(id, onClose) {
     const bg = $(id);
     if (bg) bg.addEventListener('click', e => {
-      if (e.target === bg) { if (onClose) onClose(); bg.classList.remove('show'); }
+      if (e.target === bg) { if (onClose) onClose(); bg.classList.remove('open'); }
     });
   }
 
@@ -341,6 +342,11 @@ const AscaNutrition = (() => {
     const tgtKcal = t.macros ? t.macros.kcal : 0;
 
     // Header ring: consumed / target, remaining or over.
+    // Calorie ring + "Net" line, including today's logged exercise burn
+    // (the link to the workout side: cardio sets and lifting sessions
+    // logged on the Log tab surface here).
+    const burn = deps.exerciseBurnForDate ? deps.exerciseBurnForDate(curDate) : null;
+    const burnKcal = burn ? burn.kcal : 0;
     $('nutKcalNum').textContent = E().fmt(totals.kcal, 0);
     $('nutKcalTarget').textContent = tgtKcal ? `/ ${E().fmt(tgtKcal, 0)} kcal` : '/ — kcal';
     const pct = tgtKcal > 0 ? Math.min(1, totals.kcal / tgtKcal) : 0;
@@ -349,10 +355,22 @@ const AscaNutrition = (() => {
     const remain = $('nutKcalRemain');
     if (!tgtKcal) { remain.textContent = 'Set up your plan for a target'; remain.className = 'nut-kcal-remain'; }
     else {
+      // The target was set against TDEE-which-already-includes-activity,
+      // so "remaining" stays intake-vs-target; exercise burn is shown
+      // separately and shifted to the NET line instead of re-inflating
+      // the budget (no double-counting).
       const left = tgtKcal - totals.kcal;
       remain.textContent = left >= 0 ? `${E().fmt(left, 0)} kcal remaining` : `${E().fmt(-left, 0)} kcal over target`;
       remain.className = 'nut-kcal-remain' + (left < 0 ? ' over' : '');
     }
+    const burnRow = $('nutBurnRow');
+    if (burnKcal > 0) {
+      const srcBits = [];
+      if (burn.cardio.kcal || burn.cardio.mins) srcBits.push(`cardio ${burn.cardio.kcal ? burn.cardio.kcal + ' kcal' + (burn.cardio.mins ? ' · ' + burn.cardio.mins + ' min' : '') : burn.cardio.mins + ' min'}`);
+      if (burn.liftKcal) srcBits.push(`~${burn.liftKcal} kcal lifting${burn.liftSessions > 1 ? ' × ' + burn.liftSessions : ''}`);
+      burnRow.textContent = `🏃 −${burnKcal} kcal active today (${srcBits.join(', ')}) → net ≈ ${E().fmt(totals.kcal - burnKcal, 0)} kcal`;
+      burnRow.style.display = '';
+    } else burnRow.style.display = 'none';
 
     // Macro bars — protein first and visually emphasized (section 19).
     const macroRow = (id, name, used, tgt, accent) => {
@@ -434,6 +452,12 @@ const AscaNutrition = (() => {
     // Weekly averages over the last 7 real days.
     const keys = []; for (let i = 6; i >= 0; i--) keys.push(W().addDays(today, -i));
     const wa = E().weeklyAverages(state.days, keys);
+    // Net of exercise: intake minus what the workout log says you burned.
+    let weekBurn = 0, burnDays = 0;
+    if (deps.exerciseBurnForDate) keys.forEach(d => {
+      const b = deps.exerciseBurnForDate(d);
+      if (b && b.kcal > 0) { weekBurn += b.kcal; burnDays++; }
+    });
     $('nutWeekAvg').innerHTML = wa.loggedDays === 0
       ? '<div class="nut-muted">Log a few days of food to see weekly averages.</div>'
       : `<div class="nut-statgrid">
@@ -442,7 +466,7 @@ const AscaNutrition = (() => {
           ${stat('Avg carbs', E().fmt(wa.carbs, 0), 'g/d')}
           ${stat('Avg fat', E().fmt(wa.fat, 0), 'g/d')}
           ${stat('Avg fiber', E().fmt(wa.fiber, 0), 'g/d')}
-          ${stat('Days logged', wa.loggedDays, '/ 7')}
+          ${weekBurn > 0 ? stat('Active kcal', E().fmt(weekBurn / Math.max(1, burnDays), 0), `kcal/${burnDays > 1 ? 'workout day' : 'day'}`) : stat('Days logged', wa.loggedDays, '/ 7')}
         </div>`;
 
     // Weight stats: averages, change, from-start.
@@ -513,6 +537,22 @@ const AscaNutrition = (() => {
       calSeries.push({ label: dayLabel(d), y: tot });
     }
     drawSpark($('nutChartKcal'), calSeries.filter((p, i) => i === 0 || i === calSeries.length - 1 || p.y > 0), { color: '#FF9F0A', emptyText: 'Log food to see intake' });
+
+    // Exercise burn from the workout log — the "Net" companion to intake.
+    const burnSeries = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = W().addDays(today, -i);
+      const b = deps.exerciseBurnForDate ? deps.exerciseBurnForDate(d) : null;
+      if (b && b.kcal > 0) burnSeries.push({ label: dayLabel(d), y: b.kcal });
+    }
+    const burnCard = $('nutBurnCard');
+    if (burnSeries.length) {
+      burnCard.style.display = '';
+      const last7 = burnSeries.slice(-7);
+      const wkBurn = last7.reduce((s, p) => s + p.y, 0);
+      $('nutBurnWeek').textContent = `${E().fmt(wkBurn, 0)} kcal active across the last ${last7.length} workout day${last7.length === 1 ? '' : 's'} shown`;
+      drawSpark($('nutChartBurn'), burnSeries, { color: '#FF375F', emptyText: '' });
+    } else burnCard.style.display = 'none';
 
     // Measurement sparkline + latest-values grid.
     const mkey = $('nutMeasureSelect') ? $('nutMeasureSelect').value : 'waist';

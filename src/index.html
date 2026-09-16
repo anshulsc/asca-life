@@ -563,6 +563,7 @@
           </div>
           <div class="nut-kcal-side">
             <div class="nut-kcal-remain" id="nutKcalRemain">Set up your plan for a target</div>
+            <div class="nut-burn-row" id="nutBurnRow" style="display:none"></div>
             <div class="nut-sync-note" id="nutSyncNote" style="display:none">Cloud sync paused — database rules need a republish (Settings → Developer Console).</div>
           </div>
         </div>
@@ -625,6 +626,15 @@
         <div class="card glass-card chart-card">
           <div class="chart-header"><span class="heatmap-cal-title">Calories per day — last 30</span></div>
           <div class="chart-wrap nut-chart-wrap"><canvas id="nutChartKcal"></canvas></div>
+        </div>
+
+        <div class="card glass-card chart-card" id="nutBurnCard" style="display:none">
+          <div class="chart-header">
+            <span class="heatmap-cal-title">Exercise burn — last 30 days</span>
+            <span class="chart-val" id="nutBurnWeek"></span>
+          </div>
+          <div class="chart-wrap nut-chart-wrap"><canvas id="nutChartBurn"></canvas></div>
+          <div class="nut-muted">Cardio burns come from your logged cardio sets; lifting is estimated (~5 kcal/min, 75 min/session) and folded into the observed-maintenance trend below.</div>
         </div>
 
         <div class="card glass-card nut-card-pad nut-goal-card" id="nutGoalCard" style="display:none"></div>

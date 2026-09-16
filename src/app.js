@@ -44,6 +44,27 @@ function startApp() {
         localStorage.setItem(BWK,encryptStr(JSON.stringify({weight:kg,timestamp:Date.now()})));
         renderBodyWeight();renderProfile();
         if(typeof fbPush==='function'&&fbCfg().connected)fbPush(false);
+      },
+      // The workout→nutrition link: what the Log tab knows you burned on
+      // a given day. Cardio is ground truth from cardio sets (treadmill
+      // kcal, or mins when the machine gave none); lifting is estimated
+      // (~5 kcal/min × 75 min per strength session) because set-volume
+      // math materially under-reads lifting energy vs MET-lite.
+      // Intake targets already assume activity via TDEE, so the UI shows
+      // this as a separate "active/net" line, never inflating the budget
+      // — that's the no-double-counting rule for exercise calories.
+      exerciseBurnForDate: dateKey=>{
+        const dayW=W.filter(w=>w.date===dateKey);
+        let mins=0,km=0,kcal=0,liftSessions=0;
+        dayW.forEach(w=>{
+          const c=workoutCardio(w);
+          mins+=c.mins;km+=c.km;kcal+=c.kcal;
+          if((w.exercises||[]).some(e=>(e.sets||[]).some(s=>!isCardioSet(s))))liftSessions++;
+        });
+        const liftKcal=liftSessions*375; // 5 kcal/min × 75 min — same convention as detailed-activity
+        const total=kcal+liftKcal;
+        if(!total&&!mins)return null;
+        return {kcal:total,liftKcal,liftSessions,cardio:{mins,km,kcal}};
       }
     });
   }
