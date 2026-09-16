@@ -929,8 +929,6 @@ select.input-field {
 .badge-legs { background: var(--c-green-bg); color: var(--c-green); }
 .badge-shoulders { background: var(--c-orange-bg); color: var(--c-orange); }
 .badge-core { background: var(--c-purple-bg); color: var(--c-purple); }
-.badge-other { background: var(--c-cyan-bg); color: var(--c-cyan); }
-.badge-cardio { background: rgba(255, 55, 95, 0.14); color: #FF375F; }
 .badge-new { background: var(--glass-2); border: 1px dashed var(--t-3); color: var(--t-2); }
 
 /* ── Active Set Editor — iOS 27 Glass ──────────────────── */
@@ -1018,16 +1016,6 @@ select.input-field {
   font-size: 0.62rem; font-weight: 800;
   color: var(--t-3); text-transform: uppercase;
   letter-spacing: 0.08em; text-align: center;
-}
-
-.set-num {
-  width: 32px; height: 36px;
-  border-radius: var(--r-xs);
-  background: var(--glass-2);
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--ff-mono);
-  font-size: 0.8rem; font-weight: 700; color: var(--t-2);
-  border: 1px solid var(--border-light);
 }
 
 .set-input {
@@ -1562,7 +1550,7 @@ select.input-field {
 .tl-best-val { font-size: 0.88rem; font-weight: 700; }
 
 /* ── Analytics Dashboard ──────────────────────────────────── */
-.dash-grid, .stats-mini-grid {
+.stats-mini-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 10px;
@@ -1655,31 +1643,7 @@ select.input-field {
 canvas { width: 100%; height: 100%; }
 
 /* ── Settings ────────────────────────────────────────────── */
-.settings-group { margin-bottom: 12px; }
-
-.settings-title {
-  font-family: var(--ff-title); font-size: 1rem; font-weight: 700;
-  margin-bottom: 14px; padding-bottom: 8px;
-  border-bottom: 1px solid var(--border-light);
-}
-
-.settings-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
-
-.settings-row {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border-light);
-}
-.settings-row:last-child { border-bottom: none; padding-bottom: 0; }
-
-.settings-row-info { flex: 1; padding-right: 12px; }
-.settings-row-name { font-size: 0.9rem; font-weight: 600; }
-.settings-row-desc { font-size: 0.75rem; color: var(--t-3); margin-top: 1px; }
 .destructive-text { color: var(--c-red); }
-
-.warning-row { border-top: 1px solid rgba(255, 69, 58, 0.08); margin-top: 8px; padding-top: 14px; }
-
-.settings-hint { font-size: 0.75rem; color: var(--t-3); line-height: 1.5; margin: -6px 0 14px; }
 
 /* ── Training Partner Card ───────────────────────────────── */
 .friend-card { margin-bottom: 20px; }
@@ -1696,50 +1660,9 @@ canvas { width: 100%; height: 100%; }
 
 #btnFriendSync.syncing { opacity: 0.55; pointer-events: none; }
 
-.fx-textarea {
-  width: 100%; min-height: 110px; resize: none;
-  font-family: var(--ff-mono); font-size: 0.68rem; line-height: 1.45;
-  word-break: break-all; margin-bottom: 16px;
-}
-
 .friend-empty { font-size: 0.85rem; color: var(--t-3); padding: 8px 0; }
 
 .friend-compare { display: flex; flex-direction: column; gap: 12px; }
-
-.friend-cmp-row { display: flex; flex-direction: column; gap: 5px; }
-.friend-cmp-meta {
-  display: flex; justify-content: space-between; align-items: baseline;
-  font-size: 0.75rem; color: var(--t-3);
-}
-.friend-cmp-label { font-weight: 600; }
-.friend-cmp-vals { font-family: var(--ff-mono); font-size: 0.72rem; }
-.friend-cmp-vals .me { color: var(--accent); font-weight: 700; }
-.friend-cmp-vals .them { color: var(--c-cyan); font-weight: 700; }
-
-.friend-cmp-bars { display: flex; flex-direction: column; gap: 3px; }
-.friend-cmp-track {
-  height: 7px; border-radius: var(--r-full);
-  background: var(--glass-2); overflow: hidden;
-}
-.friend-cmp-fill {
-  height: 100%; border-radius: var(--r-full);
-  transition: width 0.6s var(--spring);
-}
-.friend-cmp-fill.me { background: linear-gradient(90deg, var(--accent), #FFB300); }
-.friend-cmp-fill.them { background: linear-gradient(90deg, #0A84FF, var(--c-cyan)); }
-
-.friend-recent { margin-top: 16px; }
-.friend-recent-title {
-  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em;
-  text-transform: uppercase; color: var(--t-3); margin-bottom: 8px;
-}
-.friend-session {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 8px 0; border-bottom: 1px solid var(--border-light);
-}
-.friend-session:last-child { border-bottom: none; padding-bottom: 0; }
-.friend-session-date { font-size: 0.82rem; font-weight: 600; }
-.friend-session-stats { font-size: 0.72rem; color: var(--t-3); font-family: var(--ff-mono); }
 
 /* ── Weekly Leaderboard ──────────────────────────────────── */
 .lb-row {
@@ -1820,27 +1743,10 @@ canvas { width: 100%; height: 100%; }
   color: var(--t-3, #777); letter-spacing: 0;
 }
 
-/* ── Activity Feed ───────────────────────────────────────── */
-/* Each item carries its day-type colour (--dt/--dt-bg/--dt-bd set
-   inline): a left rail plus the split chip, so a glance down the feed
-   reads the training split without reading a word. */
-.feed-item {
-  position: relative;
-  padding: 12px 8px 12px 16px;
-  border-bottom: 1px solid var(--border-light, rgba(var(--wht),0.06));
-  transition: background 0.15s, transform 0.12s var(--spring);
-}
-.feed-item::before {
-  content: ''; position: absolute; left: 2px; top: 14px; bottom: 14px;
-  width: 3px; border-radius: 2px;
-  background: var(--dt, var(--accent)); opacity: 0.85;
-}
-.feed-item:last-child { border-bottom: none; }
-
-@media (hover: hover) and (pointer: fine) {
-  .feed-item:hover {   background: rgba(var(--wht),0.03); 
-  }
-}
+/* ── Activity Feed ─────────────────────────────────────────
+   The pre-feed-card list layout was removed with the feed-card switch;
+   these keep the pieces the new cards still reuse: the day-type split
+   chip, avatars, and the who/when text column. */
 .feed-type {
   font-size: 0.58rem; font-weight: 800; letter-spacing: 0.07em;
   text-transform: uppercase; white-space: nowrap; flex-shrink: 0;
@@ -1849,9 +1755,6 @@ canvas { width: 100%; height: 100%; }
   border: 1px solid var(--dt-bd, rgba(var(--accent-rgb),0.27));
   padding: 3px 9px; border-radius: 8px;
   margin-right: 2px;
-}
-.feed-head {
-  display: flex; align-items: center; gap: 10px;
 }
 .feed-avatar {
   width: 34px; height: 34px; border-radius: 50%;
@@ -1866,31 +1769,6 @@ canvas { width: 100%; height: 100%; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .feed-when { font-size: 0.66rem; color: var(--t-3, #777); font-weight: 500; }
-.feed-vol {
-  font-family: var(--ff-mono, monospace); font-size: 0.9rem;
-  font-weight: 800; color: var(--accent);
-  flex-shrink: 0; text-align: right; line-height: 1;
-}
-.feed-vol span {
-  font-size: 0.58rem; font-weight: 600; color: var(--t-3, #777);
-  margin-left: 2px;
-}
-.feed-chips {
-  display: flex; flex-wrap: wrap; gap: 6px;
-  margin-top: 8px; padding-left: 46px;
-}
-.feed-chip {
-  font-size: 0.64rem; font-weight: 600;
-  padding: 3px 10px; border-radius: 8px;
-  background: rgba(var(--wht),0.06);
-  color: var(--t-2, #bbb);
-  white-space: nowrap;
-}
-.feed-chip-top {
-  background: linear-gradient(135deg, rgba(255,107,0,0.15), rgba(255,179,0,0.1));
-  color: var(--accent); font-weight: 700;
-  border: 1px solid rgba(255,107,0,0.2);
-}
 
 /* ── Strava-style feed cards + kudos/comments + story rings ───── */
 .feed-card {
@@ -2059,8 +1937,8 @@ canvas { width: 100%; height: 100%; }
 .soc-empty-card .btn { display: inline-flex; width: auto; padding: 10px 26px; }
 
 /* Tappable rows press in slightly — everything that opens a profile */
-.lb-row, .feed-item, .podium-item { cursor: pointer; }
-.lb-row:active, .feed-item:active, .podium-item:active { transform: scale(0.98); }
+.lb-row, .podium-item { cursor: pointer; }
+.lb-row:active, .podium-item:active { transform: scale(0.98); }
 .lb-row { transition: background 0.2s, transform 0.12s var(--spring); }
 .podium-item { transition: transform 0.12s var(--spring); }
 
@@ -2551,29 +2429,6 @@ canvas { width: 100%; height: 100%; }
   border: none;
 }
 .user-row .btn-secondary { border: 1px solid rgba(var(--wht),0.15); }
-
-.feed-item {
-  padding: 14px 14px;
-  margin-bottom: 10px;
-  background: rgba(var(--wht), 0.01);
-  border: 1px solid rgba(var(--wht), 0.03);
-  border-radius: var(--r-s);
-  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease;
-  cursor: pointer;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .feed-item:hover {
-    background: rgba(var(--wht), 0.03);
-    border-color: rgba(var(--wht), 0.08);
-    transform: translateY(-1.5px);
-    box-shadow: 0 6px 16px rgba(var(--blk), 0.2);
-  }
-}
-.feed-item:active {
-  transform: translateY(0) scale(var(--press-scale));
-}
-
 
 /* ── Apple Liquid Glass Tab Bar — Floating Pill ──────────── */
 .bottom-bar {
@@ -3330,13 +3185,6 @@ canvas { width: 100%; height: 100%; }
 }
 .profile-edit.open { max-height: 480px; opacity: 1; margin-top: 18px; }
 
-.follow-header {
-  display: flex; align-items: baseline; gap: 6px;
-  margin: 20px 0 4px;
-  font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
-  color: var(--t-2);
-}
-
 .search-input-wrap { position: relative; }
 .search-input-wrap .search-icon {
   position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
@@ -3377,14 +3225,9 @@ canvas { width: 100%; height: 100%; }
   box-shadow: 0 4px 12px rgba(58, 123, 213, 0.25);
   border: 2px solid rgba(var(--wht), 0.08);
 }
-.user-row-avatar.is-me {
-  background: linear-gradient(135deg, var(--accent), #FF9F45);
-  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.3);
-}
 .user-row-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .user-row-name { font-size: 0.9rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff; display: flex; align-items: center; }
 .user-row-sub { font-size: 0.7rem; font-weight: 500; color: var(--t-3); }
-.follow-count { font-size: 0.72rem; font-weight: 700; color: var(--t-3); }
 .search-empty { font-size: 0.78rem; color: var(--t-3); padding: 14px; text-align: center; }
 
 /* ── Toggle Switch ─────────────────────────────────────────────
@@ -3817,14 +3660,6 @@ canvas { width: 100%; height: 100%; }
 }
 .arc-badge-chip.locked .arc-badge-icon { background: var(--glass-1); border-color: var(--border-light); filter: grayscale(1); opacity: 0.4; }
 .arc-badge-name { font-size: 0.6rem; font-weight: 700; color: var(--t-2); line-height: 1.2; }
-
-/* ── Completion celebration ── */
-@keyframes arcCrystallise {
-  0%   { clip-path: inset(0 100% 0 0); opacity: 0; }
-  40%  { opacity: 1; }
-  100% { clip-path: inset(0 0 0 0); opacity: 1; }
-}
-.arc-celebrate { animation: arcCrystallise 0.7s var(--arc-settle, var(--spring)) both; }
 
 /* ── Winter Arc: Challenges Browser + Lock In ────────────────
    Same "components, not a second stylesheet" rule as the dashboard —
@@ -4579,13 +4414,6 @@ canvas { width: 100%; height: 100%; }
 .card::before, .glass-card::before { background: radial-gradient(220px circle at calc(var(--mx) * 1%) calc(var(--my) * 1%), rgba(var(--wht), 0.11), transparent 62%); }
 }
 
-/* Celebration pulse ring — a one-shot halo behind the trigger element
-   (streak milestone, PR flag, first badge reveal). Transform-only so it
-   never shifts layout. */
-.pulse-ring-anchor { position: relative; }
-.pulse-ring-anchor::after { content: ''; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; border-radius: 50%; border: 2px solid rgba(var(--accent-rgb), 0.9); transform: translate(-50%, -50%); pointer-events: none; animation: pulseRing 0.85s var(--bounce) both; }
-@keyframes pulseRing { from { opacity: 0.9; transform: translate(-50%, -50%) scale(0.2); } to { opacity: 0; transform: translate(-50%, -50%) scale(3.4); } }
-
 /* Confetti — six-to-eight accent bits fan out from an element; each one
    carries its own JS-stamped --dx/--dy so a single keyframe fans them. */
 .celebrate-bit { position: fixed; left: 0; top: 0; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); pointer-events: none; z-index: 99999; animation: celebratePop 0.6s var(--bounce) both; }
@@ -4611,7 +4439,7 @@ canvas { width: 100%; height: 100%; }
 @media (prefers-reduced-motion: reduce) {
 .gym-heatmap-dot.today { animation-duration: 0.001ms !important; }
 .view.on > *:nth-child(-n+8) { animation-duration: 0.001ms !important; }
-.celebrate-bit, .pulse-ring-anchor::after { display: none !important; }
+.celebrate-bit { display: none !important; }
 }
 
 /* @property LAST in this section — its braces stay put even if a later
@@ -4946,16 +4774,18 @@ canvas { width: 100%; height: 100%; }
    Owns the #vNut tab and its sheets. Reuses the app's glass tokens,
    .seg-tabs, volume-widget rows, arc-xp-style bars and chart cards —
    only genuinely new shapes get nut- classes. Mono numerals use the
-   app's existing .nut-num (JetBrains Mono) convention. */
+   app's existing .nut-num (JetBrains Mono) convention. Spacing rides the
+   4px scale (--space-1..4); interactive states match the app-wide habit:
+   hover only on fine pointers, :active squish via --press-scale. */
 
-.nut-num { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.nut-num { font-family: var(--ff-mono); font-variant-numeric: tabular-nums; }
 .nut-muted { font-size: 0.76rem; line-height: 1.45; color: var(--t-2); }
-.nut-card-pad { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
-.nut-empty { font-size: 0.82rem; line-height: 1.5; color: var(--t-3); padding: 10px 4px; text-align: center; }
+.nut-card-pad { padding: 14px var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
+.nut-empty { font-size: var(--text-s); line-height: 1.5; color: var(--t-3); padding: 10px var(--space-1); text-align: center; }
 .nut-warn {
   font-size: 0.78rem; line-height: 1.45; color: var(--c-orange);
   background: var(--c-orange-bg); border: 1px solid rgba(255, 159, 10, 0.25);
-  border-radius: 10px; padding: 8px 10px; margin-top: 6px;
+  border-radius: var(--r-m); padding: var(--space-2) 10px; margin-top: 6px;
 }
 
 .nut-subtabs { margin-bottom: 14px; }
@@ -4964,7 +4794,7 @@ canvas { width: 100%; height: 100%; }
 .nut-datenav-label { font-size: 0.95rem; font-weight: 700; color: var(--t-1); }
 
 /* Calorie ring card — mirrors the Insights progress-ring anatomy. */
-.nut-kcal-card { display: flex; align-items: center; gap: 16px; padding: 14px 16px; }
+.nut-kcal-card { display: flex; align-items: center; gap: var(--space-4); padding: 14px var(--space-4); }
 .nut-kcal-ring-wrap { position: relative; width: 92px; height: 92px; flex: 0 0 auto; }
 .nut-kcal-ring-wrap .progress-ring-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .nut-kcal-ring-center {
@@ -4974,22 +4804,22 @@ canvas { width: 100%; height: 100%; }
 .nut-kcal-ring-center .nut-num { font-size: 1.35rem; font-weight: 800; color: var(--t-1); line-height: 1; }
 .nut-kcal-target { font-size: 0.62rem; color: var(--t-3); }
 .nut-kcal-side { flex: 1; min-width: 0; }
-.nut-kcal-remain { font-size: 0.88rem; font-weight: 600; color: var(--c-green); }
+.nut-kcal-remain { font-size: 0.88rem; font-weight: 600; color: var(--c-green); transition: color var(--dur-fast) ease; }
 .nut-kcal-remain.over { color: var(--c-red); }
-.nut-sync-note { margin-top: 6px; font-size: 0.72rem; color: var(--c-orange); line-height: 1.4; }
+.nut-sync-note { margin-top: 6px; font-size: var(--text-xs); color: var(--c-orange); line-height: 1.4; }
 
 /* Macro bars. */
-.nut-macros-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; }
+.nut-macros-card { display: flex; flex-direction: column; gap: var(--space-3); padding: 14px var(--space-4); }
 .nut-macro-top {
   display: flex; justify-content: space-between; align-items: baseline;
   font-size: 0.78rem; font-weight: 600; color: var(--t-1);
 }
-.nut-macro-nums { font-size: 0.72rem; color: var(--t-3); font-weight: 600; }
+.nut-macro-nums { font-size: var(--text-xs); color: var(--t-3); font-weight: 600; }
 .nut-macro-bar {
   margin-top: 4px; height: 6px; border-radius: 3px;
   background: var(--glass-2); overflow: hidden;
 }
-.nut-macro-fill { height: 100%; border-radius: 3px; width: 0; transition: width 0.35s ease; }
+.nut-macro-fill { height: 100%; border-radius: 3px; width: 0; transition: width 0.35s var(--spring, ease); }
 .nut-macro-fill.protein { background: linear-gradient(90deg, #30D158, #58E57C); }
 .nut-macro-fill.carbs { background: linear-gradient(90deg, #0A84FF, #64D2FF); }
 .nut-macro-fill.fat { background: linear-gradient(90deg, #FF9F0A, #FFBE5C); }
@@ -4997,36 +4827,65 @@ canvas { width: 100%; height: 100%; }
 .nut-macro-fill.over { background: linear-gradient(90deg, #FF453A, #FF6961); }
 
 /* Quick actions + fast presets. */
-.nut-actions-card { display: flex; gap: 8px; margin: 12px 0 10px; }
+.nut-actions-card { display: flex; gap: var(--space-2); margin: var(--space-3) 0 10px; }
 .nut-actions-card .btn { flex: 1; }
-.nut-quickpresets { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
-.nut-quickpresets-label { font-size: 0.72rem; color: var(--t-3); font-weight: 600; }
+.nut-quickpresets { display: flex; align-items: center; gap: var(--space-2); margin-bottom: 14px; flex-wrap: wrap; }
+.nut-quickpresets-label { font-size: var(--text-xs); color: var(--t-3); font-weight: 600; }
 
 /* Meal groups + entries. */
-.nut-meal { margin-bottom: 10px; }
+.nut-meal { margin-bottom: var(--space-3); }
 .nut-meal-head {
   display: flex; align-items: baseline; gap: 10px;
   padding: 6px 2px;
 }
 .nut-meal-name { font-size: 0.88rem; font-weight: 700; color: var(--t-1); flex: 1; }
-.nut-meal-kcal { font-size: 0.74rem; color: var(--t-3); }
+.nut-meal-kcal { font-size: 0.74rem; color: var(--t-3); font-variant-numeric: tabular-nums; }
 .nut-meal-add {
   background: none; border: none; cursor: pointer;
   font-size: 0.76rem; font-weight: 700; color: var(--accent, var(--c-blue));
+  padding: 2px 0; transition: opacity var(--dur-fast) ease, transform var(--dur-fast) var(--spring);
+}
+.nut-meal-add:active { transform: scale(0.96); }
+
+/* One row recipe for every nut list entry: hairline glass, springy on
+   interaction, and it never pops hover states under a fingertip. */
+.nut-entry, .nut-food-row, .nut-ing-row {
+  display: flex; align-items: center;
+  background: var(--glass-1, rgba(var(--wht), 0.04));
+  border: 1px solid var(--glass-2);
+  transition: border-color var(--dur-fast) ease, background-color var(--dur-fast) ease;
 }
 .nut-entry {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 12px; margin: 4px 0;
-  background: var(--glass-1, rgba(255,255,255,0.04));
-  border: 1px solid var(--glass-2); border-radius: 12px;
+  gap: 10px; padding: 8px var(--space-3); margin: var(--space-1) 0;
+  border-radius: var(--r-m);
 }
-.nut-entry-name { flex: 1; font-size: 0.82rem; color: var(--t-1); min-width: 0; overflow-wrap: anywhere; }
-.nut-entry-kcal { font-size: 0.76rem; color: var(--t-2); white-space: nowrap; }
-.nut-entry-del, .nut-ing-del, .nut-qa-del {
+.nut-food-row {
+  gap: var(--space-2); padding: 10px var(--space-3); margin: 6px 0;
+  border-radius: var(--r-m);
+}
+.nut-ing-row {
+  justify-content: space-between; gap: var(--space-2);
+  padding: 7px var(--space-3); margin: var(--space-1) 0;
+  font-size: 0.8rem; color: var(--t-1);
+  border-radius: var(--r-s);
+}
+@media (hover: hover) and (pointer: fine) {
+  .nut-entry:hover, .nut-food-row:hover, .nut-ing-row:hover { border-color: rgba(var(--wht), 0.12); background: var(--glass-2); }
+}
+.nut-entry-name { flex: 1; font-size: var(--text-s); color: var(--t-1); min-width: 0; overflow-wrap: anywhere; }
+.nut-entry-kcal { font-size: 0.76rem; color: var(--t-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Small × delete affordances — one rule for entries, ingredients, quick-adds. */
+.nut-entry-del, .nut-ing-del, .nut-qa-del, .nut-food-del {
   background: none; border: none; cursor: pointer; flex: 0 0 auto;
   font-size: 1rem; line-height: 1; color: var(--t-3); padding: 2px 6px;
+  border-radius: var(--r-s);
+  transition: color var(--dur-fast) ease, transform var(--dur-fast) var(--spring);
 }
-.nut-entry-del:hover, .nut-ing-del:hover, .nut-qa-del:hover { color: var(--c-red); }
+.nut-entry-del:active, .nut-ing-del:active, .nut-qa-del:active, .nut-food-del:active { transform: scale(0.88); }
+@media (hover: hover) and (pointer: fine) {
+  .nut-entry-del:hover, .nut-ing-del:hover, .nut-qa-del:hover, .nut-food-del:hover { color: var(--c-red); }
+}
 
 .nut-src-badge {
   font-size: 0.58rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
@@ -5039,76 +4898,68 @@ canvas { width: 100%; height: 100%; }
 .nut-goal-strip { padding: 10px 14px; font-size: 0.8rem; color: var(--t-2); line-height: 1.5; }
 
 /* Trends. */
-.nut-statgrid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px 8px; }
+.nut-statgrid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px var(--space-2); }
 .nut-stat { display: flex; flex-direction: column; gap: 1px; }
 .nut-stat-val { font-size: 1.02rem; font-weight: 800; color: var(--t-1); }
 .nut-stat-label { font-size: 0.64rem; color: var(--t-3); font-weight: 600; }
-.nut-tdee-line { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 0.82rem; color: var(--t-2); }
+.nut-tdee-line { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); font-size: var(--text-s); color: var(--t-2); }
 .nut-tdee-line b { color: var(--t-1); font-weight: 700; }
 .nut-tdee-line.strong { padding-top: 6px; border-top: 1px solid var(--glass-2); }
 .nut-tdee-line.strong b { color: var(--c-blue); }
 .nut-chart-wrap { height: 130px; }
-.nut-goal-card .nut-goal-nums { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.nut-goal-card .nut-goal-nums { display: flex; align-items: baseline; gap: var(--space-2); flex-wrap: wrap; }
 .nut-goal-card .nut-num { font-size: 1.05rem; font-weight: 800; color: var(--t-1); }
 .nut-goal-card .nut-num.big { font-size: 1.5rem; color: var(--c-blue); }
-.nut-goal-card em { font-style: normal; font-size: 0.66rem; color: var(--t-3); margin-right: 4px; }
+.nut-goal-card em { font-style: normal; font-size: 0.66rem; color: var(--t-3); margin-right: var(--space-1); }
 .nut-goal-card .nut-arrow { color: var(--t-3); }
 .nut-goal-left { font-size: 0.86rem; font-weight: 700; color: var(--t-1); }
 
 /* Foods & recipes lists. */
-.nut-food-search-wrap { margin-bottom: 12px; }
-.nut-food-row {
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 12px; margin: 6px 0;
-  background: var(--glass-1, rgba(255,255,255,0.04));
-  border: 1px solid var(--glass-2); border-radius: 12px;
-}
+.nut-food-search-wrap { margin-bottom: var(--space-3); }
 .nut-food-name { flex: 1; font-size: 0.84rem; font-weight: 600; color: var(--t-1); min-width: 0; overflow-wrap: anywhere; }
 .nut-food-meta { font-size: 0.7rem; color: var(--t-3); white-space: nowrap; }
 .nut-food-edit, .nut-recipe-log {
   background: none; border: none; cursor: pointer;
-  font-size: 0.72rem; font-weight: 700; color: var(--c-blue); padding: 2px 4px;
+  font-size: var(--text-xs); font-weight: 700; color: var(--c-blue); padding: 2px var(--space-1);
+  transition: opacity var(--dur-fast) ease, transform var(--dur-fast) var(--spring);
 }
-.nut-food-del {
-  background: none; border: none; cursor: pointer; flex: 0 0 auto;
-  font-size: 1rem; line-height: 1; color: var(--t-3); padding: 2px 6px;
+.nut-food-edit:active, .nut-recipe-log:active { transform: scale(0.94); }
+
+/* One chip recipe, two consumers: sheet pickers (.nut-pick) and the plan
+   tab's activity/goal grids (.nut-act-btn). */
+.nut-pick, .nut-act-btn {
+  border: 1px solid var(--glass-2); border-radius: 999px;
+  background: var(--glass-1, rgba(var(--wht), 0.04));
+  font-weight: 700; cursor: pointer;
+  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, transform var(--dur-fast) var(--spring);
 }
-.nut-food-del:hover { color: var(--c-red); }
+.nut-pick { color: var(--t-1); font-size: 0.78rem; padding: 6px var(--space-3); }
+.nut-act-btn { color: var(--t-2); font-size: 0.76rem; padding: 7px 13px; }
+.nut-pick.on, .nut-act-btn.on { border-color: var(--c-blue); color: var(--c-blue); background: var(--c-blue-bg); }
+.nut-pick.wide { width: 100%; border-radius: var(--r-m); text-align: left; padding: 10px var(--space-3); }
+.nut-pick:active, .nut-act-btn:active { transform: scale(0.96); }
+@media (hover: hover) and (pointer: fine) {
+  .nut-pick:hover, .nut-act-btn:hover { border-color: rgba(var(--wht), 0.16); }
+  .nut-pick.on:hover, .nut-act-btn.on:hover { border-color: var(--c-blue); }
+}
 
 /* Picker lists inside sheets. */
 .nut-pick-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
-.nut-pick {
-  border: 1px solid var(--glass-2); border-radius: 999px;
-  background: var(--glass-1, rgba(255,255,255,0.04));
-  color: var(--t-1); font-size: 0.78rem; font-weight: 600;
-  padding: 6px 12px; cursor: pointer;
-}
-.nut-pick.on { border-color: var(--c-blue); color: var(--c-blue); background: var(--c-blue-bg); }
-.nut-pick.wide { width: 100%; border-radius: 12px; text-align: left; padding: 10px 12px; }
 
 .nut-preview { margin: 10px 0; min-height: 18px; }
 .nut-preview-nums { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; font-size: 0.8rem; color: var(--t-2); }
 .nut-preview-nums b { font-size: 1.05rem; color: var(--t-1); }
 
-.nut-ing-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 7px 12px; margin: 4px 0; font-size: 0.8rem; color: var(--t-1);
-  background: var(--glass-1, rgba(255,255,255,0.04));
-  border: 1px solid var(--glass-2); border-radius: 10px;
-}
-
 /* Plan: activity/goal grids. */
 .nut-act-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-.nut-act-btn {
-  border: 1px solid var(--glass-2); border-radius: 999px;
-  background: var(--glass-1, rgba(255,255,255,0.04));
-  color: var(--t-2); font-size: 0.76rem; font-weight: 700;
-  padding: 7px 13px; cursor: pointer;
-}
-.nut-act-btn.on { border-color: var(--c-blue); color: var(--c-blue); background: var(--c-blue-bg); }
 
 @media (prefers-reduced-motion: reduce) {
   .nut-macro-fill { transition: none; }
+  .nut-kcal-remain,
+  .nut-meal-add, .nut-food-edit, .nut-recipe-log,
+  .nut-entry, .nut-food-row, .nut-ing-row,
+  .nut-pick, .nut-act-btn,
+  .nut-entry-del, .nut-ing-del, .nut-qa-del, .nut-food-del { transition: none; }
 }
 
 /* ── Lock Screen Overlay ─────────────────────────────────── */
@@ -5197,99 +5048,6 @@ canvas { width: 100%; height: 100%; }
   font-weight: 600;
   color: var(--t-4);
   letter-spacing: 0.02em;
-}
-
-.pin-dots {
-  display: flex;
-  gap: 16px;
-  margin: 6px 0;
-}
-
-.pin-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(var(--wht), 0.25);
-  background: transparent;
-  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.pin-dot.filled {
-  background: var(--t-1);
-  border-color: var(--t-1);
-  box-shadow: 0 0 8px rgba(var(--wht), 0.5);
-  transform: scale(1.15);
-}
-
-.pin-dots.shake {
-  animation: pinShake 0.4s ease;
-}
-
-@keyframes pinShake {
-  0%, 100% { transform: translateX(0); }
-  20%, 60% { transform: translateX(-8px); }
-  40%, 80% { transform: translateX(8px); }
-}
-
-.pin-keypad {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  width: 100%;
-}
-
-.pin-key {
-  aspect-ratio: 1.25;
-  border-radius: 14px;
-  border: 1px solid rgba(var(--wht), 0.08);
-  background: linear-gradient(135deg, rgba(var(--wht), 0.06) 0%, rgba(var(--wht), 0.01) 100%);
-  backdrop-filter: blur(15px) saturate(170%) brightness(1.1);
-  -webkit-backdrop-filter: blur(15px) saturate(170%) brightness(1.1);
-  font-family: var(--ff-mono);
-  font-size: 1.3rem;
-  font-weight: 700;
-  color: var(--t-2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(var(--wht), 0.2),
-              inset 0 0 0 0.5px rgba(var(--wht), 0.08),
-              0 3px 8px rgba(var(--blk), 0.2);
-  transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1), color 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1), transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .pin-key:hover {
-    background: linear-gradient(135deg, rgba(var(--wht), 0.12) 0%, rgba(var(--wht), 0.03) 100%);
-    color: var(--t-1);
-    border-color: rgba(var(--wht), 0.18);
-    box-shadow: inset 0 1px 0 rgba(var(--wht), 0.35),
-                0 6px 12px rgba(var(--blk), 0.3);
-  }
-}
-
-.pin-key:active {
-  transform: scale(0.9);
-}
-
-.pin-key-empty {
-  visibility: hidden;
-  pointer-events: none;
-}
-
-.pin-key-del {
-  background: transparent;
-  border-color: transparent;
-  color: var(--t-4);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .pin-key-del:hover {
-    background: transparent;
-    border-color: transparent;
-    color: var(--t-2);
-  }
 }
 
 .lock-setup-form {
@@ -5802,7 +5560,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .bot-btn { width: 50px; font-size: 0.55rem; }
   .h2h-radar-wrap svg { max-width: 100%; height: auto; }
   .lb-podium, .friend-compare, .vol-insight-list, .pr-grid { min-width: 0; }
-  .feed-chips { flex-wrap: wrap; }
   .modal { width: 94%; }
   .lb-metric-tabs, .lb-timeframe-tabs, .filter-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
   .lb-metric-tabs::-webkit-scrollbar, .lb-timeframe-tabs::-webkit-scrollbar, .filter-bar::-webkit-scrollbar { display: none; }
@@ -6068,7 +5825,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
    figures, leaderboards, streaks — so digits don't jitter width while
    animating or reflowing. Class-only; the font stays the body face. */
 .lb-val, .arc-lb-val, .mini-profile-stat-val, .mini-profile-score,
-.podium-score, .stat-val, .arc-lb-rank, .hm-count, .lock-heatmap-legend,
+.podium-score, .stat-val, .arc-lb-rank, .lock-heatmap-legend,
 .vol-widget-value, .ring-value, .w-val, .pr-score, .chart-val,
 .feed-stat b, .tl-stat-v, .timer-text, .monk-streak-num, .monk-stat-val, .mp-tile-vol {
   font-variant-numeric: tabular-nums;
