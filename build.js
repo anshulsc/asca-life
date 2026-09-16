@@ -262,20 +262,46 @@ function shrinkCss(s){
     .replace(/\s*,\s*/g,',');
 }
 
+// Same conservative shrink for the JS payloads, with a hard guard: any
+// source containing a template literal (${) ships VERBATIM — the naive
+// regexps below cannot tell an interpolation from file text and would eat
+// it. Skipped fields must parse byte-for-byte identically; untouched strings
+// trivially satisfy that.
+function shrinkJs(s){
+  // Block comments only when /* and */ sit on the SAME line — a multi-line
+  // strip would also eat /*…*/ sequences inside string/regex literals.
+  return s
+    .replace(/\/\*[^\n]*?\*\//g,'')
+    .replace(/^\s+/gm,'')
+    .replace(/\s+$/gm,'')
+    .replace(/\n{2,}/g,'\n');
+}
+
+const jsShrinkReport = [];
+function shrinkJsField(name, s){
+  if (s.includes('${')) {
+    jsShrinkReport.push({ name, raw: Buffer.byteLength(s, 'utf8'), out: Buffer.byteLength(s, 'utf8'), skipped: true });
+    return s;
+  }
+  const out = shrinkJs(s);
+  jsShrinkReport.push({ name, raw: Buffer.byteLength(s, 'utf8'), out: Buffer.byteLength(out, 'utf8'), skipped: false });
+  return out;
+}
+
 // Payload object
 const payload = {
   css: shrinkCss(styleCss),
   html: appLayoutHtml,
-  data: dataJs,
-  winter: winterJs,
-  challenges: challengesJs,
-  fsync: firebaseSyncJs,
-  arcSync: arcSyncJs,
-  nutEngine: nutritionEngineJs,
-  nutSync: nutritionSyncJs,
-  nutrition: nutritionJs,
-  wrapped: wrappedJs,
-  app: appJs
+  data: shrinkJsField('data', dataJs),
+  winter: shrinkJsField('winter', winterJs),
+  challenges: shrinkJsField('challenges', challengesJs),
+  fsync: shrinkJsField('fsync', firebaseSyncJs),
+  arcSync: shrinkJsField('arcSync', arcSyncJs),
+  nutEngine: shrinkJsField('nutEngine', nutritionEngineJs),
+  nutSync: shrinkJsField('nutSync', nutritionSyncJs),
+  nutrition: shrinkJsField('nutrition', nutritionJs),
+  wrapped: shrinkJsField('wrapped', wrappedJs),
+  app: shrinkJsField('app', appJs)
 };
 
 const payloadB64 = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64');
@@ -359,6 +385,10 @@ fs.writeFileSync(path.join(__dirname, 'index.html'), distHtml, 'utf8');
 // set; past ~800KB the next feature should pay for minification first.
 const builtKb = Math.round(Buffer.byteLength(distHtml, 'utf8') / 1024);
 console.log(`Successfully compiled index.html (login-gated, no payload encryption)! [${builtKb} KB]`);
+jsShrinkReport.forEach(r => {
+  const tag = r.skipped ? 'sk' : 'min';
+  console.log(`  js[${tag}] ${r.name.padEnd(10)} ${r.raw} -> ${r.out}`);
+});
 if (builtKb > 800) {
   console.warn('\x1b[33m%s\x1b[0m', `WARNING: index.html is ${builtKb} KB (budget 800 KB) — consider minifying style.css in build.js.`);
 }
