@@ -484,7 +484,9 @@ body {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-.view-header { margin-bottom: 2px; }
+/* The .view flex gap (--space-4) separates header from content; the 6px
+   here is the header's own breathing room on top of that rhythm. */
+.view-header { margin-bottom: 6px; }
 
 .view-title {
   font-family: var(--ff-title);
@@ -1225,7 +1227,7 @@ select.input-field {
   font-family: var(--ff-title);
   font-size: 0.68rem; font-weight: 800;
   color: var(--t-3); text-transform: uppercase;
-  letter-spacing: 0.08em; margin-bottom: 12px;
+  letter-spacing: 0.08em; margin: 4px 2px 12px;
   display: flex; align-items: center; gap: 10px;
 }
 .label::after {
@@ -4796,13 +4798,62 @@ canvas { width: 100%; height: 100%; }
   border-radius: var(--r-m); padding: var(--space-2) 10px; margin-top: 6px;
 }
 
+/* The Today pane's date-nav is the only nut pane header that isn't a plain
+   .label — it's a flex row with live buttons flanking a date string — but it
+   must read as the same 44px bar. Explicitly override its compact legacy
+   margin so the four sub-tabs are visually identical in weight/tracking. */
+#nutPaneToday .nut-datenav {
+  gap: var(--space-2); height: 44px; margin: 0 0 var(--space-3); padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--border-light);
+}
+#nutPaneToday .nut-datenav-label {
+  font-family: var(--ff-title);
+  font-size: var(--text-m); font-weight: 800; letter-spacing: -0.01em;
+  flex: 1; text-align: center; color: var(--t-1); text-transform: none;
+}
+
+#nutPaneTrends > .label,
+#nutPaneFoods > .label,
+#nutPanePlan > .label,
+#nutPaneToday .nut-datenav {
+  display: flex; align-items: center; justify-content: space-between;
+}
+#nutPaneTrends > .label,
+#nutPaneFoods > .label,
+#nutPanePlan > .label {
+  gap: var(--space-2); height: 44px; margin: 0 0 var(--space-3); padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--border-light);
+  justify-content: space-between;
+}
+#nutPaneTrends > .label::after,
+#nutPaneFoods > .label::after,
+#nutPanePlan > .label::after { display: none; }
+#nutPaneTrends > .label .arc-seeall-btn,
+#nutPaneFoods > .label .arc-seeall-btn,
+#nutPanePlan > .label .arc-seeall-btn,
+#nutPaneToday .nut-datenav .arc-seeall-btn {
+  width: 44px; height: 44px; border-radius: var(--r-full);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--t-3); border: 1px solid transparent; background: transparent;
+  flex: 0 0 auto;
+  text-transform: none; letter-spacing: normal; font-size: 0.94rem;
+}
+@media (hover: hover) and (pointer: fine) {
+  #nutPaneTrends > .label .arc-seeall-btn:hover,
+  #nutPaneFoods > .label .arc-seeall-btn:hover,
+  #nutPanePlan > .label .arc-seeall-btn:hover,
+  #nutPaneToday .nut-datenav .arc-seeall-btn:hover {
+    background: var(--glass-1); color: var(--t-1); border-color: var(--border-strong);
+  }
+}
+
 .nut-subtabs { margin-bottom: 14px; }
 
 .nut-datenav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .nut-datenav-label { font-size: 0.95rem; font-weight: 700; color: var(--t-1); }
 
 /* Calorie ring card — mirrors the Insights progress-ring anatomy. */
-.nut-kcal-card { display: flex; align-items: center; gap: var(--space-4); padding: 14px var(--space-4); }
+.nut-kcal-card { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4); }
 .nut-kcal-ring-wrap { position: relative; width: 92px; height: 92px; flex: 0 0 auto; }
 .nut-kcal-ring-wrap .progress-ring-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .nut-kcal-ring-center {
@@ -4817,7 +4868,7 @@ canvas { width: 100%; height: 100%; }
 .nut-sync-note { margin-top: 6px; font-size: var(--text-xs); color: var(--c-orange); line-height: 1.4; }
 
 /* Macro bars. */
-.nut-macros-card { display: flex; flex-direction: column; gap: var(--space-3); padding: 14px var(--space-4); }
+.nut-macros-card { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4); }
 .nut-macro-top {
   display: flex; justify-content: space-between; align-items: baseline;
   font-size: 0.78rem; font-weight: 600; color: var(--t-1);
@@ -5558,6 +5609,11 @@ canvas { width: 100%; height: 100%; }
 /* Global safety: nothing should ever cause horizontal scroll */
 html, body { max-width: 100%; overflow-x: hidden; }
 .card, .glass-card, .view, .views-container { min-width: 0; }
+
+/* ── Compact phones (≤430px — covers 390px iPhone) ──────────────── */
+@media (max-width: 430px) {
+  .views-container { padding-left: 14px; padding-right: 14px; }
+}
 
 /* ── Small phones ≤360px — kill overflow, tighten spacing ─────── */
 @media (max-width: 360px) {
