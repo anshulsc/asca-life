@@ -3093,9 +3093,22 @@ canvas { width: 100%; height: 100%; }
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .btn-lib-icon:hover {   background: rgba(var(--wht), 0.08); color: var(--accent); 
+  .btn-lib-icon:hover {   background: rgba(var(--wht), 0.08); color: var(--accent);
   }
 }
+
+/* Header Social/Account buttons are also tab targets (.bot-btn) — the
+   bar's .on styling is sized for a labelled pill, so give the header
+   pair their own active state: an accent halo ring + tinted fill that
+   matches the tab bar's language at icon scale. */
+.btn-lib-icon.bot-btn.on {
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.14);
+  box-shadow: inset 0 0 0 1.5px rgba(var(--accent-rgb), 0.45);
+}
+.btn-lib-icon.bot-btn.on .tab-icon { transform: none; filter: none; }
+.btn-lib-icon svg { width: 20px; height: 20px; }
+.nav-account-btn .tab-icon { color: inherit; position: static; }
 
 .lib-card {
   width: 92%; max-width: 420px; max-height: 82vh;
@@ -3401,14 +3414,15 @@ canvas { width: 100%; height: 100%; }
 [data-theme="winter"] .arc-tab-btn,
 [data-arc="on"] .arc-tab-btn { display: flex; }
 
-/* Six tabs need a touch less width than five did. Only kicks in once
-   Arc is actually visible, so five-tab Classic users see no change. */
+/* Five tabs (Arc + Log + Nutrition + History + Insights) need a touch
+   less width than four did when Arc is enrolled. Header-bound
+   Social/Account never reach this rule — they live outside the bar. */
 @media (max-width: 440px) {
-  [data-arc="on"] .bottom-bar .bot-btn { width: 48px; }
-  [data-arc="on"] .bottom-bar .bot-btn span { font-size: 0.56rem; }
+  [data-arc="on"] .bottom-bar .bot-btn { width: 56px; }
+  [data-arc="on"] .bottom-bar .bot-btn span { font-size: 0.58rem; }
 }
 @media (max-width: 360px) {
-  [data-arc="on"] .bottom-bar .bot-btn { width: 44px; }
+  [data-arc="on"] .bottom-bar .bot-btn { width: 52px; }
 }
 
 /* ── Onboarding card ── */

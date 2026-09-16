@@ -652,10 +652,8 @@ function bindTabs(){
       const container = document.querySelector('.views-container');
       if(container) container.scrollTo({top:0,behavior:'smooth'});
 
-      const activeBotBtn = document.querySelector('.bot-btn.on');
-      if (activeBotBtn) {
-        positionNavLens(activeBotBtn, true);
-      }
+      const activeBotBtn = document.querySelector('.bottom-bar .bot-btn.on');
+      positionNavLens(activeBotBtn, true); // null (header btn active) → lens hides
 
       // Motion & delight — stagger the newly-visible view + hand its title
       // to the View Transitions morph when the browser supports either.
@@ -689,20 +687,17 @@ function bindTabs(){
     onScroll();
   }
 
-  // Position lens initially
+  // Position lens initially — only in-bar buttons carry the lens, so a
+  // header Social/Account selection never drags it off-screen.
   setTimeout(() => {
-    const activeBotBtn = document.querySelector('.bot-btn.on');
-    if (activeBotBtn) {
-      positionNavLens(activeBotBtn, false);
-    }
+    const activeBotBtn = document.querySelector('.bottom-bar .bot-btn.on');
+    positionNavLens(activeBotBtn, false);
   }, 100);
 
   // Handle window resize to keep lens centered
   window.addEventListener('resize', () => {
-    const activeBotBtn = document.querySelector('.bot-btn.on');
-    if (activeBotBtn) {
-      positionNavLens(activeBotBtn, false);
-    }
+    const activeBotBtn = document.querySelector('.bottom-bar .bot-btn.on');
+    positionNavLens(activeBotBtn, false);
   });
 }
 function fillTypes(){

@@ -211,10 +211,28 @@
         <span class="status-dot"></span>
         <span class="status-text" id="dConnT">Offline</span>
       </div>
-      <button class="btn-lib-icon" id="btnExLib" title="View Exercise Library">
+      <!-- Social + Account live up here, not in the tab bar: with the
+           Nutrition tab the bar would hold 7 targets — past the point
+           where a thumb nav stays usable. These stay data-v buttons so
+           the shared tab binder handles them exactly like a tab. -->
+      <button class="btn-lib-icon bot-btn" data-v="Soc" title="Social" aria-label="Social">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+      </button>
+      <button class="btn-lib-icon bot-btn" id="btnExLib" title="View Exercise Library" aria-label="Exercise Library">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
           <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5v-15z"/>
+        </svg>
+      </button>
+      <button class="btn-lib-icon bot-btn nav-account-btn" data-v="Set" title="Account" aria-label="Account">
+        <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
         </svg>
       </button>
     </div>
@@ -1458,22 +1476,8 @@
       </svg>
       <span>Insights</span>
     </button>
-    <button class="bot-btn" data-v="Soc">
-      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-        <circle cx="9" cy="7" r="4"/>
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-      </svg>
-      <span>Social</span>
-    </button>
-    <button class="bot-btn" data-v="Set">
-      <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-        <circle cx="12" cy="7" r="4"/>
-      </svg>
-      <span>Account</span>
-    </button>
+    <!-- Social + Account moved to the app header (see .header-actions):
+         seven tabs don't fit a thumb nav. -->
   </nav>
 
   <!-- ═══ NUTRITION SHEETS — same mini-profile sheet idiom; all ids
