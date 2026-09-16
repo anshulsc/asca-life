@@ -553,19 +553,20 @@
         <p class="view-subtitle">Calories, macros &amp; weight trend</p>
       </div>
 
-      <div class="seg-tabs nut-subtabs" id="nutSubTabs">
-        <button class="seg-tab on" data-nut="today">Today</button>
-        <button class="seg-tab" data-nut="trends">Trends</button>
-        <button class="seg-tab" data-nut="foods">Foods</button>
-        <button class="seg-tab" data-nut="plan">Plan</button>
+      <div class="seg-tabs nut-subtabs" id="nutSubTabs" role="tablist" aria-label="Nutrition sections">
+        <button type="button" class="seg-tab on" data-nut="today">Today</button>
+        <button type="button" class="seg-tab" data-nut="trends">Trends</button>
+        <button type="button" class="seg-tab" data-nut="foods">Foods</button>
+        <button type="button" class="seg-tab" data-nut="plan">Plan</button>
       </div>
 
       <!-- ── TODAY ── -->
       <div id="nutPaneToday">
+        <div class="label">Today</div>
         <div class="nut-datenav">
-          <button class="arc-seeall-btn" id="nutPrevDay" aria-label="Previous day">‹</button>
+          <button type="button" class="arc-seeall-btn" id="nutPrevDay" aria-label="Previous day">‹</button>
           <span class="nut-datenav-label" id="nutDateLabel">Today</span>
-          <button class="arc-seeall-btn" id="nutNextDay" aria-label="Next day">›</button>
+          <button type="button" class="arc-seeall-btn" id="nutNextDay" aria-label="Next day">›</button>
         </div>
 
         <div class="card glass-card nut-kcal-card">
@@ -594,25 +595,25 @@
         </div>
 
         <div class="nut-actions-card">
-          <button class="btn btn-primary btn-sm" id="nutAddFoodBtn">+ Food</button>
-          <button class="btn btn-secondary btn-sm" id="nutAddRecipeBtn">+ Recipe</button>
-          <button class="btn btn-secondary btn-sm" id="nutQuickAddBtn">Quick add</button>
-          <button class="btn btn-secondary btn-sm" id="nutWeightBtn">+ Weight</button>
+          <button type="button" class="btn btn-primary btn-sm" id="nutAddFoodBtn" aria-label="Add food">+ Food</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="nutAddRecipeBtn" aria-label="Add recipe">+ Recipe</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="nutQuickAddBtn" aria-label="Quick add calories">Quick add</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="nutWeightBtn" aria-label="Log body weight">+ Weight</button>
         </div>
         <div class="nut-quickpresets" id="nutQuickPresets">
           <span class="nut-quickpresets-label">Fast log:</span>
-          <button class="btn-timer-chip" data-kcal="100">+100</button>
-          <button class="btn-timer-chip" data-kcal="250">+250</button>
-          <button class="btn-timer-chip" data-kcal="500">+500</button>
+          <button type="button" class="btn-timer-chip" data-kcal="100">+100</button>
+          <button type="button" class="btn-timer-chip" data-kcal="250">+250</button>
+          <button type="button" class="btn-timer-chip" data-kcal="500">+500</button>
         </div>
 
         <div class="arc-section-head">
           <div class="arc-section-title" style="flex:1">Meals</div>
-          <button class="arc-seeall-btn" id="nutAddMealBtn">+ Custom meal</button>
+          <button type="button" class="arc-seeall-btn" id="nutAddMealBtn" aria-label="Add a custom meal">+ Custom meal</button>
         </div>
         <div id="nutMealList"></div>
 
-        <div class="card glass-card volume-widget nut-weight-widget" id="nutWeightOpen" style="cursor:pointer">
+        <div class="card glass-card volume-widget nut-weight-widget" id="nutWeightOpen" style="cursor:pointer" role="button" tabindex="0" aria-label="Open body weight log">
           <div class="vol-widget-left">
             <span class="vol-widget-label">Body weight</span>
             <span class="vol-widget-period" id="nutWeightTrend">Log your weight daily</span>
@@ -627,6 +628,7 @@
 
       <!-- ── TRENDS ── -->
       <div id="nutPaneTrends" style="display:none">
+        <div class="label">Trends</div>
         <div class="label">This week</div>
         <div class="card glass-card nut-card-pad" id="nutWeekAvg"></div>
 
@@ -674,30 +676,32 @@
 
       <!-- ── FOODS ── -->
       <div id="nutPaneFoods" style="display:none">
+        <div class="label">Foods</div>
         <div class="input-group search-group nut-food-search-wrap">
           <div class="search-wrap">
             <span class="search-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             </span>
-            <input type="text" class="input-field" id="nutFoodSearch" placeholder="Search saved foods &amp; recipes…" autocomplete="off">
+            <input type="text" class="input-field" id="nutFoodSearch" placeholder="Search saved foods &amp; recipes…" autocomplete="off" aria-label="Search saved foods and recipes">
           </div>
         </div>
 
         <div class="arc-section-head">
           <div class="arc-section-title" style="flex:1">Saved foods</div>
-          <button class="arc-seeall-btn" id="nutNewFoodBtn">+ New food</button>
+          <button type="button" class="arc-seeall-btn" id="nutNewFoodBtn" aria-label="Create a new food">+ New food</button>
         </div>
         <div id="nutFoodList"></div>
 
         <div class="arc-section-head">
           <div class="arc-section-title" style="flex:1">Recipes</div>
-          <button class="arc-seeall-btn" id="nutNewRecipeBtn">+ New recipe</button>
+          <button type="button" class="arc-seeall-btn" id="nutNewRecipeBtn" aria-label="Create a new recipe">+ New recipe</button>
         </div>
         <div id="nutRecipeList"></div>
       </div>
 
       <!-- ── PLAN ── -->
       <div id="nutPanePlan" style="display:none">
+        <div class="label">Plan</div>
         <div class="label">Body &amp; profile</div>
         <div class="card glass-card nut-card-pad">
           <div class="form-row">
@@ -730,19 +734,19 @@
               <input type="number" class="input-field" id="nutBodyFat" inputmode="decimal" step="0.1" placeholder="enables Katch–McArdle">
             </div>
           </div>
-          <button class="btn btn-primary btn-full" id="nutProfileSave">Save profile</button>
-          <button class="btn btn-secondary btn-full u-mt-2" id="nutMeasureBtn">+ Log measurements (waist, neck, …)</button>
+          <button type="button" class="btn btn-primary btn-full" id="nutProfileSave" aria-label="Save body profile">Save profile</button>
+          <button type="button" class="btn btn-secondary btn-full u-mt-2" id="nutMeasureBtn" aria-label="Log body measurements">+ Log measurements (waist, neck, …)</button>
         </div>
 
         <div class="label">Activity</div>
         <div class="card glass-card nut-card-pad">
           <div class="nut-act-grid" id="nutActivityOpts">
-            <button class="nut-act-btn on" data-act="sedentary">Sedentary</button>
-            <button class="nut-act-btn" data-act="light">Lightly active</button>
-            <button class="nut-act-btn" data-act="moderate">Moderately active</button>
-            <button class="nut-act-btn" data-act="very">Very active</button>
-            <button class="nut-act-btn" data-act="extreme">Extremely active</button>
-            <button class="nut-act-btn" data-act="detailed">Detailed…</button>
+            <button type="button" class="nut-act-btn on" data-act="sedentary">Sedentary</button>
+            <button type="button" class="nut-act-btn" data-act="light">Lightly active</button>
+            <button type="button" class="nut-act-btn" data-act="moderate">Moderately active</button>
+            <button type="button" class="nut-act-btn" data-act="very">Very active</button>
+            <button type="button" class="nut-act-btn" data-act="extreme">Extremely active</button>
+            <button type="button" class="nut-act-btn" data-act="detailed">Detailed…</button>
           </div>
           <div id="nutActivityDetail" style="display:none">
             <div class="form-row">
@@ -785,10 +789,10 @@
         <div class="label">Goal</div>
         <div class="card glass-card nut-card-pad">
           <div class="nut-act-grid" id="nutGoalKind">
-            <button class="nut-act-btn on" data-goal="maintain">Maintain</button>
-            <button class="nut-act-btn" data-goal="lose">Lose</button>
-            <button class="nut-act-btn" data-goal="gain">Gain</button>
-            <button class="nut-act-btn" data-goal="custom">Custom kcal</button>
+            <button type="button" class="nut-act-btn on" data-goal="maintain">Maintain</button>
+            <button type="button" class="nut-act-btn" data-goal="lose">Lose</button>
+            <button type="button" class="nut-act-btn" data-goal="gain">Gain</button>
+            <button type="button" class="nut-act-btn" data-goal="custom">Custom kcal</button>
           </div>
           <div id="nutGoalLoseOpts" style="display:none">
             <div class="form-row">
@@ -1484,21 +1488,21 @@
        referenced from nutrition.js only. ═══ -->
 
   <!-- Add Food: search → pick → quantity → live preview → save -->
-  <div class="mini-profile-bg" id="nutAddSheetBg">
+  <div class="mini-profile-bg" id="nutAddSheetBg" role="dialog" aria-modal="true" aria-label="Add food">
     <div class="mini-profile-sheet ch-sheet">
       <div class="mini-profile-handle"></div>
       <div class="ch-sheet-head">
         <div class="ch-sheet-title">Add food</div>
-        <button class="btn-close" data-nut-close="nutAddSheetBg" aria-label="Close">
+        <button type="button" class="btn-close" data-nut-close="nutAddSheetBg" aria-label="Close add food">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
       <div class="input-group search-input-wrap">
         <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" class="input-field search-input" id="afSearch" placeholder="Search your saved foods…" autocomplete="off">
+        <input type="text" class="input-field search-input" id="afSearch" placeholder="Search your saved foods…" autocomplete="off" aria-label="Search your saved foods">
       </div>
       <div class="nut-pick-list" id="afResults"></div>
-      <button class="btn btn-ghost btn-sm btn-full" id="afNewFood">+ Save a new food first</button>
+      <button type="button" class="btn btn-ghost btn-sm btn-full" id="afNewFood" aria-label="Save a new food first">+ Save a new food first</button>
       <div class="form-row u-mt-2">
         <div class="input-group">
           <label class="input-label" for="afQty">Quantity</label>
@@ -1506,21 +1510,21 @@
         </div>
         <div class="input-group">
           <label class="input-label" for="afUnit">Unit</label>
-          <select class="input-field" id="afUnit"></select>
+          <select class="input-field" id="afUnit" aria-label="Unit"></select>
         </div>
       </div>
       <div id="afPreview" class="nut-preview"></div>
-      <button class="btn btn-primary btn-full" id="afSave">Add to meal</button>
+      <button type="button" class="btn btn-primary btn-full" id="afSave" aria-label="Add to meal">Add to meal</button>
     </div>
   </div>
 
   <!-- Quick Add (section 12) -->
-  <div class="mini-profile-bg" id="nutQuickSheetBg">
+  <div class="mini-profile-bg" id="nutQuickSheetBg" role="dialog" aria-modal="true" aria-label="Quick add">
     <div class="mini-profile-sheet ch-sheet">
       <div class="mini-profile-handle"></div>
       <div class="ch-sheet-head">
         <div class="ch-sheet-title">Quick add</div>
-        <button class="btn-close" data-nut-close="nutQuickSheetBg" aria-label="Close">
+        <button type="button" class="btn-close" data-nut-close="nutQuickSheetBg" aria-label="Close quick add">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
@@ -1534,17 +1538,17 @@
         <div class="input-group"><label class="input-label" for="qaC">Carbs (g)</label><input type="number" class="input-field" id="qaC" inputmode="decimal" min="0"></div>
         <div class="input-group"><label class="input-label" for="qaF">Fat (g)</label><input type="number" class="input-field" id="qaF" inputmode="decimal" min="0"></div>
       </div>
-      <button class="btn btn-primary btn-full" id="qaSave">Add to today</button>
+      <button type="button" class="btn btn-primary btn-full" id="qaSave" aria-label="Add to today">Add to today</button>
     </div>
   </div>
 
   <!-- Weight logger (section 17) -->
-  <div class="mini-profile-bg" id="nutWeightSheetBg">
+  <div class="mini-profile-bg" id="nutWeightSheetBg" role="dialog" aria-modal="true" aria-label="Log body weight">
     <div class="mini-profile-sheet ch-sheet">
       <div class="mini-profile-handle"></div>
       <div class="ch-sheet-head">
         <div class="ch-sheet-title">Log body weight</div>
-        <button class="btn-close" data-nut-close="nutWeightSheetBg" aria-label="Close">
+        <button type="button" class="btn-close" data-nut-close="nutWeightSheetBg" aria-label="Close weight logger">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
@@ -1553,17 +1557,17 @@
         <div class="input-group"><label class="input-label" for="nwDate">Date</label><input type="date" class="input-field" id="nwDate"></div>
         <div class="input-group"><label class="input-label" for="nwKg">Weight (kg) — empty removes that day</label><input type="number" class="input-field" id="nwKg" inputmode="decimal" step="0.1" placeholder="e.g. 74.8"></div>
       </div>
-      <button class="btn btn-primary btn-full" id="nwSave">Save weigh-in</button>
+      <button type="button" class="btn btn-primary btn-full" id="nwSave" aria-label="Save weigh-in">Save weigh-in</button>
     </div>
   </div>
 
   <!-- Measurements (section 1) -->
-  <div class="mini-profile-bg" id="nutMeasureSheetBg">
+  <div class="mini-profile-bg" id="nutMeasureSheetBg" role="dialog" aria-modal="true" aria-label="Measurements">
     <div class="mini-profile-sheet ch-sheet">
       <div class="mini-profile-handle"></div>
       <div class="ch-sheet-head">
         <div class="ch-sheet-title">Measurements</div>
-        <button class="btn-close" data-nut-close="nutMeasureSheetBg" aria-label="Close">
+        <button type="button" class="btn-close" data-nut-close="nutMeasureSheetBg" aria-label="Close measurements sheet">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
@@ -1581,17 +1585,17 @@
         <div class="input-group"><label class="input-label" for="nmHips">Hips (cm)</label><input type="number" class="input-field" id="nmHips" inputmode="decimal" step="0.1"></div>
         <div class="input-group"><label class="input-label" for="nmThighs">Thighs (cm)</label><input type="number" class="input-field" id="nmThighs" inputmode="decimal" step="0.1"></div>
       </div>
-      <button class="btn btn-primary btn-full" id="nmSave">Save measurements</button>
+      <button type="button" class="btn btn-primary btn-full" id="nmSave" aria-label="Save measurements">Save measurements</button>
     </div>
   </div>
 
   <!-- Food editor (sections 6/7/8/10/15) -->
-  <div class="mini-profile-bg" id="nutFoodSheetBg">
+  <div class="mini-profile-bg" id="nutFoodSheetBg" role="dialog" aria-modal="true" aria-label="Food editor">
     <div class="mini-profile-sheet ch-sheet">
       <div class="mini-profile-handle"></div>
       <div class="ch-sheet-head">
         <div class="ch-sheet-title" id="nutFoodSheetTitle">New food</div>
-        <button class="btn-close" data-nut-close="nutFoodSheetBg" aria-label="Close">
+        <button type="button" class="btn-close" data-nut-close="nutFoodSheetBg" aria-label="Close food editor">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
@@ -1641,17 +1645,17 @@
         <div class="input-group"><label class="input-label" for="nfRawG">Raw batch (g)</label><input type="number" class="input-field" id="nfRawG" inputmode="decimal" min="0" placeholder="e.g. 500"></div>
         <div class="input-group"><label class="input-label" for="nfCookedG">Cooked batch (g)</label><input type="number" class="input-field" id="nfCookedG" inputmode="decimal" min="0" placeholder="e.g. 1400"></div>
       </div>
-      <button class="btn btn-primary btn-full" id="nfSave">Save food</button>
+      <button type="button" class="btn btn-primary btn-full" id="nfSave" aria-label="Save food">Save food</button>
     </div>
   </div>
 
   <!-- Recipe builder (section 9) -->
-  <div class="mini-profile-bg" id="nutRecipeSheetBg">
+  <div class="mini-profile-bg" id="nutRecipeSheetBg" role="dialog" aria-modal="true" aria-label="Recipe editor">
     <div class="mini-profile-sheet ch-sheet">
       <div class="mini-profile-handle"></div>
       <div class="ch-sheet-head">
         <div class="ch-sheet-title">Recipe</div>
-        <button class="btn-close" data-nut-close="nutRecipeSheetBg" aria-label="Close">
+        <button type="button" class="btn-close" data-nut-close="nutRecipeSheetBg" aria-label="Close recipe editor">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
@@ -1660,40 +1664,40 @@
         <div class="input-group"><label class="input-label" for="nrServings">Makes (servings)</label><input type="number" class="input-field" id="nrServings" inputmode="decimal" min="1" step="0.5" value="1"></div>
       </div>
       <div class="form-row">
-        <div class="input-group" style="flex:2"><select class="input-field" id="nrFoodPick"></select></div>
-        <div class="input-group"><input type="number" class="input-field" id="nrQty" inputmode="decimal" min="0" placeholder="qty"></div>
-        <div class="input-group"><select class="input-field" id="nrUnit"><option value="g">g</option></select></div>
+        <div class="input-group" style="flex:2"><select class="input-field" id="nrFoodPick" aria-label="Pick a saved food to add as ingredient"></select></div>
+        <div class="input-group"><input type="number" class="input-field" id="nrQty" inputmode="decimal" min="0" placeholder="qty" aria-label="Ingredient quantity"></div>
+        <div class="input-group"><select class="input-field" id="nrUnit" aria-label="Ingredient unit"><option value="g">g</option></select></div>
       </div>
-      <button class="btn btn-secondary btn-sm btn-full" id="nrAddIng">+ Add ingredient</button>
+      <button type="button" class="btn btn-secondary btn-sm btn-full" id="nrAddIng" aria-label="Add ingredient">+ Add ingredient</button>
       <div id="nrIngredients" class="u-mt-2"></div>
       <div id="nrTotals" class="nut-preview"></div>
-      <button class="btn btn-primary btn-full" id="nrSave">Save recipe</button>
+      <button type="button" class="btn btn-primary btn-full" id="nrSave" aria-label="Save recipe">Save recipe</button>
     </div>
   </div>
 
   <!-- Recipe log sheet -->
-  <div class="mini-profile-bg" id="nutRecipeLogBg">
+  <div class="mini-profile-bg" id="nutRecipeLogBg" role="dialog" aria-modal="true" aria-label="Log recipe">
     <div class="mini-profile-sheet ch-sheet">
       <div class="mini-profile-handle"></div>
       <div class="ch-sheet-head">
         <div class="ch-sheet-title" id="rlName">Log recipe</div>
-        <button class="btn-close" data-nut-close="nutRecipeLogBg" aria-label="Close">
+        <button type="button" class="btn-close" data-nut-close="nutRecipeLogBg" aria-label="Close log recipe">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
       <div class="input-group"><label class="input-label" for="rlServings">Servings eaten</label><input type="number" class="input-field" id="rlServings" inputmode="decimal" min="0.25" step="0.25" value="1"></div>
       <div id="rlPreview" class="nut-preview"></div>
-      <button class="btn btn-primary btn-full" id="rlSave">Log it</button>
+      <button type="button" class="btn btn-primary btn-full" id="rlSave" aria-label="Log this recipe for today">Log it</button>
     </div>
   </div>
 
   <!-- Recipe picker (Today quick action when recipes exist) -->
-  <div class="mini-profile-bg" id="nutRecipePickBg">
+  <div class="mini-profile-bg" id="nutRecipePickBg" role="dialog" aria-modal="true" aria-label="Log a recipe">
     <div class="mini-profile-sheet ch-sheet">
       <div class="mini-profile-handle"></div>
       <div class="ch-sheet-head">
         <div class="ch-sheet-title">Log a recipe</div>
-        <button class="btn-close" data-nut-close="nutRecipePickBg" aria-label="Close">
+        <button type="button" class="btn-close" data-nut-close="nutRecipePickBg" aria-label="Close recipe picker">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
