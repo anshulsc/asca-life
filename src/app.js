@@ -478,8 +478,6 @@ function lib(){
 function positionNavLens(activeBtn, animate = true) {
   const lens = document.getElementById('navLens');
   if (!lens) return;
-  // Desktop uses a vertical sidebar with a CSS active-pill instead of the
-  // horizontal liquid lens — hide it and bail so it can't mis-position.
   if (window.matchMedia && window.matchMedia('(min-width: 1024px)').matches) {
     lens.style.display = 'none';
     return;
@@ -489,25 +487,35 @@ function positionNavLens(activeBtn, animate = true) {
     return;
   }
   lens.style.display = 'block';
-  
-  const activeLeft = activeBtn.offsetLeft;
-  const activeWidth = activeBtn.offsetWidth;
-  // Cap at 54px so the lens hugs the icon+label column, not the grid track.
-  // Track widths vary (small screens widen tabs; ≥1024 sidebar is off-lens),
-  // and letting the lens chase full track width made Home's tile read
-  // noticeably wider than Arc/Social/Insights/Profile.
-  const lensWidth = Math.min(54, Math.max(40, activeWidth - 10));
-  const leftPos = activeLeft + (activeWidth - lensWidth) / 2;
-  
+
+  // Center the lens on the icon+label *visual center*, not the track mid,
+  // so the pill hugs the actual content regardless of track width.
+  const icon = activeBtn.querySelector('.tab-icon');
+  const label = activeBtn.querySelector('span');
+  let centerX, centerY;
+  if (icon && label) {
+    const iconR = icon.getBoundingClientRect();
+    const labelR = label.getBoundingClientRect();
+    const btnR = activeBtn.getBoundingClientRect();
+    centerX = ((iconR.left + iconR.right) / 2) - btnR.left;
+    // vertical: middle of the icon+label stack, with a slight optical
+    // nudge up so the label's descender doesn't drag the pill low.
+    centerY = ((iconR.top + labelR.bottom) / 2) - btnR.top - 1;
+  } else {
+    centerX = activeBtn.offsetLeft + activeBtn.offsetWidth / 2;
+    centerY = 29; // fallback: mid of a 58px bar
+  }
+  const lensWidth = 58, lensHeight = 44;
+  const left = activeBtn.offsetLeft + centerX - lensWidth / 2;
+  const top = centerY - lensHeight / 2;
+
   if (animate) {
     lens.classList.add('stretching');
-    setTimeout(() => {
-      lens.classList.remove('stretching');
-    }, 320);
+    setTimeout(() => { lens.classList.remove('stretching'); }, 320);
   }
-  lens.style.transition = animate ? 'left 0.32s cubic-bezier(0.25, 1, 0.4, 1.1), transform 0.32s cubic-bezier(0.25, 1, 0.4, 1.1)' : 'none';
-  lens.style.left = `${leftPos}px`;
-  lens.style.top = `8px`; // centered vertically in bottom bar
+  lens.style.transition = animate ? 'left 0.32s cubic-bezier(0.25, 1, 0.4, 1.1), top 0.32s cubic-bezier(0.25, 1, 0.4, 1.1)' : 'none';
+  lens.style.left = `${left}px`;
+  lens.style.top = `${top}px`;
 }
 // DOMContentLoaded: park the lens on the active tab once layout has settled.
 document.addEventListener('DOMContentLoaded', () => {
