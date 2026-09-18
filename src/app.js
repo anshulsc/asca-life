@@ -41,7 +41,7 @@ function startApp() {
       if(hc)hc.addEventListener('click',()=>{buzz(8);svOpen();});
     }
     load();loadCX();fillTypes();bindTabs();bindSearch();bindSets();bindActs();
-    bindHist();bindAna();bindSettings();bindModal();bindLibraryModal();bindVolInsights();bindTimer();bindBodyWeight();bindFriend();bindProgressPics();bindArc();bindChallengesBrowser();bindMonkMode();bindArcPromo();bindArcLeaderboard();bindArcCalendar();bindArcGoals();bindRoutines();
+    bindHist();bindAna();bindSettings();bindModal();bindLibraryModal();bindVolInsights();bindTimer();bindBodyWeight();bindFriend();bindProgressPics();bindArc();bindChallengesBrowser();bindMonkMode();bindArcPromo();bindArcLeaderboard();bindArcCalendar();bindArcGoals();
     setToday();renderRecent();renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderProfile();renderArc();renderHomeScoreRow();renderMuscleFreshness();chBoot();
     restoreSE();
     bindCardSpotlights();
