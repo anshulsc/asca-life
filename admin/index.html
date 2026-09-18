@@ -2520,18 +2520,21 @@ canvas { width: 100%; height: 100%; }
 
 .bot-btn {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 3px; background: none; border: none;
+  gap: 2px;
+  background: none; border: none;
   color: var(--t-3); font-size: 0.58rem;
   font-weight: 700; font-family: var(--ff-sans);
   cursor: pointer; transition: var(--t-ui-slow);
-  width: 100%; height: 46px;
-  min-width: 0; /* grid tracks own the width; buttons stretch to fill */
-  min-height: 44px; /* HIG hit floor: the pill shrank to 58px so the
-    button's visual height drops to 46, still ≥ the 44px tap minimum. */
+  width: 100%;
+  height: 46px;
+  min-height: 44px;
+  padding: 6px 4px;
   border-radius: var(--r-m); outline: none;
   position: relative;
   z-index: 2;
 }
+/* force the same hit area for every tab so a wider track doesn't distort
+   the visual pill; the lens stays pinned to the actual icon+label center. */
 
 .tab-icon {
   width: 20px; height: 20px;
@@ -2549,9 +2552,9 @@ canvas { width: 100%; height: 100%; }
 
 .nav-lens {
   position: absolute;
-  width: 58px;
-  height: 44px;
-  border-radius: 14px;
+  width: 48px;
+  height: 40px;
+  border-radius: 12px;
   background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.16) 0%, rgba(var(--accent-rgb), 0.06) 100%);
   backdrop-filter: blur(12px) brightness(1.2) saturate(140%);
   -webkit-backdrop-filter: blur(12px) brightness(1.2) saturate(140%);

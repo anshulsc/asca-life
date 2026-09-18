@@ -488,32 +488,29 @@ function positionNavLens(activeBtn, animate = true) {
   }
   lens.style.display = 'block';
 
-  // Center the lens on the icon+label *visual center*, not the track mid,
-  // so the pill hugs the actual content regardless of track width.
-  const icon = activeBtn.querySelector('.tab-icon');
-  const label = activeBtn.querySelector('span');
-  let centerX, centerY;
-  if (icon && label) {
-    const iconR = icon.getBoundingClientRect();
-    const labelR = label.getBoundingClientRect();
-    const btnR = activeBtn.getBoundingClientRect();
-    centerX = ((iconR.left + iconR.right) / 2) - btnR.left;
-    // vertical: middle of the icon+label stack, with a slight optical
-    // nudge up so the label's descender doesn't drag the pill low.
-    centerY = ((iconR.top + labelR.bottom) / 2) - btnR.top - 1;
-  } else {
-    centerX = activeBtn.offsetLeft + activeBtn.offsetWidth / 2;
-    centerY = 29; // fallback: mid of a 58px bar
+  const iconR = activeBtn.querySelector('.tab-icon')?.getBoundingClientRect();
+  const labelR = activeBtn.querySelector('span')?.getBoundingClientRect();
+  const btnR = activeBtn.getBoundingClientRect();
+  const navR = lens.parentElement.getBoundingClientRect();
+  let cx = btnR.left + btnR.width / 2 - navR.left;
+  let cy = btnR.top + btnR.height / 2 - navR.top;
+  if (iconR && labelR) {
+    cx = (iconR.left + iconR.right) / 2 - navR.left;
+    cy = (iconR.top + labelR.bottom) / 2 - navR.top - 0.5;
   }
-  const lensWidth = 58, lensHeight = 44;
-  const left = activeBtn.offsetLeft + centerX - lensWidth / 2;
-  const top = centerY - lensHeight / 2;
+
+  // 48×40 hugs 22px icon + small label without spilling past neighbours.
+  const W = 48, H = 40;
+  const left = cx - W / 2;
+  const top = cy - H / 2;
 
   if (animate) {
     lens.classList.add('stretching');
     setTimeout(() => { lens.classList.remove('stretching'); }, 320);
   }
-  lens.style.transition = animate ? 'left 0.32s cubic-bezier(0.25, 1, 0.4, 1.1), top 0.32s cubic-bezier(0.25, 1, 0.4, 1.1)' : 'none';
+  lens.style.transition = animate
+    ? 'left .32s cubic-bezier(.25,1,.4,1.1), top .32s cubic-bezier(.25,1,.4,1.1)'
+    : 'none';
   lens.style.left = `${left}px`;
   lens.style.top = `${top}px`;
 }
