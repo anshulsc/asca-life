@@ -220,6 +220,91 @@ if (seen.__nutrition != null) {
   bad('NutritionEngine did not load or exposed nothing');
 }
 
+/* ── Information architecture (P0b) ────────────────────────────
+   The boot probe above proves the payload EXECUTES; it says nothing about
+   the markup it's wired against. Log is no longer a tab — it is the
+   #sessionOverlay opened by the ＋ action button — and if the nav bar or
+   view ids drift from the data-v targets, a tap silently takes the user
+   nowhere. These are no-DOM assertions against src/index.html as a
+   string: id-level presence plus data-v ↔ #v<Name> consistency. */
+
+console.log('\n\x1b[1minformation architecture (P0b)\x1b[0m');
+const srcIndex = fs.readFileSync(path.join(ROOT, 'src', 'index.html'), 'utf8');
+
+const sectionBlock = (id) => {
+  const from = srcIndex.indexOf(`id="${id}"`);
+  if (from === -1) return '';
+  // `from` points at the id attribute inside the element's open tag, so back
+  // up to its '<' to bound the block by element.
+  const tagStart = srcIndex.lastIndexOf('<', from);
+  const tagEnd = srcIndex.indexOf('>', from);
+  const tag = srcIndex.slice(tagStart + 1, tagEnd).match(/^(\w+)/)[1];
+  const close = srcIndex.indexOf(`</${tag}>`, tagEnd);
+  if (close === -1) return srcIndex.slice(tagStart);
+  // For a <section> the close tag bounds the block; for the overlay <div>
+  // the FIRST </div> after the wrapper would clip it, so a div block instead
+  // runs to the next top-level section/sheet — good enough for id containment.
+  if (tag === 'section') return srcIndex.slice(tagStart, close + `</${tag}>`.length);
+  const nextSection = srcIndex.indexOf('<section', tagEnd);
+  return srcIndex.slice(tagStart, nextSection === -1 ? close : nextSection);
+};
+
+if (!srcIndex.includes('id="vLog"')) good('no #vLog tab remains in the markup');
+else bad('#vLog still exists — the Log tab should be gone');
+
+const overlay = sectionBlock('sessionOverlay');
+if (overlay) {
+  good('#sessionOverlay exists');
+  ['wDate', 'wType', 'exS', 'se', 'disc', 'fin', 'sessionClose'].forEach(id => {
+    if (overlay.includes(`id="${id}"`)) good(`#sessionOverlay contains #${id}`);
+    else bad(`#sessionOverlay is missing #${id} — set-editor wiring will dead-end`);
+  });
+} else {
+  bad('#sessionOverlay is missing from src/index.html');
+}
+
+const home = sectionBlock('vHome');
+if (home) {
+  good('#vHome dashboard view exists');
+  ['homeStartWorkout', 'heatmapCalGrid', 'heatmapMonths', 'volWidgetVal'].forEach(id => {
+    if (home.includes(`id="${id}"`)) good(`#vHome contains #${id}`);
+    else bad(`#vHome is missing #${id}`);
+  });
+} else {
+  bad('#vHome is missing from src/index.html');
+}
+
+if (!srcIndex.includes('data-v="Log"')) good('no data-v="Log" tab target remains');
+else bad('a data-v="Log" button still exists — tapping it opens nothing');
+
+const barFrom = srcIndex.indexOf('id="bot-nav"');
+if (barFrom === -1) { bad('the bottom bar (#bot-nav) is missing'); }
+const bar = srcIndex.slice(barFrom, srcIndex.indexOf('</nav>', barFrom === -1 ? 0 : barFrom));
+if (/(?:id="fabSession[^"]*"[^>]*data-v=|data-v="[^"]*"[^>]*id="fabSession")/.test(bar))
+  bad('#fabSession carries a data-v — the ＋ is an action, not a tab, and the binder would clobber its hero styling with .on');
+else good('#fabSession has no data-v (action button, not a tab)');
+if (!bar.includes('data-v="Soc"')) bad('bottom bar lost its data-v="Soc" (Social) tab');
+if (!bar.includes('data-v="Ana"')) bad('bottom bar lost its data-v="Ana" (Insights) tab');
+if (!bar.includes('data-v="Set"')) bad('bottom bar lost its data-v="Set" (Profile) tab');
+if (!bar.includes('data-v="Home"')) bad('bottom bar lost its data-v="Home" tab');
+if (['Soc', 'Ana', 'Set', 'Home'].every(t => bar.includes(`data-v="${t}"`)))
+  good('bottom bar keeps Home / Soc / Ana / Set view slots around the ＋');
+
+if (srcIndex.includes('data-v="Hist"') && srcIndex.includes('data-v="Nut"'))
+  good('header keeps icon buttons for data-v="Hist" and data-v="Nut"');
+else bad('header is missing the History/Nutrition icon buttons');
+
+// Attribute order varies across buttons (class-first on the bottom bar,
+// data-v-first on the header icons) — can't regex one order only.
+const targets = [...srcIndex.matchAll(/data-v="([^"]+)"/g)]
+  .map(m => m[1])
+  .filter(t => t !== 'Log');
+if (!targets.length) bad('no data-v tab targets found at all');
+targets.forEach(t => {
+  if (srcIndex.includes(`id="v${t}"`)) good(`data-v="${t}" resolves to #v${t}`);
+  else bad(`data-v="${t}" has no matching #v${t} section — the tab opens nothing`);
+});
+
 console.log('');
 if (failed) { console.log(`\x1b[31msmoke FAILED (${failed})\x1b[0m\n`); process.exit(1); }
 console.log('\x1b[32msmoke OK\x1b[0m — payload executes and app.js can see WinterArc.\n');

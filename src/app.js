@@ -33,6 +33,13 @@ function startApp() {
   const appBoot=!appBooted; // captured before the flag flips below
   if(appBoot){
     appBooted=true;
+    sessionOverlayMount();
+    {
+      const sc=document.getElementById('sessionClose');
+      if(sc)sc.addEventListener('click',()=>{buzz(8);svClose();});
+      const hc=document.getElementById('homeStartWorkout');
+      if(hc)hc.addEventListener('click',()=>{buzz(8);svOpen();});
+    }
     load();loadCX();fillTypes();bindTabs();bindSearch();bindSets();bindActs();
     bindHist();bindAna();bindSettings();bindModal();bindLibraryModal();bindVolInsights();bindTimer();bindBodyWeight();bindFriend();bindProgressPics();bindArc();bindChallengesBrowser();bindMonkMode();bindArcPromo();bindArcLeaderboard();bindArcCalendar();bindArcGoals();bindRoutines();
     setToday();renderRecent();renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderProfile();renderArc();chBoot();
@@ -55,7 +62,7 @@ function startApp() {
         renderBodyWeight();renderProfile();
         if(typeof fbPush==='function'&&fbCfg().connected)fbPush(false);
       },
-      // The workout→nutrition link: what the Log tab knows you burned on
+      // The workout→nutrition link: what the session knows you burned on
       // a given day. Cardio is ground truth from cardio sets (treadmill
       // kcal, or mins when the machine gave none); lifting is estimated
       // (~5 kcal/min × 75 min per strength session) because set-volume
@@ -641,8 +648,43 @@ function bindCardSpotlights(){
   },{passive:true});
 }
 
+/* ── Session overlay (P0b) ───────────────────────────────────────────────
+   The workout log used to be a tab; it is now a full-screen surface opened
+   by the center ＋ nav button, the Home CTA, an Arc objective tap, or the
+   heatmap deep-link. State (SE/wDate/wType) persists in localStorage, so
+   opening the overlay RESUMES an in-progress session — never clears it. */
+let __svMounted=false;
+function sessionOverlayMount(){
+  // The desktop device frame (.phone-frame) is bordered and — via the
+  // frame's own border/shadow treatment — is not guaranteed to stay a
+  // plain fixed-position containing block. Reparenting the overlay to
+  // <body> makes its fixed inset resolve against the viewport everywhere.
+  if(__svMounted)return; __svMounted=true;
+  const ov=document.getElementById('sessionOverlay');
+  if(ov&&ov.parentElement!==document.body)document.body.appendChild(ov);
+}
+function svOpen(){
+  const ov=document.getElementById('sessionOverlay');
+  if(!ov)return;
+  sessionOverlayMount();
+  ov.classList.add('open');
+  document.body.classList.add('session-open');
+  document.body.style.overflow='hidden';
+  const bd=document.getElementById('sessionBody');
+  if(bd)bd.scrollTop=0;
+  const d=document.getElementById('wDate');
+  if(d&&!d.value)setToday();
+}
+function svClose(){
+  const ov=document.getElementById('sessionOverlay');
+  if(!ov)return;
+  ov.classList.remove('open');
+  document.body.classList.remove('session-open');
+  document.body.style.overflow='';
+}
+
 function bindTabs(){
-  const navs = document.querySelectorAll('.nav-btn, .bot-btn');
+  const navs = document.querySelectorAll('.nav-btn, .bot-btn:not(.bot-btn-hero)');
   navs.forEach(b=>{
     b.addEventListener('click',()=>{
       buzz(8); // tab switch — the nav-lens lands with a physical tick
@@ -658,7 +700,7 @@ function bindTabs(){
       if(tgt==='Soc'){renderFriendsCard();renderArcLeaderboard();arcPullFollowingPublic();}
       if(tgt==='Nut'){AscaNutrition.render();}
       if(tgt==='Set'){renderProfile();renderProgressPics();} // keep the account heatmap/stats live
-      if(tgt==='Log'){renderBodyWeight();renderHeatmapCalendar();renderVolWidget();}
+      if(tgt==='Home'){renderBodyWeight();renderHeatmapCalendar();renderVolWidget();}
       
       const container = document.querySelector('.views-container');
       if(container) container.scrollTo({top:0,behavior:'smooth'});
@@ -698,8 +740,17 @@ function bindTabs(){
     onScroll();
   }
 
-  // Position lens initially — only in-bar buttons carry the lens, so a
-  // header Social/Account selection never drags it off-screen.
+  // Center ＋ is an action button, not a data-v tab: opening the session
+  // overlay must not disturb the current tab/.on state, so it binds
+  // outside the data-v loop above.
+  const fab=document.getElementById('fabSession');
+  if(fab)fab.addEventListener('click',()=>{
+    buzz(8); // same physical tick as a tab switch
+    svOpen();
+  });
+
+  // Position lens initially — only in-bar view buttons carry the lens, so
+  // a header History/Nutrition selection never drags it off-screen.
   setTimeout(() => {
     const activeBotBtn = document.querySelector('.bottom-bar .bot-btn.on');
     positionNavLens(activeBotBtn, false);
@@ -1114,7 +1165,7 @@ function bindArc(){
       const id=objRow.dataset.obj;
       // "Move" points at logging a workout; the other three point at
       // today's check-in card, already on this screen.
-      if(id==='move'){document.querySelector('.bot-btn[data-v="Log"]').click();}
+      if(id==='move'){svOpen();}
       else{document.getElementById('arcCheckinCard')?.scrollIntoView({behavior:'smooth',block:'nearest'});}
       return;
     }
@@ -2984,7 +3035,7 @@ function bindTheme(){
   });
 }
 
-// Shown once, on the Log tab (the one every user already lands on), until
+// Shown once, on the Home view (the one every user already lands on), until
 // dismissed or used — the Arc nav tab is invisible in Classic mode, so
 // without this there is no way to ever discover the feature.
 function renderArcPromo(){
@@ -3256,7 +3307,7 @@ function renderHeatmapCalendar(){
     selectDay(W[0].date);
   } else {
     const detailsEl = document.getElementById('heatmapDayDetails');
-    if (detailsEl) detailsEl.innerHTML = `Log your first session to start the streak. <button type="button" class="btn btn-primary btn-sm" style="margin-left:8px" onclick="document.querySelector('.bot-btn[data-v=&quot;Log&quot;]')&&document.querySelector('.bot-btn[data-v=&quot;Log&quot;]').click()">Start</button>`;
+    if (detailsEl) detailsEl.innerHTML = `Log your first session to start the streak. <button type="button" class="btn btn-primary btn-sm" style="margin-left:8px" onclick="svOpen()">Start</button>`;
   }
 
   // On narrow screens the grid scrolls — land on the newest weeks so
@@ -4004,7 +4055,7 @@ function renderProfile(){
     pill.classList.toggle('approx',!bw);
     pill.title=bw
       ?`ASCA Score — weekly volume ÷ your body weight (${bw} kg): you moved ${score}× your body weight this week`
-      :`ASCA Score is approximate — log your body weight (Log tab) for a real score (assuming ${DEFAULT_BW} kg)`;
+      :`ASCA Score is approximate — log your body weight (Home tab) for a real score (assuming ${DEFAULT_BW} kg)`;
   }
 
   const sessions=W.filter(w=>w&&w.dayType!=='Rest Day');
@@ -5216,6 +5267,7 @@ function bindActs(){
     showM('Discard Session?','All entered data for today will be permanently lost.',()=>{
       SE=[];eEx=null;eSets=[];persistSE();document.getElementById('se').style.display='none';
       document.getElementById('acts').style.display='none';renderLogged();toast('Session discarded');
+      svClose();
     });
   });
 }
@@ -5256,6 +5308,7 @@ async function finish(){
     // renderFriendsCard covers the profile + Social leaderboard/activity
     // grids so every monitor reflects the new session immediately.
     renderHeatmapCalendar();renderVolWidget();renderFriendsCard();
+    try{svClose();}catch(_){}
   }finally{
     finishing=false;if(finBtn)finBtn.disabled=false;
   }

@@ -2539,6 +2539,76 @@ canvas { width: 100%; height: 100%; }
   transform: scale(1.22);
 }
 
+/* ── Session Hero Button — center ＋ in the tab bar ──────────────
+   An action, not a tab: never carries .on, never gets the nav-lens.
+   Breaks out of the pill (larger than the bar, overlapping its top
+   edge) so the one thing you do most reads as the one big control. */
+.bot-btn-hero {
+  width: 54px; height: 54px;
+  border-radius: 50%;
+  margin-top: -18px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-hi));
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(var(--accent-rgb), 0.45),
+              inset 0 1px 0 rgba(var(--wht), 0.35);
+  transition: var(--t-ui-slow);
+  flex-shrink: 0;
+}
+.bot-btn-hero svg {
+  width: 24px; height: 24px;
+  color: #fff;
+  filter: drop-shadow(0 1px 2px rgba(var(--blk), 0.35));
+}
+.bot-btn-hero:active { transform: scale(var(--press-scale)); }
+
+/* ── Workout Session Overlay — Home's ＋ target ─────────────────
+   position:fixed inset:0 (viewport-fixed; the phone frame carries a
+   transform that would break fixed descendants, so app.js appends
+   the overlay to <body> at boot). Solid --bg, no blur: data surfaces
+   stay flat so the glass navbar visually floats above a clean sheet. */
+.session-overlay {
+  position: fixed; inset: 0;
+  z-index: 80;
+  display: flex; flex-direction: column;
+  background: var(--bg);
+  transform: translateY(100%);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  padding-top: var(--sat);
+}
+.session-overlay.open { transform: translateY(0); }
+.session-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid rgba(var(--wht), 0.08);
+  flex-shrink: 0;
+}
+.session-title {
+  font-family: var(--ff-title);
+  font-size: 1.3rem; font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.session-subtitle {
+  font-size: 0.72rem; font-weight: 600;
+  color: var(--t-3); margin-top: 2px;
+}
+.session-close { flex-shrink: 0; }
+.session-body {
+  flex: 1; overflow-y: auto;
+  padding: 16px 16px calc(24px + var(--sab)) 16px;
+  display: flex; flex-direction: column;
+  gap: var(--space-4);
+}
+.session-body::-webkit-scrollbar { display: none; }
+
+/* ── Home Start-Workout CTA ───────────────────────────────────── */
+.start-workout-cta {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+}
+.start-workout-cta-title { font-weight: 800; font-size: 0.95rem; }
+.start-workout-cta-sub { font-size: 0.72rem; color: var(--t-3); margin-top: 2px; }
+.start-workout-cta .btn { flex-shrink: 0; }
+
 @keyframes glassTabPop {
   from { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
   to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
@@ -2813,7 +2883,10 @@ canvas { width: 100%; height: 100%; }
 }
 .action-icon-svg { width: 13px; height: 13px; }
 
-/* ── Global Rest Timer — iOS 27 Glass ────────────────────── */
+/* ── Global Rest Timer — iOS 27 Glass ──────────────────────
+   Anchored absolutely inside the phone frame above the bottom bar.
+   When a session is open the bar is part of that workflow, so the
+   body.session-open rule below lifts it above the overlay's 80. */
 .global-timer-bar {
   position: absolute;
   bottom: calc(84px + var(--sab));
@@ -2830,6 +2903,11 @@ canvas { width: 100%; height: 100%; }
 }
 .global-timer-bar.hidden { transform: translateY(calc(100% + 12px)); opacity: 0; pointer-events: none; }
 .global-timer-bar.visible { transform: translateY(0); opacity: 1; pointer-events: auto; }
+/* While the session sheet is up, the rest timer belongs to it — raise it
+   above the overlay's 80. The rule keys off a <body> class (not a sibling)
+   because the overlay is reparented to <body> at runtime while the bar
+   stays inside the frame. */
+body.session-open .global-timer-bar { z-index: 85; }
 
 .timer-content { display: flex; align-items: center; justify-content: space-between; height: 100%; padding: 0 10px; gap: 6px; }
 .timer-left { display: flex; align-items: center; gap: 6px; }
@@ -3329,15 +3407,16 @@ canvas { width: 100%; height: 100%; }
 [data-theme="winter"] .arc-tab-btn,
 [data-arc="on"] .arc-tab-btn { display: flex; }
 
-/* Five tabs (Arc + Log + Nutrition + History + Insights) need a touch
-   less width than four did when Arc is enrolled. Header-bound
-   Social/Account never reach this rule — they live outside the bar. */
+/* Six tabs (Home + Arc + Social + ＋ + Insights + Profile) squeeze a
+   little narrower when Arc is enrolled. Header-bound History/Nutrition
+   never reach this rule — they live outside the bar. The hero ＋ stays
+   54px regardless; the narrowing targets the view slots only. */
 @media (max-width: 440px) {
-  [data-arc="on"] .bottom-bar .bot-btn { width: 56px; }
-  [data-arc="on"] .bottom-bar .bot-btn span { font-size: 0.58rem; }
+  [data-arc="on"] .bottom-bar .bot-btn:not(.bot-btn-hero) { width: 56px; }
+  [data-arc="on"] .bottom-bar .bot-btn:not(.bot-btn-hero) span { font-size: 0.58rem; }
 }
 @media (max-width: 360px) {
-  [data-arc="on"] .bottom-bar .bot-btn { width: 52px; }
+  [data-arc="on"] .bottom-bar .bot-btn:not(.bot-btn-hero) { width: 52px; }
 }
 
 /* ── Onboarding card ── */
@@ -4343,7 +4422,7 @@ canvas { width: 100%; height: 100%; }
 .u-mb-6 { margin-bottom: var(--space-6); }
 .u-mt-2 { margin-top: var(--space-2); }
 .u-mt-4 { margin-top: var(--space-4); }
-/* Body-weight hero input in the Log BW modal. */
+/* Body-weight hero input in the BW modal. */
 .bw-hero-input { text-align: center; font-size: 1.4rem; font-weight: 800; }
 /* Centered text on the lock-screen credentials. */
 .lock-input { text-align: center; }
@@ -5901,19 +5980,19 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
 /* View content stages in with a light stagger — the view itself already
    animates (viewSlideIn); this makes its cards land as a cascade, not a
-   slab. Scoped to #vLog (the daily-use screen) — Social/Insights refill
+   slab. Scoped to #vHome (the dashboard screen) — Social/Insights refill
    their cards asynchronously, and a stagger would re-fire on every
    refresh there; the single view-level animation already covers them.
    nth-child on direct children, pure CSS. Reduced-motion users get the
    existing blanket override below. */
 @media (prefers-reduced-motion: no-preference) {
-  #vLog.on > * { animation: viewSlideIn 0.42s var(--spring) backwards; }
-  #vLog.on > *:nth-child(1) { animation-delay: 0.00s; }
-  #vLog.on > *:nth-child(2) { animation-delay: 0.04s; }
-  #vLog.on > *:nth-child(3) { animation-delay: 0.08s; }
-  #vLog.on > *:nth-child(4) { animation-delay: 0.12s; }
-  #vLog.on > *:nth-child(5) { animation-delay: 0.16s; }
-  #vLog.on > *:nth-child(n+6) { animation-delay: 0.20s; }
+  #vHome.on > * { animation: viewSlideIn 0.42s var(--spring) backwards; }
+  #vHome.on > *:nth-child(1) { animation-delay: 0.00s; }
+  #vHome.on > *:nth-child(2) { animation-delay: 0.04s; }
+  #vHome.on > *:nth-child(3) { animation-delay: 0.08s; }
+  #vHome.on > *:nth-child(4) { animation-delay: 0.12s; }
+  #vHome.on > *:nth-child(5) { animation-delay: 0.16s; }
+  #vHome.on > *:nth-child(n+6) { animation-delay: 0.20s; }
 }
 
 /* Numerals: tabular everywhere a value can change under the eye — stat
