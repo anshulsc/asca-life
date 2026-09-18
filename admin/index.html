@@ -749,8 +749,9 @@ body {
 
 .vol-widget-value {
   font-family: var(--ff-mono);
-  font-size: 1.7rem; font-weight: 800;
+  font-weight: 800;
   color: var(--t-1);
+  font-size: clamp(1.35rem, 1.15rem + 1vw, 1.85rem);
 }
 
 .vol-widget-unit {
@@ -807,8 +808,10 @@ body {
 
 .ring-value {
   font-family: var(--ff-mono);
-  font-size: 1.5rem; font-weight: 800;
+  font-weight: 800;
   color: var(--t-1);
+  /* fluid: compact on phones, full on tablets/desktop */
+  font-size: clamp(1.3rem, 1.1rem + 0.9vw, 1.6rem);
 }
 
 .ring-label {
@@ -1631,8 +1634,11 @@ select.input-field {
 
 .w-val {
   font-family: var(--ff-mono);
-  font-size: 1.5rem; font-weight: 800;
+  font-weight: 800;
   line-height: 1.1; margin-bottom: 3px;
+  /* Fluid type: scales from compact phones up to the desktop shell without
+     media-query stair-steps. 4.2vw at ~390px ≈ 1.6rem; ≥576px ≈ 1.7rem cap. */
+  font-size: clamp(1.25rem, 1.1rem + 0.8vw, 1.7rem);
 }
 .w-lbl {
   font-size: 0.65rem; font-weight: 700;
@@ -1670,7 +1676,8 @@ select.input-field {
 .pr-details { flex: 1; }
 .pr-name { font-family: var(--ff-title); font-size: 0.92rem; font-weight: 700; margin-bottom: 1px; }
 .pr-sub { font-size: 0.72rem; color: var(--t-3); }
-.pr-score { font-family: var(--ff-mono); font-size: 1.15rem; font-weight: 800; color: var(--c-orange); }
+.pr-score { font-family: var(--ff-mono); font-weight: 800; color: var(--c-orange);
+  font-size: clamp(0.95rem, 0.9rem + 0.3vw, 1.15rem); }
 
 /* Analytics Chart */
 .chart-card { padding: var(--space-4); min-height: 290px; }
@@ -1692,7 +1699,8 @@ select.input-field {
 }
 
 .chart-val-container { text-align: right; }
-.chart-val { font-family: var(--ff-mono); font-size: 1.4rem; font-weight: 800; color: var(--accent); }
+.chart-val { font-family: var(--ff-mono); font-weight: 800; color: var(--accent);
+  font-size: clamp(1.1rem, 0.95rem + 0.7vw, 1.4rem); }
 .chart-wrap { width: 100%; height: 170px; position: relative; }
 canvas { width: 100%; height: 100%; }
 
