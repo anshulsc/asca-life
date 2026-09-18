@@ -2484,20 +2484,6 @@ canvas { width: 100%; height: 100%; }
 .user-row .btn-secondary { border: 1px solid rgba(var(--wht),0.15); }
 
 /* ── Apple Liquid Glass Tab Bar — Floating Pill ──────────── */
-/* ＋ is absolutely positioned (dead-center regardless of tab count). Its
-   grid slot is reserved via explicit track assignment on the tab buttons:
-   home=1, social=2, [hole]=3, insights=4, profile=5. Arc sits in track 3
-   when enrolled and the whole row re-centers via grid-template change. */
-.bottom-bar > [data-v="Home"] { grid-column: 1; grid-row: 1; }
-.bottom-bar > [data-v="Soc"]  { grid-column: 2; grid-row: 1; }
-.bottom-bar > [data-v="Ana"]  { grid-column: 4; grid-row: 1; }
-.bottom-bar > [data-v="Set"]  { grid-column: 5; grid-row: 1; }
-.bottom-bar > [data-v="Arc"]  { grid-column: 2; grid-row: 1; }
-/* Arc enrolled: shift Social left, Arc slots in at 2, others keep spots */
-.bottom-bar:has(.arc-tab-btn:not([hidden])) > [data-v="Soc"]  { grid-column: 3; }
-.bottom-bar:has(.arc-tab-btn:not([hidden])) > [data-v="Ana"]  { grid-column: 5; }
-.bottom-bar:has(.arc-tab-btn:not([hidden])) > [data-v="Set"]  { grid-column: 6; }
-/* Arc-hidden: 4 tabs + hole; Arc shown: 5 tabs + hole */
 .bottom-bar {
   position: absolute;
   bottom: calc(10px + var(--sab));
@@ -2509,7 +2495,8 @@ canvas { width: 100%; height: 100%; }
   border: 1px solid rgba(var(--wht), 0.12);
   border-radius: var(--r-xl);
   display: grid;
-  grid-template-columns: 1fr 1fr 1.4fr 1fr 1fr;
+  /* ＋ moved to a right-edge floating FAB; nav is a clean equal-width row. */
+  grid-template-columns: repeat(4, 1fr);
   align-items: center;
   column-gap: 2px;
   padding: 0 8px;
@@ -2518,9 +2505,18 @@ canvas { width: 100%; height: 100%; }
               inset 0 0 0 0.5px rgba(var(--wht), 0.1),
               0 8px 32px rgba(var(--blk), 0.55);
 }
-.bottom-bar:has(.arc-tab-btn:not([hidden])) {
-  grid-template-columns: 1fr 1fr 1fr 1.4fr 1fr 1fr;
+/* Arc ON → 5 equal view slots (Home Arc Social Insights Profile);
+   Arc hidden → 4 (Social/Insights/Profile fill the 4 tracks). */
+[data-arc="on"] .bottom-bar,
+[data-theme="winter"] .bottom-bar {
+  grid-template-columns: repeat(5, 1fr) !important;
 }
+/* Tabs fill their tracks inside the grid */
+.bottom-bar > [data-v="Home"] { grid-column: 1; grid-row: 1; }
+.bottom-bar > [data-v="Arc"]  { grid-column: 2; grid-row: 1; }
+.bottom-bar > [data-v="Soc"]  { grid-column: 3; grid-row: 1; }
+.bottom-bar > [data-v="Ana"]  { grid-column: 4; grid-row: 1; }
+.bottom-bar > [data-v="Set"]  { grid-column: 5; grid-row: 1; }
 
 .bot-btn {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -2576,26 +2572,24 @@ canvas { width: 100%; height: 100%; }
    edge) so the one thing you do most reads as the one big control. */
 .bot-btn-hero {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -58%);
-  width: 60px; height: 60px;
+  right: 14px;
+  bottom: calc(76px + var(--sab)); /* bar 58px + gap 8px */
+  width: 58px; height: 58px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--accent-hi), var(--accent));
   color: var(--bg);
-  box-shadow: 0 8px 22px rgba(var(--accent-rgb), 0.55),
+  box-shadow: 0 10px 26px rgba(var(--accent-rgb), 0.5),
               0 2px 8px rgba(var(--blk), 0.5),
               inset 0 1px 0 rgba(var(--wht), 0.4);
   transition: var(--t-ui-slow);
-  z-index: 3;
+  z-index: 55; /* above the bottom bar */
 }
-.bot-btn-hero:active { transform: translate(-50%, -58%) scale(var(--press-scale)); }
+.bot-btn-hero:active { transform: scale(var(--press-scale)); }
 .bot-btn-hero svg {
   width: 24px; height: 24px;
   color: var(--bg);
   filter: drop-shadow(0 1px 1px rgba(var(--wht), 0.25));
 }
-.bot-btn-hero:active { transform: translate(-50%, -58%) scale(var(--press-scale)); }
 
 /* ── Workout Session Overlay — Home's ＋ target ─────────────────
    position:fixed inset:0 (viewport-fixed; the phone frame carries a
@@ -5866,11 +5860,13 @@ html, body { max-width: 100%; overflow-x: hidden; }
     scrollbar-width: none;
   }
   /* undo mobile pill grid + hero-in-hole when stacking vertically */
-  .bottom-bar:has(.arc-tab-btn:not([hidden])) {
-    grid-template-columns: none;
+  .bottom-bar:has(.arc-tab-btn:not([hidden])),
+  [data-arc="on"] .bottom-bar,
+  [data-theme="winter"] .bottom-bar {
+    grid-template-columns: none !important;
   }
   .bot-btn-hero {
-    position: static; transform: none;
+    position: static; transform: none; right: auto; bottom: auto;
     width: 100%; height: 46px; border-radius: 10px; margin: 4px 0;
   }
   .bot-btn-hero:active { transform: scale(var(--press-scale)); }
@@ -5894,6 +5890,8 @@ html, body { max-width: 100%; overflow-x: hidden; }
     padding: 13px 16px;
     border-radius: 10px;
     font-size: 0.9rem;
+    grid-column: auto; /* sidebar is a column flex — tracks unpinned */
+  }
     color: var(--t-2);
     transition: background var(--dur-fast) var(--spring), color var(--dur-fast) var(--spring);
   }
