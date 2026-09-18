@@ -42,7 +42,7 @@ function startApp() {
     }
     load();loadCX();fillTypes();bindTabs();bindSearch();bindSets();bindActs();
     bindHist();bindAna();bindSettings();bindModal();bindLibraryModal();bindVolInsights();bindTimer();bindBodyWeight();bindFriend();bindProgressPics();bindArc();bindChallengesBrowser();bindMonkMode();bindArcPromo();bindArcLeaderboard();bindArcCalendar();bindArcGoals();bindRoutines();
-    setToday();renderRecent();renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderProfile();renderArc();renderHomeScoreRow();chBoot();
+    setToday();renderRecent();renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderProfile();renderArc();renderHomeScoreRow();renderMuscleFreshness();chBoot();
     restoreSE();
     bindCardSpotlights();
   }else{
@@ -777,7 +777,7 @@ function bindTabs(){
       if(tgt==='Soc'){renderFriendsCard();renderArcLeaderboard();arcPullFollowingPublic();}
       if(tgt==='Nut'){AscaNutrition.render();}
       if(tgt==='Set'){renderProfile();renderProgressPics();} // keep the account heatmap/stats live
-      if(tgt==='Home'){renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderHomeScoreRow();}
+      if(tgt==='Home'){renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderHomeScoreRow();renderMuscleFreshness();}
       
       const container = document.querySelector('.views-container');
       if(container) container.scrollTo({top:0,behavior:'smooth'});
@@ -3606,6 +3606,7 @@ function refreshAllUI() {
   renderWeeklyRing();
   renderProfile();
   renderHomeScoreRow();
+  renderMuscleFreshness();
   renderFriendsCard();
   scheduleRender('hist','refresh',()=>{renderHist();});
   scheduleRender('ana','refresh',()=>{renderVolInsights();renderSG();renderPRs();renderRanks();renderChart();});
@@ -7576,6 +7577,13 @@ function getMusclesForExercise(exName, dayType = '') {
 
 function getAnatomySvg(view, muscleLevels = {}) {
   const getLevelClass = (m) => `m-level-${muscleLevels[m] || 0}`;
+  /* Optional freshness overlay mode: pass `{freshness: {chest:'fresh',…}}`
+     in muscleLevels-freshness to swap m-level-* for m-fresh/m-recovering/
+     m-fatigued. Default behavior (no freshness key) is unchanged. */
+  const freshness=muscleLevels.__freshness;
+  const getClass=(m)=>freshness?`m-${freshness[m]||'fresh'}`:getLevelClass(m);
+  const getDm=(m)=>`data-muscle="${m}"`;
+  const pm=(m,d)=>`<path class="muscle-path ${getClass(m)}" ${getDm(m)} d="${d}" />`;
   const defsHtml = `
     <defs>
       <linearGradient id="gradL0" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -7663,6 +7671,49 @@ function renderAnatomyMap(container, muscleLevels) {
     <div class="anatomy-svg-container"><div class="anatomy-view-label">Front</div>${getAnatomySvg('front', muscleLevels)}</div>
     <div class="anatomy-svg-container"><div class="anatomy-view-label">Back</div>${getAnatomySvg('back', muscleLevels)}</div>
   `;
+}
+
+/* ── Muscle freshness map (P2: "what should I train today?") ──
+   Reuses the anatomy SVG; instead of volume, each path carries one of
+   three tint classes. Computed once per refresh pass — cheap walk over
+   W tracking the latest date each muscle fired. */
+function computeMuscleFreshness(){
+  const last={};
+  const today=new Date();today.setHours(23,59,59,999);
+  (W||[]).forEach(w=>{
+    if(!w||w.dayType==='Rest Day')return;
+    (w.exercises||[]).forEach(e=>{
+      if(!e||!e.name)return;
+      /* Skip pure cardio entries — they don't track muscle freshness. The
+         day-type fallback in getMusclesForExercise would still return
+         something for "Cardio", so gate explicitly. */
+      if((e.sets||[]).some(isCardioSet) && !(e.sets||[]).some(s=>!isCardioSet(s)))return;
+      const ms=getMusclesForExercise(e.name,w.dayType||'');
+      (ms||[]).forEach(m=>{
+        if(!last[m]||w.date>last[m])last[m]=w.date;
+      });
+    });
+  });
+  const fresh={}, groups=['chest','back','delts','biceps','triceps','forearms','quads','hamstrings','calves','abs'];
+  groups.forEach(m=>{
+    const d=last[m];
+    if(!d){fresh[m]='fresh';return;}
+    const days=Math.floor((today-new Date(d+'T23:59:59'))/(1000*60*60*24));
+    if(days>=4)fresh[m]='fresh';
+    else if(days>=2)fresh[m]='recovering';
+    else fresh[m]='fatigued';
+  });
+  return fresh;
+}
+function renderMuscleFreshness(){
+  const host=document.getElementById('freshMapHost');
+  if(!host)return;
+  const fresh=computeMuscleFreshness();
+  /* The same anatomy shape, but lanes are state classes, not m-level-N.
+     renderAnatomyMap is unchanged — getAnatomySvg quietly swaps when
+     __freshness is present in the levels object. */
+  const musclesObject=Object.assign({},fresh,{__freshness:fresh});
+  renderAnatomyMap(host,musclesObject);
 }
 
 function renderHeatmapInsights(period) {

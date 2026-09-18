@@ -3190,6 +3190,26 @@ body.session-open .global-timer-bar { z-index: 85; }
 .muscle-path.m-level-2 { fill: url(#gradL2); stroke: rgba(255, 149, 0, 0.65); }
 .muscle-path.m-level-3 { fill: url(#gradL3); stroke: rgba(var(--wht), 0.45); filter: url(#glow3d); }
 
+/* Freshness overlay — same anatomy SVG, parallel semantic colors.
+   The alternative-traffic-light read:
+     fresh     = 4+ days since (or never) hit → solid accent green
+     recovering= 2-3 days → soft amber, slight pulse on touch
+     fatigued  = 0-1 days → deep red sits "under the skin" as heat */
+.muscle-path.m-fresh      { fill: rgba(48, 209, 88, 0.55); stroke: rgba(48, 209, 88, 0.6); }
+.muscle-path.m-recovering { fill: rgba(255, 159, 10, 0.42); stroke: rgba(255, 159, 10, 0.55); }
+.muscle-path.m-fatigued   { fill: rgba(255, 69, 58, 0.55); stroke: rgba(255, 69, 58, 0.65); }
+
+.freshness-card { margin-top: 18px; }
+.freshness-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid var(--border-light); margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+.freshness-legend { display: flex; gap: 10px; }
+.freshness-key { font-size: 0.62rem; font-weight: 700; color: var(--t-3); display: flex; align-items: center; gap: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+.freshness-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.freshness-dot.fresh      { background: #30D158; }
+.freshness-dot.recovering { background: #FF9F0A; }
+.freshness-dot.fatigued   { background: #FF453A; }
+.freshness-body { display: flex; justify-content: center; gap: 20px; padding: 4px 0; }
+.freshness-body .anatomy-svg { width: 70px; height: 130px; }
+
 .history-heatmap-wrap {
   display: flex; gap: 12px;
   background: rgba(var(--wht), 0.01);
