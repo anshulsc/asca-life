@@ -492,12 +492,10 @@ function positionNavLens(activeBtn, animate = true) {
   
   const activeLeft = activeBtn.offsetLeft;
   const activeWidth = activeBtn.offsetWidth;
-  // Was a hardcoded 54px, sized for 5 tabs at 56px each. With Arc adding a
-  // 6th tab, ≤440px viewports narrow .bot-btn to fit — a fixed lens then
-  // either overhangs a 46/50px button or looks small on a 56px one. Track
-  // the real button width (minus a small inset so the lens reads as a
-  // highlight, not a duplicate outline) instead of a magic number.
-  const lensWidth = Math.max(38, activeWidth - 2);
+  // Lens looks best hugging the icon+label column, not spanning the full
+  // tab track — cap at 62px so every tab (Home wide or Arc narrow) reads
+  // identically, and never extends past the track's tap area.
+  const lensWidth = Math.min(62, Math.max(38, activeWidth - 2));
   const leftPos = activeLeft + (activeWidth - lensWidth) / 2;
   
   if (animate) {
@@ -510,6 +508,13 @@ function positionNavLens(activeBtn, animate = true) {
   lens.style.left = `${leftPos}px`;
   lens.style.top = `8px`; // centered vertically in bottom bar
 }
+// DOMContentLoaded: park the lens on the active tab once layout has settled.
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    const active = document.querySelector('.bottom-bar .bot-btn.on');
+    if (active) positionNavLens(active, false);
+  }, 60);
+});
 
 /* ── Motion & Delight helpers (2026 polish) ────────────────────────────── */
 

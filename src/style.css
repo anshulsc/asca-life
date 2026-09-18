@@ -2530,7 +2530,11 @@ canvas { width: 100%; height: 100%; }
   z-index: 2;
 }
 
+/* Active state: text switches to accent. No enlargement; the lens and the
+   icon's accent color are sufficient signal. */
 .bot-btn.on { color: var(--t-1); }
+.bot-btn.on .tab-icon { color: var(--accent); filter: drop-shadow(0 0 6px rgba(var(--accent-rgb), 0.4)); }
+.bot-btn:active .tab-icon { transform: scale(0.88); }
 
 .nav-lens {
   position: absolute;
@@ -2643,8 +2647,7 @@ canvas { width: 100%; height: 100%; }
   to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
 }
 
-.bot-btn.on .tab-icon { transform: scale(1.1); color: var(--accent); filter: drop-shadow(0 0 6px rgba(var(--accent-rgb), 0.4)); }
-.bot-btn:active .tab-icon { transform: scale(0.88); }
+/* kept the lens; removed the .on 1.1 scale so all tabs stay visually uniform */
 
 /* ── Toast Notifications ───────────────────────────────────── */
 .toast-wrap {
