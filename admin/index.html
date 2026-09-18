@@ -6434,10 +6434,32 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .wrap-ring-legend span { color: var(--t-2); font-weight: 600; font-size: var(--text-s); display: inline-flex; align-items: center; gap: 6px; }
 .wrap-ring-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
 
-/* dots + nav */
+/* dots + nav — story-deck segmented progress
+   Each dot is actually a tiny track whose inner .wrap-dot-bar fills
+   over SLIDE_MS while that slide is live, then locks full when the
+   viewer moves on. Replaces the plain "active is white" dot so the
+   user can pace the auto-advance. */
 .wrap-dots { position: absolute; bottom: calc(var(--space-5) + var(--sab)); left: 50%; transform: translateX(-50%); display: flex; gap: 7px; }
-.wrap-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(var(--wht), 0.22); transition: background 0.3s, transform 0.3s; }
-.wrap-dot.on { background: var(--t-1); transform: scale(1.25); }
+.wrap-dot {
+  width: 22px; height: 4px; border-radius: var(--r-full);
+  background: rgba(var(--wht), 0.12); overflow: hidden;
+  transition: background 0.3s, transform 0.3s;
+  position: relative;
+}
+.wrap-dot-bar {
+  display: block; height: 100%; width: 0%;
+  background: var(--t-1); border-radius: inherit;
+  /* width set inline by JS via transition="width Xms linear" */
+}
+.wrap-dot.on    { background: rgba(var(--wht), 0.18); }
+.wrap-dot.done  { background: rgba(var(--wht), 0.12); }
+.wrap-dot.done .wrap-dot-bar { width: 100% !important; transition: none !important; }
+/* Pause: stop the story, signal we're held — the active dot's bar
+   freezes mid-fill and the stage dims a hair. */
+.wrapped-overlay.is-paused .wrap-dot.on .wrap-dot-bar {
+  transition: none !important; /* JS also updates width directly when pausing */
+}
+.wrapped-overlay.is-paused .wrap-stage { opacity: 0.82; }
 
 .wrap-close {
   position: absolute; top: calc(var(--space-4) + var(--sat)); right: var(--space-4);

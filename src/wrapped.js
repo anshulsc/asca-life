@@ -221,6 +221,79 @@ const Wrapped = (() => {
   let data = null;
   let bwNow = null;
   let touchStartX = 0;
+  /* Story deck playback.
+     Auto-advance: each slide has SLIDE_MS of pure show time.
+     Progress bar lives in .wrap-dots (per-slide segment widths animate).
+     Hold-to-pause: pointerdown pauses, pointerup resumes. Hold duration
+     is reconciled against slideStart. */
+  const SLIDE_MS = 5200;
+  let slideTimer = null, slideStart = 0, paused = false, pausedAt = 0;
+  function clearTimer(){ if(slideTimer) clearTimeout(slideTimer); slideTimer = null; }
+  function startClock(){
+    clearTimer();
+    if (prm()) return; /* honor prefers-reduced-motion: stop auto-advance. */
+    slideStart = performance.now();
+    slideTimer = setTimeout(() => {
+      if (paused) return;
+      if (idx < cards.length - 1) go(+1);
+      else closeWrapped(); /* last slide: auto-advance past the end = close. */
+    }, SLIDE_MS);
+    /* The .on segment's ::before bar animates SLIDE_MS of width change. */
+    paintProgress();
+  }
+  function pauseClock(){
+    if (!slideTimer || paused) return;
+    paused = true; pausedAt = performance.now();
+    clearTimer();
+    if (overlay) overlay.classList.add('is-paused');
+    paintProgress();
+  }
+  function resumeClock(){
+    if (!paused) return;
+    paused = false;
+    /* Remaining time in the slide: SLIDE_MS - how long we already watched. */
+    const elapsed = pausedAt - slideStart;
+    const left = Math.max(680, SLIDE_MS - elapsed); /* even a 0s resume gets a breath */
+    slideStart = performance.now() - (SLIDE_MS - left);
+    slideTimer = setTimeout(() => {
+      if (paused) return;
+      if (idx < cards.length - 1) go(+1);
+      else closeWrapped();
+    }, left);
+    if (overlay) overlay.classList.remove('is-paused');
+    paintProgress();
+  }
+  function paintProgress(){
+    const dots = document.getElementById('wrapDots');
+    if (!dots) return;
+    const nowPaused = paused;
+    const elapsed = paused ? (pausedAt - slideStart) : (performance.now() - slideStart);
+    const remaining = Math.max(0, SLIDE_MS - elapsed);
+    dots.querySelectorAll('.wrap-dot').forEach((d, i) => {
+      d.classList.toggle('on', i === idx);
+      d.classList.toggle('done', i < idx);
+      if (i === idx) {
+        const bar = d.querySelector('.wrap-dot-bar');
+        if (!bar) return;
+        if (nowPaused || prm()) {
+          /* Freeze the bar wherever it is. */
+          const frozen = getComputedStyle(bar).width;
+          bar.style.transition = 'none';
+          bar.style.width = frozen;
+        } else {
+          /* First run of this slide after any manual/auto start. Restart at
+             the current fraction, then animate linearly to 100% for the
+             time left in the slide. */
+          const startPct = Math.min(100, (elapsed / SLIDE_MS) * 100);
+          bar.style.transition = 'none';
+          bar.style.width = startPct.toFixed(2) + '%';
+          void bar.offsetWidth;
+          bar.style.transition = `width ${remaining}ms linear`;
+          bar.style.width = '100%';
+        }
+      }
+    });
+  }
 
   function ensureOverlay() {
     if (overlay) return;
@@ -249,18 +322,27 @@ const Wrapped = (() => {
       if (e.clientX < r.width * 0.4) go(-1);
       else if (e.clientX > r.width * 0.6) go(+1);
     });
-    // swipe
-    overlay.addEventListener('pointerdown', e => { touchStartX = e.clientX; });
+    /* Hold-to-pause: press anywhere that's not a button. The release
+       re-arms the slide timer for whatever time was left. */
+    overlay.addEventListener('pointerdown', e => {
+      if (e.target.closest('button, .wrap-close')) return;
+      touchStartX = e.clientX;
+      pauseClock();
+    });
     overlay.addEventListener('pointerup',   e => {
+      if (e.target.closest('button, .wrap-close')) return;
       const dx = e.clientX - touchStartX;
+      resumeClock();
       if (Math.abs(dx) > 40) go(dx < 0 ? +1 : -1);
     });
+    overlay.addEventListener('pointercancel', () => resumeClock());
     // keyboard
     document.addEventListener('keydown', e => {
       if (!open) return;
       if (e.key === 'Escape') closeWrapped();
       else if (e.key === 'ArrowLeft')  go(-1);
       else if (e.key === 'ArrowRight') go(+1);
+      else if (e.key === ' ') { e.preventDefault(); paused ? resumeClock() : pauseClock(); }
     });
   }
 
@@ -331,10 +413,14 @@ const Wrapped = (() => {
   }
 
   function renderCard() {
+    /* Manual ↔ auto sequencing: a direct go() unpauses and re-arms the
+       slide timer so the new card gets its full window. */
+    if (paused) { paused = false; if (overlay) overlay.classList.remove('is-paused'); }
+    clearTimer();
     const c = cards[idx];
     const stage = document.getElementById('wrapStage');
     document.getElementById('wrapDots').innerHTML = cards.map((_, i) =>
-      `<span class="wrap-dot${i === idx ? ' on' : ''}"></span>`).join('');
+      `<span class="wrap-dot${i === idx ? ' on' : ''}${i < idx ? ' done' : ''}"><span class="wrap-dot-bar"></span></span>`).join('');
     document.getElementById('wrapPrev').style.opacity = idx === 0 ? 0.25 : 1;
     document.getElementById('wrapNext').style.opacity = idx === cards.length - 1 ? 0.25 : 1;
     document.getElementById('wrapShare').style.display = idx === cards.length - 1 ? '' : 'none';
@@ -354,6 +440,7 @@ const Wrapped = (() => {
       const n = parseInt(big.childNodes[0].textContent.replace(/,/g, ''), 10);
       if (Number.isFinite(n) && n > 0) countUp(big.childNodes[0], n);
     }
+    startClock();
   }
 
   function countUp(textNode, target) {
@@ -392,8 +479,10 @@ const Wrapped = (() => {
 
   function closeWrapped() {
     if (!overlay) return;
+    clearTimer();
     open = false;
-    overlay.classList.remove('open');
+    paused = false;
+    overlay.classList.remove('open', 'is-paused');
     document.body.style.overflow = '';
   }
 
