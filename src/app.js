@@ -4722,9 +4722,12 @@ function selEx(name){
     const lc = lastCardio(eEx);
     eSets = [{cardio:true, mins:lc.mins, km:lc.km, kcal:lc.kcal, speed:lc.speed, incline:lc.incline, hr:lc.hr, notes:'', completed:false}];
   } else {
-    const lw=lastW(eEx);
-    eSets=[{weight:lw,reps:'',notes:'',completed:false},{weight:lw,reps:'',notes:'',completed:false},{weight:lw,reps:'',notes:'',completed:false}];
+    /* Ghost values render via placeholder/hint — rows stay EMPTY so a
+       single check tap means "same as last time" and a typed value
+       means a genuine change. */
+    eSets=[{weight:'',reps:'',notes:'',completed:false},{weight:'',reps:'',notes:'',completed:false},{weight:'',reps:'',notes:'',completed:false}];
   }
+  _sessionPRFired={}; // arm live-PR detection fresh per editor session
   
   renderSets();
   renderSegmentToggle();
@@ -4799,6 +4802,54 @@ function lastW(n){
 function renderRecent(){}
 
 /* ── Elite Editor ──────────────────────────────────────────── */
+/* Ghost value: what the i-th set of this exercise looked like last time
+   it was trained — the two-line answer to "what did I lift?" Used as
+   placeholder/hint text and the one-tap fill when a set is checked empty. */
+function lastSetTemplate(exName,i){
+  const key=canonicalName(exName);if(!key)return null;
+  for(const w of W){
+    for(const e of (w.exercises||[])){
+      if(canonicalName(e.name)!==key)continue;
+      const sets=(e.sets||[]).filter(s=>s&&!isCardioSet(s));
+      const s=sets[i];if(!s)return null;
+      const wv=getSetWeightVal(s);
+      return {weight:wv>0?wv:(s.weight||''),reps:s.reps!=null?s.reps:'',setType:s.setType,notes:s.notes||''};
+    }
+  }
+  return null;
+}
+
+/* Plate calculator — pure shapes. plateSolve targets the largest-count
+   denomination first so the breakdown is always the fewest plates. */
+const PLATE_BAR_KG=20,PLATE_STACK=[25,20,15,10,5,2.5,1.25];
+function plateSolve(loadKg){
+  const out=[];let rem=+loadKg;
+  for(const p of PLATE_STACK){
+    const n=Math.floor((rem+1e-9)/p);
+    for(let i=0;i<n;i++)out.push(p);
+    rem=+(rem-n*p).toFixed(3);
+    if(rem<1e-9)break;
+  }
+  return {plates:out,remainder:+Math.max(0,rem).toFixed(3)};
+}
+function plateMath(totalKg){
+  const t=+totalKg;
+  if(!t||t<0||t>1000)return {load:0,solve:{plates:[],remainder:0},plates40:[],plates60:[]};
+  const load=(t-PLATE_BAR_KG)/2,solve=plateSolve(load);
+  // min/max stack pixels are fixed so proportional sizing stays simple CSS.
+  return {load:+load.toFixed(3),solve,
+    plates40:solve.plates.map(p=>Math.round(10+p*1.6)),
+    plates60:solve.plates.map((p,i)=>({h:Math.round(10+p*1.6),i}))};
+}
+
+/* Set types: warm-up/drop/failure don't compete for PRs or volume.
+   Nothing is required — a missing type is a normal working set, so old
+   history and other clients degrade cleanly. */
+const SET_TYPES=[{k:'warmup',label:'W',full:'Warm-up',exclude:true},{k:'working',label:'N',full:'Working set',exclude:false},{k:'drop',label:'D',full:'Drop set',exclude:false},{k:'failure',label:'F',full:'To failure',exclude:false}];
+function setTypeOf(s){const k=s&&s.setType;return SET_TYPES.some(t=>t.k===k)?k:'working';}
+function nextSetType(k){const i=SET_TYPES.findIndex(t=>t.k===k);return SET_TYPES[(i+1+SET_TYPES.length)%SET_TYPES.length].k;}
+function setTypeExcluded(s){const t=SET_TYPES.find(t=>t.k===setTypeOf(s));return !!(t&&t.exclude);}
+
 function bindSets(){
   document.getElementById('addS').addEventListener('click',()=>{
     if(eMode==='cardio'){
@@ -4809,8 +4860,90 @@ function bindSets(){
     }
     renderSets();
   });
-  document.getElementById('seCl').addEventListener('click',()=>{eEx=null;eSets=[];document.getElementById('se').style.display='none';});
+  document.getElementById('seCl').addEventListener('click',()=>{eEx=null;eSets=[];_sessionPRFired={};closePlateCalc();document.getElementById('se').style.display='none';});
   document.getElementById('svEx').addEventListener('click',saveEx);
+  bindPlateCalc();
+}
+
+/* ── Plate calculator UI ─────────────────────────────────────
+   Pure math lives in plateMath(); this is only the DOM + trigger. */
+function plateStackSvg(sm){
+  if(!sm.solve.plates.length)return '';
+  const plates=sm.solve.plates,w=Math.min(36,Math.max(14,14+ (plates[0]||0)*0.6));
+  const gap=6,bw=Math.max(8,Math.round(6+(plates[plates.length-1]||0)*0.15));
+  const bars=plates.map((p,i)=>`<rect class="plate-svg-plate" x="${22+i*(bw+2)}" y="${Math.max(0,(60-(10+p*1.6))/2)}" width="${bw}" height="${10+p*1.6}" rx="2"/>`).join('');
+  return `<svg class="plate-svg" viewBox="0 0 ${22+plates.length*(bw+2)+6} 60" aria-hidden="true">
+    <rect class="plate-svg-bar" x="0" y="28" width="18" height="4" rx="2"/>
+    ${bars}
+  </svg>`;
+}
+function plateButtonValue(){return currentPlateTarget>=0?(eSets[currentPlateTarget]||{}).weight:null;}
+let currentPlateTarget=-1;
+function openPlateCalc(i,anchorEl){
+  currentPlateTarget=i;
+  const pop=document.getElementById('plateCalc'),body=document.getElementById('plateBody');
+  if(!pop||!body)return;
+  renderPlateCalc(body);
+  pop.style.display='block';
+  pop.setAttribute('data-open-set',String(i));
+  try{
+    const ed=document.getElementById('se');
+    pop.style.top='auto';pop.style.bottom='';pop.style.left='';pop.style.right='';
+    if(anchorEl&&ed){
+      pop.style.position='fixed';
+      const r=anchorEl.getBoundingClientRect();
+      pop.style.top=Math.min(window.innerHeight-260,r.bottom+6)+'px';
+      pop.style.left=Math.max(8,Math.min(window.innerWidth-280,r.left-140))+'px';
+    }
+  }catch(_){}
+}
+function renderPlateCalc(body){
+  const val=plateButtonValue();
+  if(!val||+val<=PLATE_BAR_KG){
+    body.innerHTML=`<div class="plate-calc-empty">${val?`Total ${val}kg is at or under the 20kg bar — pure bar.`:'Enter a weight above the bar first.'}</div>`;
+    return;
+  }
+  const sm=plateMath(+val);
+  const star=PLATE_STACK.map(p=>{
+    const n=sm.solve.plates.filter(x=>x===p).length;
+    return n?`<span class="plate-chip"><b>${p}</b> ×${n}</span>`:'';
+  }).join('');
+  body.innerHTML=`
+    <div class="plate-calc-total">${esc(String(val))}kg <span class="plate-calc-side">(${esc(String(sm.load))}kg per side)</span></div>
+    <div class="plate-calc-stack">${star}</div>
+    ${plateStackSvg(sm)}
+    ${sm.solve.remainder>0.001?`<div class="plate-calc-remainder">+${sm.solve.remainder}kg unplatable remainder</div>`:''}
+  `;
+}
+function closePlateCalc(){const p=document.getElementById('plateCalc');if(p){p.style.display='none';p.removeAttribute('data-open-set');}}
+function bindPlateCalc(){
+  const pop=document.getElementById('plateCalc'),cl=document.getElementById('plateClose');
+  if(cl)cl.addEventListener('click',closePlateCalc);
+  const g=document.getElementById('seG');
+  if(g){
+    /* Long-press / right-click on a weight input opens the calculator. */
+    let pressTimer=null;
+    g.addEventListener('touchstart',e=>{
+      const inp=e.target.closest('.set-input[data-f="weight"]');if(!inp)return;
+      pressTimer=setTimeout(()=>{openPlateCalc(+inp.dataset.i,inp);buzz(8);},420);
+    },{passive:true});
+    g.addEventListener('touchend',()=>clearTimeout(pressTimer),{passive:true});
+    g.addEventListener('touchmove',()=>clearTimeout(pressTimer),{passive:true});
+    g.addEventListener('contextmenu',e=>{
+      const inp=e.target.closest('.set-input[data-f="weight"]');if(!inp)return;
+      e.preventDefault();openPlateCalc(+inp.dataset.i,inp);
+    });
+    g.addEventListener('input',e=>{
+      const inp=e.target.closest('.set-input[data-f="weight"]');
+      if(pop&&pop.style.display==='block'&&inp&&+inp.dataset.i===currentPlateTarget){
+        renderPlateCalc(document.getElementById('plateBody'));
+      }
+    });
+  }
+  /* Tap anywhere else closes it — matches the exercise dropdown idiom. */
+  document.addEventListener('click',e=>{
+    if(pop&&pop.style.display==='block'&&!e.target.closest('#plateCalc')&&!e.target.closest('.set-input[data-f="weight"]'))closePlateCalc();
+  });
 }
 
 // Notes are auto-growing textareas: the box expands with the text so
@@ -4822,22 +4955,27 @@ function renderSets(){
   const isL = eMode === 'level';
   if (eMode === 'cardio') { renderCardioSets(g); return; }
   g.innerHTML=`
-    <div style="display:grid;grid-template-columns:30px 1.3fr 1fr 28px;gap:8px;margin-bottom:6px;align-items:center">
-      <div class="set-label" style="text-align:center;color:var(--accent);font-size:0.75rem">Done</div>
+    <div class="set-col-header">
+      <div class="set-label" style="color:var(--accent);font-size:0.75rem">Done</div>
       <div class="set-label" style="text-align:left;padding-left:10px">${isL ? 'Level' : 'Weight'}</div>
       <div class="set-label">Reps</div>
+      <div></div>
       <div></div>
     </div>`;
 
   eSets.forEach((s,i)=>{
     const r=document.createElement('div');r.className=`set-row-container ${s.completed?'completed':''}`;
     const stepVal = isL ? 1 : 2.5;
-    const placeholder = isL ? 'Level' : 'kg';
-    const tags = isL 
+    const gTpl=lastSetTemplate(eEx,i);
+    const placeholder = isL ? (gTpl&&gTpl.weight!==''?String(gTpl.weight):'Level') : (gTpl&&gTpl.weight!==''?String(gTpl.weight):'kg');
+    const repsPh = gTpl&&gTpl.reps!==''&&gTpl.reps!=null ? String(gTpl.reps) : 'reps';
+    const tags = isL
       ? ["Warm-up", "Easy", "Normal", "To failure"]
       : ["Warm-up", "Drop set", "To failure", "Felt heavy"];
     const tagsHtml = tags.map(t => `<button type="button" class="note-tag" data-i="${i}" data-val="${t}">${t}</button>`).join('');
-    
+    const tK=setTypeOf(s),tObj=SET_TYPES.find(t=>t.k===tK)||SET_TYPES[1];
+    const hint=(gTpl&&!s.completed)?`<button type="button" class="set-ghost-chip" data-i="${i}"><span class="set-ghost-label">Last:</span> ${esc(isL?`Level ${gTpl.weight}`:`${gTpl.weight||'?'}kg`)} × ${esc(String(gTpl.reps||'?'))}</button>`:'';
+
     r.innerHTML=`
       <div class="set-grid-main">
         <button class="btn-set-check ${s.completed?'completed':''}" data-i="${i}" aria-label="Toggle set completion">
@@ -4848,7 +4986,8 @@ function renderSets(){
           <input type="number" class="set-input" data-i="${i}" data-f="weight" value="${s.weight||''}" placeholder="${placeholder}" step="${isL ? 1 : 0.5}" inputmode="decimal" autocomplete="off" ${s.completed?'disabled':''}>
           <button class="stepper-btn" data-i="${i}" data-d="${stepVal}">+</button>
         </div>
-        <input type="number" class="set-input" data-i="${i}" data-f="reps" value="${s.reps||''}" placeholder="reps" inputmode="numeric" autocomplete="off" ${s.completed?'disabled':''}>
+        <input type="number" class="set-input" data-i="${i}" data-f="reps" value="${s.reps||''}" placeholder="${repsPh}" inputmode="numeric" autocomplete="off" ${s.completed?'disabled':''}>
+        <button class="set-type-btn ${tObj.exclude?'set-type-excluded':''}" data-i="${i}" data-t="${tK}" title="${esc(tObj.full)}${tObj.exclude?' (not counted)':''}" aria-label="Set type: ${esc(tObj.full)}. Tap to cycle.">${tObj.label}</button>
         <button class="set-del" data-i="${i}" aria-label="Delete set">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -4857,6 +4996,7 @@ function renderSets(){
       </div>
       <div class="set-notes-wrap">
         <textarea class="set-input set-notes-input" data-i="${i}" data-f="notes" rows="1" placeholder="Add note for set ${i+1}..." ${s.completed?'disabled':''}>${esc(s.notes||'')}</textarea>
+        <div class="set-hint-row">${hint}</div>
         <div class="note-tags-row">
           ${tagsHtml}
         </div>
@@ -4864,6 +5004,23 @@ function renderSets(){
     g.appendChild(r);
   });
   g.querySelectorAll('.set-notes-input').forEach(autoGrowNote);
+
+  /* Ghost fill: tapping the "Last: 20kg × 8" chip copies it into the row
+     without completing it — completing is the checkbox's job. */
+  g.querySelectorAll('.set-ghost-chip').forEach(b=>b.addEventListener('click',()=>{
+    const idx=+b.dataset.i,tpl=lastSetTemplate(eEx,idx);if(!tpl)return;
+    eSets[idx].weight=tpl.weight;eSets[idx].reps=tpl.reps;
+    if(tpl.setType)eSets[idx].setType=tpl.setType;
+    renderSets();
+  }));
+
+  /* Set type cycle W→N→D→F. Warm-up marks the row as "not counted" so
+     saveEx and the PR engine can strip it from competition. */
+  g.querySelectorAll('.set-type-btn').forEach(b=>b.addEventListener('click',()=>{
+    const idx=+b.dataset.i;
+    eSets[idx].setType=nextSetType(setTypeOf(eSets[idx]));
+    renderSets();
+  }));
 
   g.querySelectorAll('.stepper-btn').forEach(b=>b.addEventListener('click',e=>{
     const idx=+e.currentTarget.dataset.i,d=parseFloat(e.currentTarget.dataset.d);
@@ -4913,15 +5070,73 @@ function renderSets(){
   g.querySelectorAll('.btn-set-check').forEach(btn => {
     btn.addEventListener('click', e => {
       const idx = +e.currentTarget.dataset.i;
-      eSets[idx].completed = !eSets[idx].completed;
-      if (eSets[idx].completed) {
+      const s=eSets[idx];
+      if(!s.completed){
+        /* One tap on an untouched row means "doing what I did last time":
+           pull the weight/reps ghost in as values first, THEN complete. */
+        const emptyW=(s.weight===''||s.weight==null),emptyR=(s.reps===''||s.reps==null);
+        if(emptyW||emptyR){
+          const tpl=lastSetTemplate(eEx,idx);
+          if(tpl){
+            if(emptyW&&tpl.weight!=='')s.weight=tpl.weight;
+            if(emptyR&&tpl.reps!=='')s.reps=tpl.reps;
+            if(tpl.setType&&!s.setType)s.setType=tpl.setType;
+          }
+        }
+        s.completed=true;
         const restDuration = (timerTotal > 0) ? timerTotal : 90;
         if (typeof window.triggerRestTimer === 'function') {
           window.triggerRestTimer(restDuration);
         }
+        livePRCheck(idx);
+      } else {
+        s.completed=false;
       }
       renderSets();
+      if(s.completed){
+        const rows=g.querySelectorAll('.set-row-container');
+        if(rows[idx+1])setTimeout(()=>rows[idx+1].scrollIntoView({behavior:'smooth',block:'center'}),120);
+      }
     });
+  });
+}
+
+/* Live PR mid-session: builds the same basis as the finish-flow detector
+   (registry + W + this session's in-flight rows for the same exercise,
+   minus the current one). Warm-up sets never qualify. Fires only for the
+   axis clear of everything that came before — and only once per axis per
+   open editor, so tapping the same row's checkbox on/off doesn't spam. */
+let _sessionPRFired={};
+function livePRCheck(completedIdx){
+  if(!eEx)return;
+  const key=canonicalName(eEx);if(!key)return;
+  const basis={weight:0,e1rm:0,volume:0};
+  const reg=prRegistryLoad(key);
+  if(reg){basis.weight=Math.max(0,+reg.weight)||0;basis.e1rm=Math.max(0,+reg.e1rm)||0;basis.volume=Math.max(0,+reg.volume)||0;}
+  (W||[]).forEach(wo=>{if(!wo)return;(wo.exercises||[]).forEach(ex=>{if(canonicalName(ex.name)===key)prBestOf(key,ex.sets,basis);});});
+  /* What has already been committed this session under this name counts —
+     catches chasing your own new record inside one workout. */
+  (SE||[]).forEach(ex=>{if(ex&&canonicalName(ex.name)===key)prBestOf(key,ex.sets,basis);});
+  eSets.forEach((s,i)=>{if(i!==completedIdx&&s.completed){prBestOf(key,[s],basis);}});
+  const s=eSets[completedIdx];
+  if(!s||setTypeExcluded(s))return;
+  const wv=getSetWeightVal(s),r=parseInt(s.reps)||0;
+  if(!(wv>0&&r>0))return;
+  const fresh={weight:wv,e1rm:wv*(1+r/30),volume:wv*r};
+  ['weight','e1rm','volume'].forEach(axis=>{
+    if(fresh[axis]>basis[axis]+1e-9){
+      const fireKey=key+'::'+axis;
+      if(_sessionPRFired[fireKey])return;
+      _sessionPRFired[fireKey]=true;
+      const mark=axis==='volume'?`${fmtStatNum(fresh[axis])} kg total`:`${fresh[axis].toFixed(axis==='weight'?1:0)}kg`;
+      toast(`🏆 New ${PR_KINDS[axis]} — ${key} ${mark}`,'success');
+      try{
+        (window.celebrate||function(){})(document.getElementById('se')||document.body);
+        const chk=document.querySelector(`.btn-set-check[data-i="${completedIdx}"]`);
+        if(chk){chk.classList.remove('pr-pop');void chk.offsetWidth;chk.classList.add('pr-pop');}
+      }catch(_){}
+      buzz([20,50,20,50,40]);
+    }
   });
 }
 
@@ -5016,7 +5231,7 @@ function renderCardioSets(g){
 function saveEx(){
   if(!eEx)return;
   const isCardio=eMode==='cardio';
-  const v=eSets.filter(s=>isCardio?(s.mins||s.km||s.kcal||s.speed||s.incline||s.hr||s.notes):(s.weight||s.reps||s.notes));
+  const v=eSets.filter(s=>isCardio?(s.mins||s.km||s.kcal||s.speed||s.incline||s.hr||s.notes):((s.weight||s.reps||s.notes)&&!setTypeExcluded(s)));
   if(!v.length){toast(isCardio?'Enter at least one interval':'Enter at least one set','error');return;}
   SE.push({
     name:eEx,
@@ -5035,10 +5250,12 @@ function saveEx(){
       weight:s.weight||null,
       reps:s.reps||null,
       notes:s.notes||'',
-      isLevel: eMode === 'level'
+      isLevel: eMode === 'level',
+      ...(s.setType&&s.setType!=='working'?{setType:s.setType}:{})
     }))
   });
   persistSE();
+  _sessionPRFired={};
   
   let isDefault=false;
   for(const exs of Object.values(EXERCISE_LIBRARY)){
@@ -5349,7 +5566,7 @@ function mergeExercises(existing,batch){
 const PR_KINDS={weight:'Heaviest lift',e1rm:'Est. 1-rep max',volume:'Best set volume'};
 function prBestOf(name,sets,best){
   (sets||[]).forEach(s=>{
-    if(!s||isCardioSet(s))return;
+    if(!s||isCardioSet(s)||setTypeExcluded(s))return;
     const wv=getSetWeightVal(s),r=parseInt(s.reps)||0;
     if(wv>0&&wv>best.weight)best.weight=wv;
     if(wv>0&&r>0){
@@ -5761,6 +5978,7 @@ function findG(name){
 
 function getSetWeightVal(s) {
   if (isCardioSet(s)) return 0; // cardio never contributes to lifted volume
+  if (typeof setTypeExcluded==='function'&&setTypeExcluded(s)) return 0; // warm-ups don't compete
   if (s.weight !== null && s.weight !== undefined && s.weight !== '') return parseFloat(s.weight);
   if (s.notes) { const m = s.notes.match(/level\s*(\d+)/i); if (m) return parseFloat(m[1]); }
   return 0;
@@ -7117,6 +7335,20 @@ function bindTimer() {
   });
 
   document.addEventListener('click',e=>{const btn=e.target.closest('.btn-timer-chip');if(btn){start(parseInt(btn.dataset.sec));}});
+  /* −15s / +30s adjust the countdown mid-rest or re-arm before the next
+     set. Keeps `timerTotal` honest so the ring shows the right fraction. */
+  const adjustTimer=d=>{
+    if(timerRunning&&timerEndTime){
+      const remaining=Math.max(0,Math.ceil((timerEndTime-Date.now())/1000));
+      if(remaining+d<=0){stopTimer(true);return;}
+      timerEndTime+=d*1000;timerSecs+=d;timerTotal=Math.max(1,timerTotal+d);updateDisplay();
+    }else{
+      timerSecs=Math.max(15,timerSecs+d);timerTotal=Math.max(15,timerTotal+d);updateDisplay();
+    }
+  };
+  const adjM=document.getElementById('gtMinus15'),adjP=document.getElementById('gtPlus30');
+  if(adjM)adjM.addEventListener('click',()=>adjustTimer(-15));
+  if(adjP)adjP.addEventListener('click',()=>adjustTimer(30));
   toggle.addEventListener('click',()=>{if(timerRunning)stopTimer();else if(timerSecs>0)resume();else start(60);});
   reset.addEventListener('click',()=>{if(timerInterval)clearInterval(timerInterval);timerInterval=null;timerEndTime=0;timerSecs=timerTotal;timerRunning=false;timerSound.disarm();updateDisplay();desc.textContent="Reset";playIcon.style.display='block';pauseIcon.style.display='none';});
   close.addEventListener('click',()=>{if(timerInterval)clearInterval(timerInterval);timerInterval=null;timerRunning=false;timerEndTime=0;timerSecs=0;timerTotal=0;timerSound.disarm();bar.classList.remove('visible');bar.classList.add('hidden');document.querySelectorAll('.btn-timer-chip').forEach(btn=>btn.classList.remove('active'));});

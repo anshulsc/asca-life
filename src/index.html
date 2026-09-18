@@ -513,6 +513,17 @@
           </div>
         </div>
 
+        <!-- Plate calculator popup (anchored near the weight field by JS) -->
+        <div class="plate-calc" id="plateCalc" role="dialog" aria-label="Plate calculator" style="display:none">
+          <div class="plate-calc-head">
+            <span class="plate-calc-title">Plate Calculator</span>
+            <button class="btn-close" id="plateClose" aria-label="Close plate calculator">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="plate-calc-body" id="plateBody"></div>
+        </div>
+
         <!-- Active Set Editor -->
         <div class="editor card glass-card" id="se">
           <div class="editor-header">
@@ -527,13 +538,10 @@
             </button>
           </div>
           
-          <!-- Quick Rest Timer Presets in Editor -->
+          <!-- Rest presets moved to the floating bar permanently — one
+               timer surface. The label stays to remind where it lives. -->
           <div class="editor-timer-row">
-            <span class="editor-timer-label">Rest:</span>
-            <button class="btn-timer-chip" data-sec="60">60s</button>
-            <button class="btn-timer-chip" data-sec="90">90s</button>
-            <button class="btn-timer-chip" data-sec="120">2m</button>
-            <button class="btn-timer-chip" data-sec="180">3m</button>
+            <span class="editor-timer-label">Rest runs in the floating bar — starts itself when a set is checked ✓</span>
           </div>
           
           <div id="seG" class="sets-grid-container"></div>
@@ -1451,6 +1459,10 @@
         <button class="btn-timer-chip" data-sec="90">90s</button>
         <button class="btn-timer-chip" data-sec="120">2m</button>
         <button class="btn-timer-chip" data-sec="180">3m</button>
+      </div>
+      <div class="timer-adjs">
+        <button class="btn-timer-adj" id="gtMinus15">−15</button>
+        <button class="btn-timer-adj" id="gtPlus30">+30</button>
       </div>
       <div class="timer-controls">
         <button class="btn-timer-action" id="gtToggle" aria-label="Play or Pause rest timer">

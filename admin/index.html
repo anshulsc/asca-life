@@ -1047,9 +1047,59 @@ select.input-field {
 
 .set-grid-main {
   display: grid;
-  grid-template-columns: 30px 1.4fr 1.1fr 30px;
+  grid-template-columns: 30px 1.4fr 1.1fr 24px 30px;
   gap: 8px; align-items: center;
 }
+/* Column header mirrors .set-grid-main so "Weight"/"Reps" sit over their
+   inputs now that the grid carries a third interactable column. */
+.set-col-header {
+  display: grid;
+  grid-template-columns: 30px 1.4fr 1.1fr 24px 30px;
+  gap: 8px; margin-bottom: 6px; align-items: center; text-align: center;
+}
+
+/* ── Set-type chip (W/N/D/F) ─────────────────────────────────
+   One tap cycles the set's purpose. Warm-up is visually quarantined so
+   the athlete sees "this one doesn't count" before it hits the math. */
+.set-type-btn {
+  width: 24px; height: 32px; border-radius: var(--r-xs);
+  background: rgba(var(--wht), 0.03);
+  border: 1px solid var(--border-light);
+  color: var(--t-3); font-family: var(--ff-mono);
+  font-size: 0.6rem; font-weight: 700;
+  cursor: pointer; transition: var(--t-ui);
+  display: flex; align-items: center; justify-content: center;
+  padding: 0;
+}
+.set-type-btn:active { transform: scale(0.9); }
+@media (hover: hover) and (pointer: fine) {
+  .set-type-btn:hover { color: var(--t-1); border-color: var(--t-3); }
+}
+.set-type-excluded {
+  background: rgba(var(--wht), 0.015);
+  color: var(--c-orange); border-color: rgba(255, 159, 10, 0.3);
+  border-style: dashed; opacity: 0.85;
+}
+
+/* ── Ghost "Last:" chip ──────────────────────────────────────
+   The one-tap completion prompt. Lives inside .set-notes-wrap so it
+   shares the off-side indent; tucks into its own row above note tags. */
+.set-hint-row { display: flex; margin-top: 3px; min-height: 0; }
+.set-ghost-chip {
+  background: rgba(var(--accent-rgb), 0.06);
+  border: 1px dashed rgba(var(--accent-rgb), 0.25);
+  color: var(--t-3);
+  padding: 2px 8px; border-radius: var(--r-full);
+  font-family: var(--ff-mono); font-size: 0.62rem; font-weight: 600;
+  cursor: pointer; transition: var(--t-ui);
+  white-space: nowrap; outline: none;
+  display: inline-flex; gap: 4px; align-items: center;
+}
+.set-ghost-chip:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) {
+  .set-ghost-chip:hover { background: rgba(var(--accent-rgb), 0.12); color: var(--t-1); border-color: rgba(var(--accent-rgb), 0.4); }
+}
+.set-ghost-label { color: var(--accent); font-weight: 800; font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.06em; }
 
 .set-notes-wrap { padding-left: 38px; padding-right: 38px; margin-top: 4px; }
 
@@ -3008,6 +3058,53 @@ body.session-open .global-timer-bar { z-index: 85; }
   }
 }
 .btn-timer-chip.active { background: var(--accent-bg); color: var(--accent); border-color: var(--accent); box-shadow: 0 0 10px var(--accent-bg); }
+
+.timer-adjs { display: flex; gap: 3px; }
+.btn-timer-adj {
+  padding: 4px 6px; border-radius: var(--r-s);
+  background: var(--glass-2);
+  border: 1px solid var(--border-light);
+  color: var(--t-2); font-size: 0.62rem; font-weight: 700;
+  cursor: pointer; transition: var(--t-ui-slow); outline: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn-timer-adj:hover { background: var(--glass-3); color: var(--t-1); }
+}
+.btn-timer-adj:active { transform: scale(0.92); }
+
+/* ── Plate Calculator popup ──────────────────────────────────
+   Pure-math helper that pops next to the weight field on long-press /
+   right-click. No library — results are a static "per side: plates" +
+   an inline SVG bar diagram. */
+.plate-calc {
+  position: fixed; z-index: 95; min-width: 220px; max-width: 280px;
+  background: linear-gradient(180deg, rgba(var(--wht), 0.1) 0%, rgba(var(--wht), 0.04) 100%);
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.4)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.4)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  border: 1px solid rgba(var(--wht), 0.15);
+  border-radius: var(--r-m);
+  padding: 12px 14px;
+  box-shadow: 0 12px 40px rgba(var(--blk), 0.55), inset 0 1px 0 rgba(var(--wht), 0.2);
+  animation: plate-pop 0.22s var(--spring);
+}
+@keyframes plate-pop { from { opacity: 0; transform: scale(0.92) translateY(4px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+.plate-calc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.plate-calc-title { font-family: var(--ff-title); font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--t-2); }
+.plate-calc-title + .btn-close { width: 20px; height: 20px; min-width: 20px; }
+.plate-calc-total { font-family: var(--ff-mono); font-size: 1.1rem; font-weight: 700; color: var(--t-1); margin-bottom: 6px; }
+.plate-calc-side { font-size: 0.68rem; color: var(--t-3); font-weight: 500; margin-left: 4px; }
+.plate-calc-stack { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+.plate-chip {
+  background: rgba(var(--wht), 0.05); border: 1px solid var(--border-light);
+  border-radius: var(--r-s); padding: 3px 8px;
+  font-family: var(--ff-mono); font-size: 0.66rem; font-weight: 600; color: var(--t-2);
+}
+.plate-chip b { color: var(--accent); font-weight: 800; }
+.plate-svg { width: 100%; height: auto; display: block; margin: 4px 0 2px; overflow: visible; }
+.plate-svg-bar { fill: rgba(var(--wht), 0.35); }
+.plate-svg-plate { fill: rgba(var(--wht), 0.65); stroke: rgba(var(--wht), 0.18); stroke-width: 0.4; }
+.plate-calc-remainder { font-size: 0.62rem; color: var(--c-orange); font-weight: 600; margin-top: 4px; }
+.plate-calc-empty { font-size: 0.72rem; color: var(--t-3); line-height: 1.5; }
 
 .timer-controls { display: flex; gap: 4px; }
 

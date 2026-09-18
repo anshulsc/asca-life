@@ -32,6 +32,7 @@ const ChallengeEngine = (() => {
 
   function setWeight(s) {
     if (!s || isCardioSet(s)) return 0;
+    if (s.setType === 'warmup') return 0; // mirror app.js setTypeExcluded
     const w = parseFloat(s.weight);
     if (!isNaN(w)) return w;
     const m = /level\s*(\d+)/i.exec(s.notes || '');
