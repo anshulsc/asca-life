@@ -2578,22 +2578,24 @@ canvas { width: 100%; height: 100%; }
   position: absolute;
   left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%); /* geometric center of the bar */
-  width: 56px; height: 56px;
+  transform: translate(-50%, -58%);
+  width: 60px; height: 60px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent), var(--accent-hi));
+  background: linear-gradient(135deg, var(--accent-hi), var(--accent));
   color: var(--bg);
-  box-shadow: 0 6px 18px rgba(var(--accent-rgb), 0.45),
-              inset 0 1px 0 rgba(var(--wht), 0.35);
+  box-shadow: 0 8px 22px rgba(var(--accent-rgb), 0.55),
+              0 2px 8px rgba(var(--blk), 0.5),
+              inset 0 1px 0 rgba(var(--wht), 0.4);
   transition: var(--t-ui-slow);
-  z-index: 3; /* above nav-lens and peer icons */
+  z-index: 3;
 }
+.bot-btn-hero:active { transform: translate(-50%, -58%) scale(var(--press-scale)); }
 .bot-btn-hero svg {
   width: 24px; height: 24px;
   color: var(--bg);
   filter: drop-shadow(0 1px 1px rgba(var(--wht), 0.25));
 }
-.bot-btn-hero:active { transform: translate(-50%, -50%) scale(var(--press-scale)); }
+.bot-btn-hero:active { transform: translate(-50%, -58%) scale(var(--press-scale)); }
 
 /* ── Workout Session Overlay — Home's ＋ target ─────────────────
    position:fixed inset:0 (viewport-fixed; the phone frame carries a
