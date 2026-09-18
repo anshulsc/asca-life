@@ -2484,6 +2484,20 @@ canvas { width: 100%; height: 100%; }
 .user-row .btn-secondary { border: 1px solid rgba(var(--wht),0.15); }
 
 /* ── Apple Liquid Glass Tab Bar — Floating Pill ──────────── */
+/* ＋ is absolutely positioned (dead-center regardless of tab count). Its
+   grid slot is reserved via explicit track assignment on the tab buttons:
+   home=1, social=2, [hole]=3, insights=4, profile=5. Arc sits in track 3
+   when enrolled and the whole row re-centers via grid-template change. */
+.bottom-bar > [data-v="Home"] { grid-column: 1; grid-row: 1; }
+.bottom-bar > [data-v="Soc"]  { grid-column: 2; grid-row: 1; }
+.bottom-bar > [data-v="Ana"]  { grid-column: 4; grid-row: 1; }
+.bottom-bar > [data-v="Set"]  { grid-column: 5; grid-row: 1; }
+.bottom-bar > [data-v="Arc"]  { grid-column: 2; grid-row: 1; }
+/* Arc enrolled: shift Social left, Arc slots in at 2, others keep spots */
+.bottom-bar:has(.arc-tab-btn:not([hidden])) > [data-v="Soc"]  { grid-column: 3; }
+.bottom-bar:has(.arc-tab-btn:not([hidden])) > [data-v="Ana"]  { grid-column: 5; }
+.bottom-bar:has(.arc-tab-btn:not([hidden])) > [data-v="Set"]  { grid-column: 6; }
+/* Arc-hidden: 4 tabs + hole; Arc shown: 5 tabs + hole */
 .bottom-bar {
   position: absolute;
   bottom: calc(10px + var(--sab));
@@ -2495,9 +2509,7 @@ canvas { width: 100%; height: 100%; }
   border: 1px solid rgba(var(--wht), 0.12);
   border-radius: var(--r-xl);
   display: grid;
-  /* ＋ is out-of-flow, positioned absolute; the 1.6fr center column is its
-     reserved hole. Arc hidden → 4 tabs; enrolled → 5, grid via :has(). */
-  grid-template-columns: 1fr 1fr 1.6fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1.4fr 1fr 1fr;
   align-items: center;
   column-gap: 2px;
   padding: 0 8px;
@@ -2506,9 +2518,8 @@ canvas { width: 100%; height: 100%; }
               inset 0 0 0 0.5px rgba(var(--wht), 0.1),
               0 8px 32px rgba(var(--blk), 0.55);
 }
-/* Arc enrolled = 5 view tabs around the hero: widen the hole, symmetric flanks */
 .bottom-bar:has(.arc-tab-btn:not([hidden])) {
-  grid-template-columns: 1fr 1fr 1fr 1.6fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr 1.4fr 1fr 1fr;
 }
 
 .bot-btn {
