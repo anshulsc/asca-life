@@ -694,13 +694,79 @@ function svClose(){
   document.body.style.overflow='';
 }
 
+/* ── Pull-to-refresh ───────────────────────────────────────
+   Available on any tab once the scroll container is at top. Show a thin
+   reveal-ring in the page header; cross the threshold → buzz + run the
+   tab's refresh path. Single global binding (one per tab active at a
+   time), uses session-state flags so only ONE pull runs at a time. */
+let _ptrState = { active: false, startY: 0, pulling: false, depth: 0, threshold: 72 };
+const PTR_TABS = {
+  Soc:  { onPull: () => Promise.resolve(syncFriends(false)), msg: 'Syncing your friends…' },
+  Hist: { onPull: async () => { save(); renderHist(); }, msg: 'History refreshed' },
+};
+let _currTab='Home';
+function bindPullToRefresh(){
+  /* Tab name comes from bindTabs' handler — mirror it off .on so other
+     re-render paths (svClose etc.) stay consistent. */
+  const viewsEl=document.querySelector('.views-container');
+  if(!viewsEl)return;
+  const ring=document.createElement('div');
+  ring.className='ptr-ring';
+  ring.innerHTML=`<div class="ptr-ring-fill"></div>`;
+  document.body.appendChild(ring);
+
+  let isScrollTop=false;
+  viewsEl.addEventListener('scroll',()=>{isScrollTop=viewsEl.scrollTop<=8;},{passive:true});
+
+  document.addEventListener('touchstart',e=>{
+    if(!isScrollTop||_ptrState.active)return;
+    const target=e.target.closest('.view.on');
+    if(!target)return;
+    const tab=PTR_TABS[_currTab];if(!tab)return;
+    _ptrState.active=true;_ptrState.startY=e.touches[0].clientY;_ptrState.depth=0;
+  },{passive:true});
+
+  document.addEventListener('touchmove',e=>{
+    if(!_ptrState.active)return;
+    const dy=e.touches[0].clientY-_ptrState.startY;
+    if(dy<0){_ptrState.active=false;ring.classList.remove('visible','past');return;}
+    _ptrState.depth=Math.min(dy,_ptrState.threshold*2);
+    const p=_ptrState.depth/_ptrState.threshold;
+    ring.style.transform=`translateY(${Math.min(_ptrState.depth*0.5,44)}px)`;
+    ring.classList.add('visible');
+    ring.classList.toggle('past',p>=1);
+    if(dy>_ptrState.threshold)(buzz(6));
+  },{passive:true});
+
+  document.addEventListener('touchend',async e=>{
+    if(!_ptrState.active)return;
+    const tab=PTR_TABS[_currTab];
+    _ptrState.active=false;
+    if(!tab){ring.classList.remove('visible','past');ring.style.transform='';return;}
+    if(_ptrState.depth>=_ptrState.threshold){
+      buzz([10,30,10]);
+      ring.classList.add('running');
+      try{ await tab.onPull(); toast(tab.msg,'success'); }
+      catch(_err){ toast('Sync failed','error'); }
+      finally{
+        setTimeout(()=>{ring.classList.remove('visible','past','running');ring.style.transform='';},420);
+      }
+    }else{
+      ring.classList.remove('visible','past');ring.style.transform='';
+    }
+    _ptrState.depth=0;
+  },{passive:true});
+}
+
 function bindTabs(){
+  bindPullToRefresh();
   const navs = document.querySelectorAll('.nav-btn, .bot-btn:not(.bot-btn-hero)');
   navs.forEach(b=>{
     b.addEventListener('click',()=>{
       buzz(8); // tab switch — the nav-lens lands with a physical tick
       navs.forEach(x=>x.classList.remove('on'));
       const tgt = b.dataset.v;
+      _currTab=tgt;
       document.querySelectorAll(`[data-v="${tgt}"]`).forEach(x=>x.classList.add('on'));
       document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
       const v=document.getElementById('v'+tgt);
@@ -4410,7 +4476,7 @@ function renderActivityFeed(allRows){
   feed.sort((a,b)=>b.w.date.localeCompare(a.w.date));
   if(!feed.length){feedLabel.style.display='none';feedCard.style.display='none';return;}
   feedLabel.style.display='block';feedCard.style.display='block';
-  recent.innerHTML=feed.slice(0,12).map(({id,name,w})=>{
+  recent.innerHTML=feed.slice(0,40).map(({id,name,w})=>{
     const sets=w.exercises.reduce((s,e)=>s+e.sets.length,0);
     const vol=w.exercises.reduce((s,e)=>s+e.sets.reduce((ss,x)=>ss+((getSetWeightVal(x))*(x.reps||0)),0),0);
     const cd=workoutCardio(w);
@@ -4439,7 +4505,7 @@ function renderActivityFeed(allRows){
           ${cd.kcal>0?`<div class="feed-stat feed-stat-cardio"><b>${cd.kcal}</b><span>kcal</span></div>`:''}
           <div class="feed-stat"><b>${sets}</b><span>sets</span></div>
           <div class="feed-stat"><b>${w.exercises.length}</b><span>exercise${w.exercises.length===1?'':'s'}</span></div>
-          ${prName?`<span class="pr-pill" title="Top lift of all time · ${esc(prName)}">🏆 New PR · ${esc(prName)}</span>`:''}
+          ${prName?`<span class="pr-pill feed-stat-pr" title="Top lift of all time · ${esc(prName)}">🏆 New PR · ${esc(prName)}</span>`:''}
         </div>
         ${route?`<div class="feed-route"><span class="feed-route-dot" style="background:${dtc}"></span>${esc(route)}${w.exercises.length>3?` +${w.exercises.length-3}`:''}</div>`:''}
         <div class="feed-detail" style="display:none">${detail}</div>
@@ -4618,9 +4684,27 @@ function renderFriendsCard(){
   const syncEl=document.getElementById('friendLastSync');
   if(!ids.length){
     if(syncEl)syncEl.textContent='Not synced yet';
-    document.getElementById('friendCompare').innerHTML='<p class="friend-empty">Tap Sync to load the people you follow.</p>';
+    /* Empty friends cache + connected remote = first fetch in flight. Show
+       real skeletons (not blank space) so the tab doesn't flash "no data"
+       before the pull lands. The guardian in this flow is interactive
+       sync; on auto-load, these sit for as short as the network allows. */
+    if(hasRemote){
+      const fc=document.getElementById('friendCompare');
+      if(fc&&fc.dataset.skel!=='1'){fc.dataset.skel='1';fc.innerHTML='<div class="skel skel-podium"></div><div class="skel skel-feed-row"></div>'.repeat(2);}
+      const fr=document.getElementById('friendRecent');
+      const fl=document.getElementById('feedLabel'),fcard=document.getElementById('feedCard');
+      if(fl)fl.style.display='block';
+      if(fcard)fcard.style.display='block';
+      if(fr&&fr.dataset.skel!=='1'){fr.dataset.skel='1';fr.innerHTML='<div class="skel skel-feed-row"></div><div class="skel skel-feed-row"></div><div class="skel skel-feed-row"></div>';}
+    }else{
+      document.getElementById('friendCompare').innerHTML='<p class="friend-empty">Tap Sync to load the people you follow.</p>';
+    }
     document.getElementById('lbPodium').innerHTML='';return;
   }
+  /* Real data arrived — clear any skeleton state so the next render
+     replaces, not compounds. */
+  const fc=document.getElementById('friendCompare'); if(fc) delete fc.dataset.skel;
+  const fr=document.getElementById('friendRecent'); if(fr) delete fr.dataset.skel;
   if(syncEl)syncEl.textContent=`Updated ${timeAgo(cache.ts)}`;
   const allRows=buildLBRows();
   renderPodium(allRows,_lbMetric);renderLeaderboardRows(allRows,_lbMetric);

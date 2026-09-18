@@ -6208,6 +6208,58 @@ html, body { max-width: 100%; overflow-x: hidden; }
   100% { background-position: -120% 0; }
 }
 
+/* Generic skeleton shapes — clone of the Arc recipe so every async surface
+   (feed, leaderboard, heatmaps) gets the same treatment while data flows in.
+   Add `.skel` to any block element; height variants via classes below. */
+.skel {
+  background: linear-gradient(90deg,
+    rgba(var(--wht), 0.04) 0%, rgba(var(--wht), 0.09) 40%,
+    rgba(var(--wht), 0.04) 80%);
+  background-size: 220% 100%;
+  animation: arcSkel 1.3s ease-in-out infinite;
+  border-radius: var(--r-s);
+}
+.skel-txt { height: 12px; }
+.skel-card { height: 120px; }
+.skel-podium { height: 88px; }
+.skel + .skel { margin-top: 8px; }
+.skel-feed-row { height: 92px; }
+.skel:nth-child(2) { animation-delay: 0.12s; }
+.skel:nth-child(3) { animation-delay: 0.24s; }
+.skel:nth-child(4) { animation-delay: 0.36s; }
+.skel:nth-child(5) { animation-delay: 0.48s; width: 92%; }
+
+/* ── Pull-to-refresh indicator ─────────────────────────────
+   Thin top-edge accent ring that slides down with the finger pull.
+   `past` = crossed threshold; `running` = swap in the shimmer while the
+   refresh is in flight so the user knows the pull wasn't a no-op. */
+.ptr-ring {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 3px; z-index: 100;
+  background: rgba(var(--accent-rgb), 0.22);
+  transform: translateY(-100%);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+.ptr-ring.visible { opacity: 1; }
+.ptr-ring-fill {
+  display: block; height: 100%; width: 34%;
+  background: var(--accent);
+  margin: 0 auto; border-radius: 0 0 4px 4px;
+  box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.5);
+  transform-origin: center;
+  transition: width 0.18s ease;
+}
+.ptr-ring.past .ptr-ring-fill { width: 88%; }
+.ptr-ring.running .ptr-ring-fill {
+  animation: ptrDash 1s ease-in-out infinite;
+}
+@keyframes ptrDash {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
+}
+
 /* Focus: a visible ring for keyboard users without changing the touch
    experience. Chromium/Safari both honor :focus-visible — taps don't
    trigger it. Offset-only, no forced border-radius: the outline follows
