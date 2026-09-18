@@ -275,18 +275,19 @@
            radial-gradient(100% 50% at 85% 5%, rgba(var(--wht), 0.035) 0%, transparent 65%),
            radial-gradient(140% 70% at 50% 110%, rgba(var(--wht), 0.02) 0%, transparent 60%);
 
-  /* Aurora blobs — now just grey light, not colour. Present enough that
-     the background isn't flat, quiet enough that it reads as restraint. */
-  --blob-1: 200, 206, 214;  --blob-1-a: 0.14;
-  --blob-2: 150, 155, 163;  --blob-2-a: 0.12;
-  --blob-3: 170, 175, 182;  --blob-3-a: 0.08;
-  --blob-4: 90, 96, 105;    --blob-4-a: 0.14;
+  /* Aurora blobs — quieter in winter: just enough presence that the
+     background isn't flat, but not a nebula. Muted further from prior. */
+  --blob-1: 200, 206, 214;  --blob-1-a: 0.10;
+  --blob-2: 150, 155, 163;  --blob-2-a: 0.09;
+  --blob-3: 170, 175, 182;  --blob-3-a: 0.06;
+  --blob-4: 90, 96, 105;    --blob-4-a: 0.11;
 
-  /* Activity ramp — grey at low intensity, near-white at the top. */
-  --hm-1: rgba(var(--wht), 0.20);
-  --hm-2: rgba(var(--wht), 0.40);
-  --hm-3: rgba(var(--wht), 0.65);
-  --hm-4: rgba(var(--wht), 0.95);
+  /* Activity ramp — burrowed: low intensity stays quiet, high intensity hits
+     proper winter-white instead of grey-on-grey */
+  --hm-1: rgba(var(--wht), 0.16);
+  --hm-2: rgba(var(--wht), 0.34);
+  --hm-3: rgba(var(--wht), 0.58);
+  --hm-4: rgba(var(--wht), 0.92);
 
   /* c-green / c-cyan are left at their classic values on purpose: they
      colour-code workout day-types and muscle groups elsewhere in the app
@@ -2654,6 +2655,17 @@ canvas { width: 100%; height: 100%; }
   .start-workout-cta-sub { font-size: 0.62rem; margin-top: 1px; }
   .start-workout-cta .btn { padding: 9px 13px; font-size: 0.72rem; white-space: nowrap; }
   .start-workout-cta .btn-icon { font-size: 1rem; }
+}
+/* Winter: the app is monochrome, so give this one card a quiet ember
+   accent — reads as "do this now" without breaking the season. */
+[data-theme="winter"] .start-workout-cta {
+  border-color: rgba(var(--arc-ember-rgb), 0.4);
+  box-shadow: var(--elev-1), 0 0 0 0.5px rgba(var(--arc-ember-rgb), 0.08),
+              0 0 20px rgba(var(--arc-ember-rgb), 0.06);
+}
+[data-theme="winter"] .start-workout-cta .btn-primary {
+  background: linear-gradient(135deg, var(--wht) 0%, color-mix(in srgb, var(--wht) 60%, var(--blk)) 100%);
+  color: var(--blk);
 }
 
 @keyframes glassTabPop {
