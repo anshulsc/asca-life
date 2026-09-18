@@ -7576,14 +7576,12 @@ function getMusclesForExercise(exName, dayType = '') {
 }
 
 function getAnatomySvg(view, muscleLevels = {}) {
-  const getLevelClass = (m) => `m-level-${muscleLevels[m] || 0}`;
-  /* Optional freshness overlay mode: pass `{freshness: {chest:'fresh',…}}`
-     in muscleLevels-freshness to swap m-level-* for m-fresh/m-recovering/
-     m-fatigued. Default behavior (no freshness key) is unchanged. */
+  /* Level-vs-freshness lane switch. Default: emit m-level-N classes keyed
+     off muscleLevels[group]. If an __freshness map is attached, emit the
+     state classes (m-fresh / m-recovering / m-fatigued) instead — same
+     driver, different semantic lane. */
   const freshness=muscleLevels.__freshness;
-  const getClass=(m)=>freshness?`m-${freshness[m]||'fresh'}`:getLevelClass(m);
-  const getDm=(m)=>`data-muscle="${m}"`;
-  const pm=(m,d)=>`<path class="muscle-path ${getClass(m)}" ${getDm(m)} d="${d}" />`;
+  const getClass=(m)=>freshness?`m-${freshness[m]||'fresh'}`:'m-level-'+(muscleLevels[m]||0);
   const defsHtml = `
     <defs>
       <linearGradient id="gradL0" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -7620,48 +7618,48 @@ function getAnatomySvg(view, muscleLevels = {}) {
     return `<svg class="anatomy-svg" viewBox="0 0 100 200">${defsHtml}
         <ellipse class="anatomy-base" cx="50" cy="18" rx="7" ry="9" filter="url(#innerBevel)"/>
         <path class="anatomy-base" d="${bodySilhouette}" filter="url(#innerBevel)"/>
-        <path class="muscle-path ${getLevelClass('chest')}" d="M48 37 L38 37 C35 37, 34 40, 34 44 C34 47, 39 48, 48 45 Z" />
-        <path class="muscle-path ${getLevelClass('chest')}" d="M52 37 L62 37 C65 37, 66 40, 66 44 C66 47, 61 48, 52 45 Z" />
-        <path class="muscle-path ${getLevelClass('abs')}" d="M49 48 L42 48 C41 52, 41 53, 42 53 L49 53 Z" />
-        <path class="muscle-path ${getLevelClass('abs')}" d="M51 48 L58 48 C59 52, 59 53, 58 53 L51 53 Z" />
-        <path class="muscle-path ${getLevelClass('abs')}" d="M49 55 L41 55 C41 59, 41 60, 42 60 L49 60 Z" />
-        <path class="muscle-path ${getLevelClass('abs')}" d="M51 55 L59 55 C59 59, 59 60, 58 60 L51 60 Z" />
-        <path class="muscle-path ${getLevelClass('abs')}" d="M49 62 L41 62 C41 66, 42 67, 43 67 L49 67 Z" />
-        <path class="muscle-path ${getLevelClass('abs')}" d="M51 62 L59 62 C59 66, 58 67, 57 67 L51 67 Z" />
-        <path class="muscle-path ${getLevelClass('abs')}" d="M43 69 L57 69 L55 80 L45 80 Z" />
-        <path class="muscle-path ${getLevelClass('delts')}" d="M37 35 C32 35, 29 37, 28 43 C28 47, 30 50, 33 50 C36 47, 37 42, 37 35 Z" />
-        <path class="muscle-path ${getLevelClass('delts')}" d="M63 35 C68 35, 71 37, 72 43 C72 47, 70 50, 67 50 C64 47, 63 42, 63 35 Z" />
-        <path class="muscle-path ${getLevelClass('biceps')}" d="M31 48 C29 51, 27 56, 27 62 C28 64, 30 64, 32 62 C33 56, 33 51, 31 48 Z" />
-        <path class="muscle-path ${getLevelClass('biceps')}" d="M69 48 C71 51, 73 56, 73 62 C72 64, 70 64, 68 62 C67 56, 67 51, 69 48 Z" />
-        <path class="muscle-path ${getLevelClass('forearms')}" d="M26 67 C24 72, 22 80, 22 88 C24 89, 26 89, 27 86 C28 80, 29 72, 29 67 Z" />
-        <path class="muscle-path ${getLevelClass('forearms')}" d="M74 67 C76 72, 78 80, 78 88 C76 89, 74 89, 73 86 C72 80, 71 72, 71 67 Z" />
-        <path class="muscle-path ${getLevelClass('quads')}" d="M37 86 C35 96, 35 112, 37 122 C39 123, 40 123, 41 122 C41 112, 40 96, 38 86 Z" />
-        <path class="muscle-path ${getLevelClass('quads')}" d="M40 88 C40 98, 41 110, 42 122 C44 122, 45 120, 45 115 C45 105, 43 96, 41 88 Z" />
-        <path class="muscle-path ${getLevelClass('quads')}" d="M63 86 C65 96, 65 112, 63 122 C61 123, 60 123, 59 122 C59 112, 60 96, 62 86 Z" />
-        <path class="muscle-path ${getLevelClass('quads')}" d="M60 88 C60 98, 59 110, 58 122 C56 122, 55 120, 55 115 C55 105, 57 96, 59 88 Z" />
-        <path class="muscle-path ${getLevelClass('calves')}" d="M38 132 C37 142, 38 156, 39 170 C40 170, 42 170, 42 168 C42 156, 41 142, 40 132 Z" />
-        <path class="muscle-path ${getLevelClass('calves')}" d="M62 132 C63 142, 62 156, 61 170 C60 170, 58 170, 58 168 C58 156, 59 142, 60 132 Z" />
+        <path class="muscle-path ${getClass('chest')}" data-muscle="chest" d="M48 37 L38 37 C35 37, 34 40, 34 44 C34 47, 39 48, 48 45 Z" />
+        <path class="muscle-path ${getClass('chest')}" data-muscle="chest" d="M52 37 L62 37 C65 37, 66 40, 66 44 C66 47, 61 48, 52 45 Z" />
+        <path class="muscle-path ${getClass('abs')}" data-muscle="abs" d="M49 48 L42 48 C41 52, 41 53, 42 53 L49 53 Z" />
+        <path class="muscle-path ${getClass('abs')}" data-muscle="abs" d="M51 48 L58 48 C59 52, 59 53, 58 53 L51 53 Z" />
+        <path class="muscle-path ${getClass('abs')}" data-muscle="abs" d="M49 55 L41 55 C41 59, 41 60, 42 60 L49 60 Z" />
+        <path class="muscle-path ${getClass('abs')}" data-muscle="abs" d="M51 55 L59 55 C59 59, 59 60, 58 60 L51 60 Z" />
+        <path class="muscle-path ${getClass('abs')}" data-muscle="abs" d="M49 62 L41 62 C41 66, 42 67, 43 67 L49 67 Z" />
+        <path class="muscle-path ${getClass('abs')}" data-muscle="abs" d="M51 62 L59 62 C59 66, 58 67, 57 67 L51 67 Z" />
+        <path class="muscle-path ${getClass('abs')}" data-muscle="abs" d="M43 69 L57 69 L55 80 L45 80 Z" />
+        <path class="muscle-path ${getClass('delts')}" data-muscle="delts" d="M37 35 C32 35, 29 37, 28 43 C28 47, 30 50, 33 50 C36 47, 37 42, 37 35 Z" />
+        <path class="muscle-path ${getClass('delts')}" data-muscle="delts" d="M63 35 C68 35, 71 37, 72 43 C72 47, 70 50, 67 50 C64 47, 63 42, 63 35 Z" />
+        <path class="muscle-path ${getClass('biceps')}" data-muscle="biceps" d="M31 48 C29 51, 27 56, 27 62 C28 64, 30 64, 32 62 C33 56, 33 51, 31 48 Z" />
+        <path class="muscle-path ${getClass('biceps')}" data-muscle="biceps" d="M69 48 C71 51, 73 56, 73 62 C72 64, 70 64, 68 62 C67 56, 67 51, 69 48 Z" />
+        <path class="muscle-path ${getClass('forearms')}" data-muscle="forearms" d="M26 67 C24 72, 22 80, 22 88 C24 89, 26 89, 27 86 C28 80, 29 72, 29 67 Z" />
+        <path class="muscle-path ${getClass('forearms')}" data-muscle="forearms" d="M74 67 C76 72, 78 80, 78 88 C76 89, 74 89, 73 86 C72 80, 71 72, 71 67 Z" />
+        <path class="muscle-path ${getClass('quads')}" data-muscle="quads" d="M37 86 C35 96, 35 112, 37 122 C39 123, 40 123, 41 122 C41 112, 40 96, 38 86 Z" />
+        <path class="muscle-path ${getClass('quads')}" data-muscle="quads" d="M40 88 C40 98, 41 110, 42 122 C44 122, 45 120, 45 115 C45 105, 43 96, 41 88 Z" />
+        <path class="muscle-path ${getClass('quads')}" data-muscle="quads" d="M63 86 C65 96, 65 112, 63 122 C61 123, 60 123, 59 122 C59 112, 60 96, 62 86 Z" />
+        <path class="muscle-path ${getClass('quads')}" data-muscle="quads" d="M60 88 C60 98, 59 110, 58 122 C56 122, 55 120, 55 115 C55 105, 57 96, 59 88 Z" />
+        <path class="muscle-path ${getClass('calves')}" data-muscle="calves" d="M38 132 C37 142, 38 156, 39 170 C40 170, 42 170, 42 168 C42 156, 41 142, 40 132 Z" />
+        <path class="muscle-path ${getClass('calves')}" data-muscle="calves" d="M62 132 C63 142, 62 156, 61 170 C60 170, 58 170, 58 168 C58 156, 59 142, 60 132 Z" />
       </svg>`;
   } else {
     return `<svg class="anatomy-svg" viewBox="0 0 100 200">${defsHtml}
         <ellipse class="anatomy-base" cx="50" cy="18" rx="7" ry="9" filter="url(#innerBevel)"/>
         <path class="anatomy-base" d="${bodySilhouette}" filter="url(#innerBevel)"/>
-        <path class="muscle-path ${getLevelClass('back')}" d="M50 27 C47 27, 44 31, 43 35 C45 35, 47 37, 50 48 C53 37, 55 35, 57 35 C56 31, 53 27, 50 27 Z" />
-        <path class="muscle-path ${getLevelClass('back')}" d="M48 37 C42 38, 36 41, 35 48 C35 56, 37 68, 41 72 C44 65, 47 52, 48 37 Z" />
-        <path class="muscle-path ${getLevelClass('back')}" d="M52 37 C58 38, 64 41, 65 48 C65 56, 63 68, 59 72 C56 65, 53 52, 52 37 Z" />
-        <path class="muscle-path ${getLevelClass('back')}" d="M50 49 L43 72 L45 82 L55 82 L57 72 Z" />
-        <path class="muscle-path ${getLevelClass('delts')}" d="M37 35 C32 35, 29 37, 28 43 C28 47, 30 50, 33 50 C36 47, 37 42, 37 35 Z" />
-        <path class="muscle-path ${getLevelClass('delts')}" d="M63 35 C68 35, 71 37, 72 43 C72 47, 70 50, 67 50 C64 47, 63 42, 63 35 Z" />
-        <path class="muscle-path ${getLevelClass('triceps')}" d="M31 48 C29 51, 27 57, 27 63 C28 65, 30 65, 32 63 C33 57, 33 51, 31 48 Z" />
-        <path class="muscle-path ${getLevelClass('triceps')}" d="M69 48 C71 51, 73 57, 73 63 C72 65, 70 65, 68 63 C67 57, 67 51, 69 48 Z" />
-        <path class="muscle-path ${getLevelClass('forearms')}" d="M26 67 C24 72, 22 80, 22 88 C24 89, 26 89, 27 86 C28 80, 29 72, 29 67 Z" />
-        <path class="muscle-path ${getLevelClass('forearms')}" d="M74 67 C76 72, 78 80, 78 88 C76 89, 74 89, 73 86 C72 80, 71 72, 71 67 Z" />
-        <path class="muscle-path ${getLevelClass('hamstrings')}" d="M36 78 C35 83, 38 87, 48 87 C49 83, 49 79, 48 75 C42 75, 37 76, 36 78 Z" />
-        <path class="muscle-path ${getLevelClass('hamstrings')}" d="M64 78 C65 83, 62 87, 52 87 C51 83, 51 79, 52 75 C58 75, 63 76, 64 78 Z" />
-        <path class="muscle-path ${getLevelClass('hamstrings')}" d="M37 89 C36 100, 36 114, 38 124 C40 125, 42 125, 43 124 C44 114, 44 100, 43 89 Z" />
-        <path class="muscle-path ${getLevelClass('hamstrings')}" d="M63 89 C64 100, 64 114, 62 124 C60 125, 58 125, 57 124 C56 114, 56 100, 57 89 Z" />
-        <path class="muscle-path ${getLevelClass('calves')}" d="M37 132 C35 142, 36 156, 38 170 C39 172, 41 172, 42 170 C42 156, 41 142, 39 132 Z" />
-        <path class="muscle-path ${getLevelClass('calves')}" d="M63 132 C65 142, 64 156, 62 170 C61 172, 59 172, 58 170 C58 156, 59 142, 61 132 Z" />
+        <path class="muscle-path ${getClass('back')}" data-muscle="back" d="M50 27 C47 27, 44 31, 43 35 C45 35, 47 37, 50 48 C53 37, 55 35, 57 35 C56 31, 53 27, 50 27 Z" />
+        <path class="muscle-path ${getClass('back')}" data-muscle="back" d="M48 37 C42 38, 36 41, 35 48 C35 56, 37 68, 41 72 C44 65, 47 52, 48 37 Z" />
+        <path class="muscle-path ${getClass('back')}" data-muscle="back" d="M52 37 C58 38, 64 41, 65 48 C65 56, 63 68, 59 72 C56 65, 53 52, 52 37 Z" />
+        <path class="muscle-path ${getClass('back')}" data-muscle="back" d="M50 49 L43 72 L45 82 L55 82 L57 72 Z" />
+        <path class="muscle-path ${getClass('delts')}" data-muscle="delts" d="M37 35 C32 35, 29 37, 28 43 C28 47, 30 50, 33 50 C36 47, 37 42, 37 35 Z" />
+        <path class="muscle-path ${getClass('delts')}" data-muscle="delts" d="M63 35 C68 35, 71 37, 72 43 C72 47, 70 50, 67 50 C64 47, 63 42, 63 35 Z" />
+        <path class="muscle-path ${getClass('triceps')}" data-muscle="triceps" d="M31 48 C29 51, 27 57, 27 63 C28 65, 30 65, 32 63 C33 57, 33 51, 31 48 Z" />
+        <path class="muscle-path ${getClass('triceps')}" data-muscle="triceps" d="M69 48 C71 51, 73 57, 73 63 C72 65, 70 65, 68 63 C67 57, 67 51, 69 48 Z" />
+        <path class="muscle-path ${getClass('forearms')}" data-muscle="forearms" d="M26 67 C24 72, 22 80, 22 88 C24 89, 26 89, 27 86 C28 80, 29 72, 29 67 Z" />
+        <path class="muscle-path ${getClass('forearms')}" data-muscle="forearms" d="M74 67 C76 72, 78 80, 78 88 C76 89, 74 89, 73 86 C72 80, 71 72, 71 67 Z" />
+        <path class="muscle-path ${getClass('hamstrings')}" data-muscle="hamstrings" d="M36 78 C35 83, 38 87, 48 87 C49 83, 49 79, 48 75 C42 75, 37 76, 36 78 Z" />
+        <path class="muscle-path ${getClass('hamstrings')}" data-muscle="hamstrings" d="M64 78 C65 83, 62 87, 52 87 C51 83, 51 79, 52 75 C58 75, 63 76, 64 78 Z" />
+        <path class="muscle-path ${getClass('hamstrings')}" data-muscle="hamstrings" d="M37 89 C36 100, 36 114, 38 124 C40 125, 42 125, 43 124 C44 114, 44 100, 43 89 Z" />
+        <path class="muscle-path ${getClass('hamstrings')}" data-muscle="hamstrings" d="M63 89 C64 100, 64 114, 62 124 C60 125, 58 125, 57 124 C56 114, 56 100, 57 89 Z" />
+        <path class="muscle-path ${getClass('calves')}" data-muscle="calves" d="M37 132 C35 142, 36 156, 38 170 C39 172, 41 172, 42 170 C42 156, 41 142, 39 132 Z" />
+        <path class="muscle-path ${getClass('calves')}" data-muscle="calves" d="M63 132 C65 142, 64 156, 62 170 C61 172, 59 172, 58 170 C58 156, 59 142, 61 132 Z" />
       </svg>`;
   }
 }
