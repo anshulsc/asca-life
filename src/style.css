@@ -2538,7 +2538,8 @@ canvas { width: 100%; height: 100%; }
 
 .nav-lens {
   position: absolute;
-  width: 54px;
+  width: 58px;
+  max-width: 62px;         /* never wider than a typical tab, regardless of track */
   height: 44px;
   border-radius: 14px;
   background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.16) 0%, rgba(var(--accent-rgb), 0.06) 100%);

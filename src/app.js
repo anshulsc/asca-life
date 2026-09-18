@@ -492,10 +492,11 @@ function positionNavLens(activeBtn, animate = true) {
   
   const activeLeft = activeBtn.offsetLeft;
   const activeWidth = activeBtn.offsetWidth;
-  // Lens looks best hugging the icon+label column, not spanning the full
-  // tab track — cap at 62px so every tab (Home wide or Arc narrow) reads
-  // identically, and never extends past the track's tap area.
-  const lensWidth = Math.min(62, Math.max(38, activeWidth - 2));
+  // Cap at 54px so the lens hugs the icon+label column, not the grid track.
+  // Track widths vary (small screens widen tabs; ≥1024 sidebar is off-lens),
+  // and letting the lens chase full track width made Home's tile read
+  // noticeably wider than Arc/Social/Insights/Profile.
+  const lensWidth = Math.min(54, Math.max(40, activeWidth - 10));
   const leftPos = activeLeft + (activeWidth - lensWidth) / 2;
   
   if (animate) {
