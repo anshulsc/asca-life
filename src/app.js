@@ -4882,7 +4882,15 @@ function selEx(name){
   }
   
   const se=document.getElementById('se');se.style.display='block';
-  setTimeout(()=>se.scrollIntoView({behavior:'smooth',block:'center'}),80);
+  setTimeout(()=>{
+    /* Only drag the editor into view if it's currently outside the
+       viewport. If the athlete is scrolled down to routines and the
+       editor is already fully visible, leave their place alone —
+       otherwise every exercise pick teleports them back up. */
+    const r=se.getBoundingClientRect();
+    const fullyVisible=r.top>=0&&r.bottom<=window.innerHeight;
+    if(!fullyVisible)se.scrollIntoView({behavior:'smooth',block:'center'});
+  },80);
 }
 
 function renderSegmentToggle() {
