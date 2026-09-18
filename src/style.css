@@ -3371,6 +3371,12 @@ body.session-open .global-timer-bar { z-index: 85; }
   box-shadow: 0 4px 14px rgba(var(--blk), 0.5);
   white-space: nowrap; z-index: 2;
 }
+.profile-score-pill .as-state-label {
+  font-family: var(--ff-title); font-size: 0.62rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.09em;
+  margin-left: 6px;
+  padding-left: 6px; border-left: 1px solid rgba(var(--wht), 0.12);
+}
 .profile-score-pill span {
   font-family: var(--ff-mono); font-size: 0.88rem; font-weight: 800;
   color: #FFB25A; letter-spacing: -0.02em;
@@ -4765,6 +4771,48 @@ body.session-open .global-timer-bar { z-index: 85; }
   0%, 100% { opacity: 0.35; }
   50%      { opacity: 1; }
 }
+
+/* ── Home score row — slim ASCA + state pill ────────────────
+   Reads as a compact dashboard header above the start-workout CTA.
+   Tinted by state via data-tone rules below; colors set inline by JS. */
+.home-score-row {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center;
+  padding: 16px 20px; margin-bottom: 12px;
+  background: linear-gradient(180deg, rgba(var(--wht), 0.05), rgba(var(--wht), 0.015));
+  border: 1px solid var(--border-light);
+  border-radius: var(--r-m);
+  position: relative; overflow: hidden;
+}
+.home-score-num {
+  font-family: var(--ff-mono); font-weight: 800;
+  font-size: clamp(1.8rem, 8vw, 2.6rem);
+  color: var(--t-1); letter-spacing: -0.04em; line-height: 1;
+  align-self: center;
+}
+.home-score-meta {
+  display: flex; flex-direction: column; gap: 6px; min-width: 0;
+}
+.home-score-label { font-family: var(--ff-title); font-size: 0.58rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: var(--t-3); }
+.home-score-state {
+  display: inline-flex; align-items: center; align-self: flex-start;
+  font-family: var(--ff-title); font-weight: 800; font-size: 0.66rem;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  padding: 4px 10px; border-radius: var(--r-full);
+  border: 1px solid rgba(var(--wht), 0.12);
+  transition: all 0.3s var(--spring);
+}
+.home-score-ring {
+  width: 52px; height: 52px; flex-shrink: 0; border-radius: 50%;
+  position: relative; justify-self: end;
+}
+.home-score-ring::before {
+  content: ''; position: absolute; inset: 5px; border-radius: 50%;
+  background: var(--bg);
+}
+/* State tone applied via data-tone on .home-score-row */
+.home-score-row[data-tone='hot']   { border-color: rgba(48, 209, 88, 0.2); }
+.home-score-row[data-tone='cold']  { border-color: rgba(255, 69, 58, 0.22); }
+.home-score-row[data-tone='steady']{ border-color: rgba(255, 159, 10, 0.22); }
 
 @media (prefers-reduced-motion: reduce) {
   .pr-confetti-p { animation-duration: 0.001ms !important; }

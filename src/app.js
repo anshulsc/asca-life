@@ -42,7 +42,7 @@ function startApp() {
     }
     load();loadCX();fillTypes();bindTabs();bindSearch();bindSets();bindActs();
     bindHist();bindAna();bindSettings();bindModal();bindLibraryModal();bindVolInsights();bindTimer();bindBodyWeight();bindFriend();bindProgressPics();bindArc();bindChallengesBrowser();bindMonkMode();bindArcPromo();bindArcLeaderboard();bindArcCalendar();bindArcGoals();bindRoutines();
-    setToday();renderRecent();renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderProfile();renderArc();chBoot();
+    setToday();renderRecent();renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderProfile();renderArc();renderHomeScoreRow();chBoot();
     restoreSE();
     bindCardSpotlights();
   }else{
@@ -777,7 +777,7 @@ function bindTabs(){
       if(tgt==='Soc'){renderFriendsCard();renderArcLeaderboard();arcPullFollowingPublic();}
       if(tgt==='Nut'){AscaNutrition.render();}
       if(tgt==='Set'){renderProfile();renderProgressPics();} // keep the account heatmap/stats live
-      if(tgt==='Home'){renderBodyWeight();renderHeatmapCalendar();renderVolWidget();}
+      if(tgt==='Home'){renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderHomeScoreRow();}
       
       const container = document.querySelector('.views-container');
       if(container) container.scrollTo({top:0,behavior:'smooth'});
@@ -3605,9 +3605,35 @@ function refreshAllUI() {
   renderVolWidget();
   renderWeeklyRing();
   renderProfile();
+  renderHomeScoreRow();
   renderFriendsCard();
   scheduleRender('hist','refresh',()=>{renderHist();});
   scheduleRender('ana','refresh',()=>{renderVolInsights();renderSG();renderPRs();renderRanks();renderChart();});
+}
+
+/* ── Home score row — the state pill in the top dashboard card ──
+   Slim version of the Profile ring: number on the left, label + state
+   text mid, mini ring on the right. Reuses the conic CSS so the visual
+   language stays one family. */
+function renderHomeScoreRow(){
+  const row=document.getElementById('homeScoreRow');if(!row)return;
+  const num=document.getElementById('homeScoreNum');
+  const stateEl=document.getElementById('homeScoreState');
+  const ringEl=document.getElementById('homeScoreRing');
+  const bw=myBW();
+  const score=ascaScore(periodStatsExtended(W,'week').volume,bw);
+  const state=ascaState();
+  const toneMap={hot:{c:'#30D158',l:'Prime',bg:'rgba(48,209,88,0.16)'},
+                 steady:{c:'#FF9F0A',l:'Maintaining',bg:'rgba(255,159,10,0.16)'},
+                 cold:{c:'#FF453A',l:'Falling behind',bg:'rgba(255,69,58,0.16)'}};
+  const t=toneMap[state.tone]||toneMap.steady;
+  if(num)num.textContent=score;
+  if(stateEl){stateEl.textContent=t.l;stateEl.style.color=t.c;stateEl.style.background=t.bg;}
+  if(ringEl){
+    const deg=Math.max(Math.min(score/150,1)*360,8);
+    ringEl.style.background=`conic-gradient(from 220deg, ${t.c}, color-mix(in oklch, ${t.c}, #fff 35%) ${deg}deg, rgba(255,255,255,0.08) ${deg}deg)`;
+  }
+  row.dataset.tone=state.tone;
 }
 
 let activeStreams={};              // id (or "_directory") -> EventSource
@@ -4116,9 +4142,15 @@ function renderProfile(){
   const bw=myBW();
   const score=ascaScore(periodStatsExtended(W,'week').volume,bw);
   const ring=document.getElementById('profRing');
+  const state=ascaState();
+  const stateTones={hot:'#30D158',steady:'#FF9F0A',cold:'#FF453A'};
+  const stateTone=stateTones[state.tone]||stateTones.steady;
+  const stateSoft=state.tone==='hot'?'rgba(48,209,88,0.16)':state.tone==='steady'?'rgba(255,159,10,0.16)':'rgba(255,69,58,0.16)';
   if(ring){
     const deg=Math.max(Math.min(score/150,1)*360,8);
-    ring.style.background=`conic-gradient(from 220deg, #FF7600, #FFB25A ${deg}deg, rgba(255,255,255,0.07) ${deg}deg)`;
+    /* Semantic tint — the ring stops switch with state while the track
+       stays quiet; the color *is* the message. */
+    ring.style.background=`conic-gradient(from 220deg, ${stateTone}, color-mix(in oklch, ${stateTone}, #fff 35%) ${deg}deg, rgba(255,255,255,0.07) ${deg}deg)`;
     upgradeProfileRing(ring,score);
   }
   const pill=document.getElementById('profScorePill');
@@ -4130,9 +4162,13 @@ function renderProfile(){
       if(num.__mpCUP==null){num.__mpCUP=1;countUpTo(num,score);}
     }
     pill.classList.toggle('approx',!bw);
-    pill.title=bw
-      ?`ASCA Score — weekly volume ÷ your body weight (${bw} kg): you moved ${score}× your body weight this week`
-      :`ASCA Score is approximate — log your body weight (Home tab) for a real score (assuming ${DEFAULT_BW} kg)`;
+    pill.dataset.tone=state.tone;
+    pill.style.borderColor=stateTone;
+    pill.style.boxShadow=`0 0 18px ${stateSoft}, inset 0 1px 0 rgba(255,255,255,0.2)`;
+    const stLabel=pill.querySelector('.as-state-label')||(()=>{const s=document.createElement('span');s.className='as-state-label';pill.appendChild(s);return s;})();
+    stLabel.textContent=state.label;
+    stLabel.style.color=stateTone;
+    pill.title=`${state.label} — ${state.tone==='hot'?'consistency is on point':state.tone==='cold'?'3+ days since your last session':'training is happening, cadence could tighten'}`;
   }
 
   const sessions=W.filter(w=>w&&w.dayType!=='Rest Day');
@@ -4173,6 +4209,31 @@ function renderProfile(){
    unknown, 75 kg is assumed and the score is shown as approximate. */
 const DEFAULT_BW=75;
 function ascaScore(weekVol,bw){return Math.round((weekVol||0)/(bw||DEFAULT_BW));}
+
+/* ── ASCA state pill ──────────────────────────────────────
+   From the plan (docs/V2-DESIGN.md§P2): one number, one color, state
+   word. Pure function so testable.
+
+   Prime:      ≥3 active days this week AND current streak ≥ 2
+   Falling behind: no training in ≥3 days (gap at streak start)
+   Maintaining: everything else (recent training but not enough cadence
+                 for Prime). */
+function ascaState(){
+  const week=periodStats(W).week||0;
+  const streak=periodStatsExtended(W,'week').streak||0;
+  /* Gap detection: days since the last real workout. */
+  const activeDays=W.filter(w=>w&&w.dayType!=='Rest Day').length;
+  if(!activeDays){return {label:'Falling behind',tone:'cold',score:0};}
+  const last=W.filter(w=>w&&w.dayType!=='Rest Day').map(w=>w.date).sort().pop();
+  let gapDays=0;
+  if(last){
+    const now=new Date();const l=new Date(last+'T23:59:59');
+    gapDays=Math.max(0,Math.floor((now-l)/(1000*60*60*24)));
+  }
+  if(gapDays>=3)return {label:'Falling behind',tone:'cold',score:0};
+  if(week>=3&&streak>=2)return {label:'Prime',tone:'hot',score:1};
+  return {label:'Maintaining',tone:'steady',score:0.5};
+}
 function myBW(){const b=getBodyWeight();return (b&&b.weight)||0;}
 
 /* ── Extended Stats for Leaderboard / H2H ─────────────────── */
