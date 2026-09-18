@@ -375,6 +375,8 @@ section('cardio/lifting classification');
   eq('mins alone flags a set as cardio', CE.isCardioSet({ mins: 20 }), true);
   eq('a cardio set contributes zero to weight', CE.setWeight({ cardio: true, mins: 20 }), 0);
   eq('level notes are parsed as weight when unset', CE.setWeight({ weight: null, notes: 'Level 6' }), 6);
+  eq('warm-up sets contribute zero to weight', CE.setWeight({ weight: 100, reps: 5, setType: 'warmup' }), 0);
+  eq('working/drop/failure sets still count', CE.setWeight({ weight: 100, setType: 'drop' }), 100);
 }
 
 section('arc state merge (WinterArc.mergeArcState)');

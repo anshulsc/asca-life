@@ -33,9 +33,16 @@ function startApp() {
   const appBoot=!appBooted; // captured before the flag flips below
   if(appBoot){
     appBooted=true;
+    sessionOverlayMount();
+    {
+      const sc=document.getElementById('sessionClose');
+      if(sc)sc.addEventListener('click',()=>{buzz(8);svClose();});
+      const hc=document.getElementById('homeStartWorkout');
+      if(hc)hc.addEventListener('click',()=>{buzz(8);svOpen();});
+    }
     load();loadCX();fillTypes();bindTabs();bindSearch();bindSets();bindActs();
     bindHist();bindAna();bindSettings();bindModal();bindLibraryModal();bindVolInsights();bindTimer();bindBodyWeight();bindFriend();bindProgressPics();bindArc();bindChallengesBrowser();bindMonkMode();bindArcPromo();bindArcLeaderboard();bindArcCalendar();bindArcGoals();bindRoutines();
-    setToday();renderRecent();renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderProfile();renderArc();chBoot();
+    setToday();renderRecent();renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderProfile();renderArc();renderHomeScoreRow();renderMuscleFreshness();chBoot();
     restoreSE();
     bindCardSpotlights();
   }else{
@@ -55,7 +62,7 @@ function startApp() {
         renderBodyWeight();renderProfile();
         if(typeof fbPush==='function'&&fbCfg().connected)fbPush(false);
       },
-      // The workout→nutrition link: what the Log tab knows you burned on
+      // The workout→nutrition link: what the session knows you burned on
       // a given day. Cardio is ground truth from cardio sets (treadmill
       // kcal, or mins when the machine gave none); lifting is estimated
       // (~5 kcal/min × 75 min per strength session) because set-volume
@@ -471,8 +478,6 @@ function lib(){
 function positionNavLens(activeBtn, animate = true) {
   const lens = document.getElementById('navLens');
   if (!lens) return;
-  // Desktop uses a vertical sidebar with a CSS active-pill instead of the
-  // horizontal liquid lens — hide it and bail so it can't mis-position.
   if (window.matchMedia && window.matchMedia('(min-width: 1024px)').matches) {
     lens.style.display = 'none';
     return;
@@ -482,27 +487,40 @@ function positionNavLens(activeBtn, animate = true) {
     return;
   }
   lens.style.display = 'block';
-  
-  const activeLeft = activeBtn.offsetLeft;
-  const activeWidth = activeBtn.offsetWidth;
-  // Was a hardcoded 54px, sized for 5 tabs at 56px each. With Arc adding a
-  // 6th tab, ≤440px viewports narrow .bot-btn to fit — a fixed lens then
-  // either overhangs a 46/50px button or looks small on a 56px one. Track
-  // the real button width (minus a small inset so the lens reads as a
-  // highlight, not a duplicate outline) instead of a magic number.
-  const lensWidth = Math.max(38, activeWidth - 2);
-  const leftPos = activeLeft + (activeWidth - lensWidth) / 2;
-  
+
+  const iconR = activeBtn.querySelector('.tab-icon')?.getBoundingClientRect();
+  const labelR = activeBtn.querySelector('span')?.getBoundingClientRect();
+  const btnR = activeBtn.getBoundingClientRect();
+  const navR = lens.parentElement.getBoundingClientRect();
+  let cx = btnR.left + btnR.width / 2 - navR.left;
+  let cy = btnR.top + btnR.height / 2 - navR.top;
+  if (iconR && labelR) {
+    cx = (iconR.left + iconR.right) / 2 - navR.left;
+    cy = (iconR.top + labelR.bottom) / 2 - navR.top - 0.5;
+  }
+
+  // 48×40 hugs 22px icon + small label without spilling past neighbours.
+  const W = 48, H = 40;
+  const left = cx - W / 2;
+  const top = cy - H / 2;
+
   if (animate) {
     lens.classList.add('stretching');
-    setTimeout(() => {
-      lens.classList.remove('stretching');
-    }, 320);
+    setTimeout(() => { lens.classList.remove('stretching'); }, 320);
   }
-  lens.style.transition = animate ? 'left 0.32s cubic-bezier(0.25, 1, 0.4, 1.1), transform 0.32s cubic-bezier(0.25, 1, 0.4, 1.1)' : 'none';
-  lens.style.left = `${leftPos}px`;
-  lens.style.top = `8px`; // centered vertically in bottom bar
+  lens.style.transition = animate
+    ? 'left .32s cubic-bezier(.25,1,.4,1.1), top .32s cubic-bezier(.25,1,.4,1.1)'
+    : 'none';
+  lens.style.left = `${left}px`;
+  lens.style.top = `${top}px`;
 }
+// DOMContentLoaded: park the lens on the active tab once layout has settled.
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    const active = document.querySelector('.bottom-bar .bot-btn.on');
+    if (active) positionNavLens(active, false);
+  }, 60);
+});
 
 /* ── Motion & Delight helpers (2026 polish) ────────────────────────────── */
 
@@ -641,13 +659,114 @@ function bindCardSpotlights(){
   },{passive:true});
 }
 
+/* ── Session overlay (P0b) ───────────────────────────────────────────────
+   The workout log used to be a tab; it is now a full-screen surface opened
+   by the center ＋ nav button, the Home CTA, an Arc objective tap, or the
+   heatmap deep-link. State (SE/wDate/wType) persists in localStorage, so
+   opening the overlay RESUMES an in-progress session — never clears it. */
+let __svMounted=false;
+function sessionOverlayMount(){
+  // The desktop device frame (.phone-frame) is bordered and — via the
+  // frame's own border/shadow treatment — is not guaranteed to stay a
+  // plain fixed-position containing block. Reparenting the overlay to
+  // <body> makes its fixed inset resolve against the viewport everywhere.
+  if(__svMounted)return; __svMounted=true;
+  const ov=document.getElementById('sessionOverlay');
+  if(ov&&ov.parentElement!==document.body)document.body.appendChild(ov);
+}
+function svOpen(){
+  const ov=document.getElementById('sessionOverlay');
+  if(!ov)return;
+  sessionOverlayMount();
+  ov.classList.add('open');
+  document.body.classList.add('session-open');
+  document.body.style.overflow='hidden';
+  const bd=document.getElementById('sessionBody');
+  if(bd)bd.scrollTop=0;
+  const d=document.getElementById('wDate');
+  if(d&&!d.value)setToday();
+}
+function svClose(){
+  const ov=document.getElementById('sessionOverlay');
+  if(!ov)return;
+  ov.classList.remove('open');
+  document.body.classList.remove('session-open');
+  document.body.style.overflow='';
+}
+
+/* ── Pull-to-refresh ───────────────────────────────────────
+   Available on any tab once the scroll container is at top. Show a thin
+   reveal-ring in the page header; cross the threshold → buzz + run the
+   tab's refresh path. Single global binding (one per tab active at a
+   time), uses session-state flags so only ONE pull runs at a time. */
+let _ptrState = { active: false, startY: 0, pulling: false, depth: 0, threshold: 72 };
+const PTR_TABS = {
+  Soc:  { onPull: () => Promise.resolve(syncFriends(false)), msg: 'Syncing your friends…' },
+  Hist: { onPull: async () => { save(); renderHist(); }, msg: 'History refreshed' },
+};
+let _currTab='Home';
+function bindPullToRefresh(){
+  /* Tab name comes from bindTabs' handler — mirror it off .on so other
+     re-render paths (svClose etc.) stay consistent. */
+  const viewsEl=document.querySelector('.views-container');
+  if(!viewsEl)return;
+  const ring=document.createElement('div');
+  ring.className='ptr-ring';
+  ring.innerHTML=`<div class="ptr-ring-fill"></div>`;
+  document.body.appendChild(ring);
+
+  let isScrollTop=false;
+  viewsEl.addEventListener('scroll',()=>{isScrollTop=viewsEl.scrollTop<=8;},{passive:true});
+
+  document.addEventListener('touchstart',e=>{
+    if(!isScrollTop||_ptrState.active)return;
+    const target=e.target.closest('.view.on');
+    if(!target)return;
+    const tab=PTR_TABS[_currTab];if(!tab)return;
+    _ptrState.active=true;_ptrState.startY=e.touches[0].clientY;_ptrState.depth=0;
+  },{passive:true});
+
+  document.addEventListener('touchmove',e=>{
+    if(!_ptrState.active)return;
+    const dy=e.touches[0].clientY-_ptrState.startY;
+    if(dy<0){_ptrState.active=false;ring.classList.remove('visible','past');return;}
+    _ptrState.depth=Math.min(dy,_ptrState.threshold*2);
+    const p=_ptrState.depth/_ptrState.threshold;
+    ring.style.transform=`translateY(${Math.min(_ptrState.depth*0.5,44)}px)`;
+    ring.classList.add('visible');
+    ring.classList.toggle('past',p>=1);
+    if(dy>_ptrState.threshold)(buzz(6));
+  },{passive:true});
+
+  document.addEventListener('touchend',async e=>{
+    if(!_ptrState.active)return;
+    const tab=PTR_TABS[_currTab];
+    _ptrState.active=false;
+    if(!tab){ring.classList.remove('visible','past');ring.style.transform='';return;}
+    if(_ptrState.depth>=_ptrState.threshold){
+      buzz([10,30,10]);
+      ring.classList.add('running');
+      try{ await tab.onPull(); toast(tab.msg,'success'); }
+      catch(_err){ toast('Sync failed','error'); }
+      finally{
+        setTimeout(()=>{ring.classList.remove('visible','past','running');ring.style.transform='';},420);
+      }
+    }else{
+      ring.classList.remove('visible','past');ring.style.transform='';
+    }
+    _ptrState.depth=0;
+  },{passive:true});
+}
+
 function bindTabs(){
-  const navs = document.querySelectorAll('.nav-btn, .bot-btn');
+  bindPullToRefresh();
+  const navs = document.querySelectorAll('.nav-btn, .bot-btn:not(.bot-btn-hero)');
   navs.forEach(b=>{
     b.addEventListener('click',()=>{
       buzz(8); // tab switch — the nav-lens lands with a physical tick
       navs.forEach(x=>x.classList.remove('on'));
       const tgt = b.dataset.v;
+      _currTab=tgt;
       document.querySelectorAll(`[data-v="${tgt}"]`).forEach(x=>x.classList.add('on'));
       document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
       const v=document.getElementById('v'+tgt);
@@ -658,7 +777,7 @@ function bindTabs(){
       if(tgt==='Soc'){renderFriendsCard();renderArcLeaderboard();arcPullFollowingPublic();}
       if(tgt==='Nut'){AscaNutrition.render();}
       if(tgt==='Set'){renderProfile();renderProgressPics();} // keep the account heatmap/stats live
-      if(tgt==='Log'){renderBodyWeight();renderHeatmapCalendar();renderVolWidget();}
+      if(tgt==='Home'){renderBodyWeight();renderHeatmapCalendar();renderVolWidget();renderHomeScoreRow();renderMuscleFreshness();}
       
       const container = document.querySelector('.views-container');
       if(container) container.scrollTo({top:0,behavior:'smooth'});
@@ -698,8 +817,17 @@ function bindTabs(){
     onScroll();
   }
 
-  // Position lens initially — only in-bar buttons carry the lens, so a
-  // header Social/Account selection never drags it off-screen.
+  // Center ＋ is an action button, not a data-v tab: opening the session
+  // overlay must not disturb the current tab/.on state, so it binds
+  // outside the data-v loop above.
+  const fab=document.getElementById('fabSession');
+  if(fab)fab.addEventListener('click',()=>{
+    buzz(8); // same physical tick as a tab switch
+    svOpen();
+  });
+
+  // Position lens initially — only in-bar view buttons carry the lens, so
+  // a header History/Nutrition selection never drags it off-screen.
   setTimeout(() => {
     const activeBotBtn = document.querySelector('.bottom-bar .bot-btn.on');
     positionNavLens(activeBotBtn, false);
@@ -1114,7 +1242,7 @@ function bindArc(){
       const id=objRow.dataset.obj;
       // "Move" points at logging a workout; the other three point at
       // today's check-in card, already on this screen.
-      if(id==='move'){document.querySelector('.bot-btn[data-v="Log"]').click();}
+      if(id==='move'){svOpen();}
       else{document.getElementById('arcCheckinCard')?.scrollIntoView({behavior:'smooth',block:'nearest'});}
       return;
     }
@@ -2984,7 +3112,7 @@ function bindTheme(){
   });
 }
 
-// Shown once, on the Log tab (the one every user already lands on), until
+// Shown once, on the Home view (the one every user already lands on), until
 // dismissed or used — the Arc nav tab is invisible in Classic mode, so
 // without this there is no way to ever discover the feature.
 function renderArcPromo(){
@@ -3256,7 +3384,7 @@ function renderHeatmapCalendar(){
     selectDay(W[0].date);
   } else {
     const detailsEl = document.getElementById('heatmapDayDetails');
-    if (detailsEl) detailsEl.innerHTML = `Log your first session to start the streak. <button type="button" class="btn btn-primary btn-sm" style="margin-left:8px" onclick="document.querySelector('.bot-btn[data-v=&quot;Log&quot;]')&&document.querySelector('.bot-btn[data-v=&quot;Log&quot;]').click()">Start</button>`;
+    if (detailsEl) detailsEl.innerHTML = `Log your first session to start the streak. <button type="button" class="btn btn-primary btn-sm" style="margin-left:8px" onclick="svOpen()">Start</button>`;
   }
 
   // On narrow screens the grid scrolls — land on the newest weeks so
@@ -3477,9 +3605,36 @@ function refreshAllUI() {
   renderVolWidget();
   renderWeeklyRing();
   renderProfile();
+  renderHomeScoreRow();
+  renderMuscleFreshness();
   renderFriendsCard();
   scheduleRender('hist','refresh',()=>{renderHist();});
   scheduleRender('ana','refresh',()=>{renderVolInsights();renderSG();renderPRs();renderRanks();renderChart();});
+}
+
+/* ── Home score row — the state pill in the top dashboard card ──
+   Slim version of the Profile ring: number on the left, label + state
+   text mid, mini ring on the right. Reuses the conic CSS so the visual
+   language stays one family. */
+function renderHomeScoreRow(){
+  const row=document.getElementById('homeScoreRow');if(!row)return;
+  const num=document.getElementById('homeScoreNum');
+  const stateEl=document.getElementById('homeScoreState');
+  const ringEl=document.getElementById('homeScoreRing');
+  const bw=myBW();
+  const score=ascaScore(periodStatsExtended(W,'week').volume,bw);
+  const state=ascaState();
+  const toneMap={hot:{c:'#30D158',l:'Prime',bg:'rgba(48,209,88,0.16)'},
+                 steady:{c:'#FF9F0A',l:'Maintaining',bg:'rgba(255,159,10,0.16)'},
+                 cold:{c:'#FF453A',l:'Falling behind',bg:'rgba(255,69,58,0.16)'}};
+  const t=toneMap[state.tone]||toneMap.steady;
+  if(num)num.textContent=score;
+  if(stateEl){stateEl.textContent=t.l;stateEl.style.color=t.c;stateEl.style.background=t.bg;}
+  if(ringEl){
+    const deg=Math.max(Math.min(score/150,1)*360,8);
+    ringEl.style.background=`conic-gradient(from 220deg, ${t.c}, color-mix(in oklch, ${t.c}, #fff 35%) ${deg}deg, rgba(255,255,255,0.08) ${deg}deg)`;
+  }
+  row.dataset.tone=state.tone;
 }
 
 let activeStreams={};              // id (or "_directory") -> EventSource
@@ -3988,9 +4143,15 @@ function renderProfile(){
   const bw=myBW();
   const score=ascaScore(periodStatsExtended(W,'week').volume,bw);
   const ring=document.getElementById('profRing');
+  const state=ascaState();
+  const stateTones={hot:'#30D158',steady:'#FF9F0A',cold:'#FF453A'};
+  const stateTone=stateTones[state.tone]||stateTones.steady;
+  const stateSoft=state.tone==='hot'?'rgba(48,209,88,0.16)':state.tone==='steady'?'rgba(255,159,10,0.16)':'rgba(255,69,58,0.16)';
   if(ring){
     const deg=Math.max(Math.min(score/150,1)*360,8);
-    ring.style.background=`conic-gradient(from 220deg, #FF7600, #FFB25A ${deg}deg, rgba(255,255,255,0.07) ${deg}deg)`;
+    /* Semantic tint — the ring stops switch with state while the track
+       stays quiet; the color *is* the message. */
+    ring.style.background=`conic-gradient(from 220deg, ${stateTone}, color-mix(in oklch, ${stateTone}, #fff 35%) ${deg}deg, rgba(255,255,255,0.07) ${deg}deg)`;
     upgradeProfileRing(ring,score);
   }
   const pill=document.getElementById('profScorePill');
@@ -4002,9 +4163,13 @@ function renderProfile(){
       if(num.__mpCUP==null){num.__mpCUP=1;countUpTo(num,score);}
     }
     pill.classList.toggle('approx',!bw);
-    pill.title=bw
-      ?`ASCA Score — weekly volume ÷ your body weight (${bw} kg): you moved ${score}× your body weight this week`
-      :`ASCA Score is approximate — log your body weight (Log tab) for a real score (assuming ${DEFAULT_BW} kg)`;
+    pill.dataset.tone=state.tone;
+    pill.style.borderColor=stateTone;
+    pill.style.boxShadow=`0 0 18px ${stateSoft}, inset 0 1px 0 rgba(255,255,255,0.2)`;
+    const stLabel=pill.querySelector('.as-state-label')||(()=>{const s=document.createElement('span');s.className='as-state-label';pill.appendChild(s);return s;})();
+    stLabel.textContent=state.label;
+    stLabel.style.color=stateTone;
+    pill.title=`${state.label} — ${state.tone==='hot'?'consistency is on point':state.tone==='cold'?'3+ days since your last session':'training is happening, cadence could tighten'}`;
   }
 
   const sessions=W.filter(w=>w&&w.dayType!=='Rest Day');
@@ -4045,6 +4210,31 @@ function renderProfile(){
    unknown, 75 kg is assumed and the score is shown as approximate. */
 const DEFAULT_BW=75;
 function ascaScore(weekVol,bw){return Math.round((weekVol||0)/(bw||DEFAULT_BW));}
+
+/* ── ASCA state pill ──────────────────────────────────────
+   From the plan (docs/V2-DESIGN.md§P2): one number, one color, state
+   word. Pure function so testable.
+
+   Prime:      ≥3 active days this week AND current streak ≥ 2
+   Falling behind: no training in ≥3 days (gap at streak start)
+   Maintaining: everything else (recent training but not enough cadence
+                 for Prime). */
+function ascaState(){
+  const week=periodStats(W).week||0;
+  const streak=periodStatsExtended(W,'week').streak||0;
+  /* Gap detection: days since the last real workout. */
+  const activeDays=W.filter(w=>w&&w.dayType!=='Rest Day').length;
+  if(!activeDays){return {label:'Falling behind',tone:'cold',score:0};}
+  const last=W.filter(w=>w&&w.dayType!=='Rest Day').map(w=>w.date).sort().pop();
+  let gapDays=0;
+  if(last){
+    const now=new Date();const l=new Date(last+'T23:59:59');
+    gapDays=Math.max(0,Math.floor((now-l)/(1000*60*60*24)));
+  }
+  if(gapDays>=3)return {label:'Falling behind',tone:'cold',score:0};
+  if(week>=3&&streak>=2)return {label:'Prime',tone:'hot',score:1};
+  return {label:'Maintaining',tone:'steady',score:0.5};
+}
 function myBW(){const b=getBodyWeight();return (b&&b.weight)||0;}
 
 /* ── Extended Stats for Leaderboard / H2H ─────────────────── */
@@ -4348,7 +4538,7 @@ function renderActivityFeed(allRows){
   feed.sort((a,b)=>b.w.date.localeCompare(a.w.date));
   if(!feed.length){feedLabel.style.display='none';feedCard.style.display='none';return;}
   feedLabel.style.display='block';feedCard.style.display='block';
-  recent.innerHTML=feed.slice(0,12).map(({id,name,w})=>{
+  recent.innerHTML=feed.slice(0,40).map(({id,name,w})=>{
     const sets=w.exercises.reduce((s,e)=>s+e.sets.length,0);
     const vol=w.exercises.reduce((s,e)=>s+e.sets.reduce((ss,x)=>ss+((getSetWeightVal(x))*(x.reps||0)),0),0);
     const cd=workoutCardio(w);
@@ -4377,7 +4567,7 @@ function renderActivityFeed(allRows){
           ${cd.kcal>0?`<div class="feed-stat feed-stat-cardio"><b>${cd.kcal}</b><span>kcal</span></div>`:''}
           <div class="feed-stat"><b>${sets}</b><span>sets</span></div>
           <div class="feed-stat"><b>${w.exercises.length}</b><span>exercise${w.exercises.length===1?'':'s'}</span></div>
-          ${prName?`<span class="pr-pill" title="Top lift of all time · ${esc(prName)}">🏆 New PR · ${esc(prName)}</span>`:''}
+          ${prName?`<span class="pr-pill feed-stat-pr" title="Top lift of all time · ${esc(prName)}">🏆 New PR · ${esc(prName)}</span>`:''}
         </div>
         ${route?`<div class="feed-route"><span class="feed-route-dot" style="background:${dtc}"></span>${esc(route)}${w.exercises.length>3?` +${w.exercises.length-3}`:''}</div>`:''}
         <div class="feed-detail" style="display:none">${detail}</div>
@@ -4556,9 +4746,27 @@ function renderFriendsCard(){
   const syncEl=document.getElementById('friendLastSync');
   if(!ids.length){
     if(syncEl)syncEl.textContent='Not synced yet';
-    document.getElementById('friendCompare').innerHTML='<p class="friend-empty">Tap Sync to load the people you follow.</p>';
+    /* Empty friends cache + connected remote = first fetch in flight. Show
+       real skeletons (not blank space) so the tab doesn't flash "no data"
+       before the pull lands. The guardian in this flow is interactive
+       sync; on auto-load, these sit for as short as the network allows. */
+    if(hasRemote){
+      const fc=document.getElementById('friendCompare');
+      if(fc&&fc.dataset.skel!=='1'){fc.dataset.skel='1';fc.innerHTML='<div class="skel skel-podium"></div><div class="skel skel-feed-row"></div>'.repeat(2);}
+      const fr=document.getElementById('friendRecent');
+      const fl=document.getElementById('feedLabel'),fcard=document.getElementById('feedCard');
+      if(fl)fl.style.display='block';
+      if(fcard)fcard.style.display='block';
+      if(fr&&fr.dataset.skel!=='1'){fr.dataset.skel='1';fr.innerHTML='<div class="skel skel-feed-row"></div><div class="skel skel-feed-row"></div><div class="skel skel-feed-row"></div>';}
+    }else{
+      document.getElementById('friendCompare').innerHTML='<p class="friend-empty">Tap Sync to load the people you follow.</p>';
+    }
     document.getElementById('lbPodium').innerHTML='';return;
   }
+  /* Real data arrived — clear any skeleton state so the next render
+     replaces, not compounds. */
+  const fc=document.getElementById('friendCompare'); if(fc) delete fc.dataset.skel;
+  const fr=document.getElementById('friendRecent'); if(fr) delete fr.dataset.skel;
   if(syncEl)syncEl.textContent=`Updated ${timeAgo(cache.ts)}`;
   const allRows=buildLBRows();
   renderPodium(allRows,_lbMetric);renderLeaderboardRows(allRows,_lbMetric);
@@ -4660,9 +4868,12 @@ function selEx(name){
     const lc = lastCardio(eEx);
     eSets = [{cardio:true, mins:lc.mins, km:lc.km, kcal:lc.kcal, speed:lc.speed, incline:lc.incline, hr:lc.hr, notes:'', completed:false}];
   } else {
-    const lw=lastW(eEx);
-    eSets=[{weight:lw,reps:'',notes:'',completed:false},{weight:lw,reps:'',notes:'',completed:false},{weight:lw,reps:'',notes:'',completed:false}];
+    /* Ghost values render via placeholder/hint — rows stay EMPTY so a
+       single check tap means "same as last time" and a typed value
+       means a genuine change. */
+    eSets=[{weight:'',reps:'',notes:'',completed:false},{weight:'',reps:'',notes:'',completed:false},{weight:'',reps:'',notes:'',completed:false}];
   }
+  _sessionPRFired={}; // arm live-PR detection fresh per editor session
   
   renderSets();
   renderSegmentToggle();
@@ -4737,6 +4948,54 @@ function lastW(n){
 function renderRecent(){}
 
 /* ── Elite Editor ──────────────────────────────────────────── */
+/* Ghost value: what the i-th set of this exercise looked like last time
+   it was trained — the two-line answer to "what did I lift?" Used as
+   placeholder/hint text and the one-tap fill when a set is checked empty. */
+function lastSetTemplate(exName,i){
+  const key=canonicalName(exName);if(!key)return null;
+  for(const w of W){
+    for(const e of (w.exercises||[])){
+      if(canonicalName(e.name)!==key)continue;
+      const sets=(e.sets||[]).filter(s=>s&&!isCardioSet(s));
+      const s=sets[i];if(!s)return null;
+      const wv=getSetWeightVal(s);
+      return {weight:wv>0?wv:(s.weight||''),reps:s.reps!=null?s.reps:'',setType:s.setType,notes:s.notes||''};
+    }
+  }
+  return null;
+}
+
+/* Plate calculator — pure shapes. plateSolve targets the largest-count
+   denomination first so the breakdown is always the fewest plates. */
+const PLATE_BAR_KG=20,PLATE_STACK=[25,20,15,10,5,2.5,1.25];
+function plateSolve(loadKg){
+  const out=[];let rem=+loadKg;
+  for(const p of PLATE_STACK){
+    const n=Math.floor((rem+1e-9)/p);
+    for(let i=0;i<n;i++)out.push(p);
+    rem=+(rem-n*p).toFixed(3);
+    if(rem<1e-9)break;
+  }
+  return {plates:out,remainder:+Math.max(0,rem).toFixed(3)};
+}
+function plateMath(totalKg){
+  const t=+totalKg;
+  if(!t||t<0||t>1000)return {load:0,solve:{plates:[],remainder:0},plates40:[],plates60:[]};
+  const load=(t-PLATE_BAR_KG)/2,solve=plateSolve(load);
+  // min/max stack pixels are fixed so proportional sizing stays simple CSS.
+  return {load:+load.toFixed(3),solve,
+    plates40:solve.plates.map(p=>Math.round(10+p*1.6)),
+    plates60:solve.plates.map((p,i)=>({h:Math.round(10+p*1.6),i}))};
+}
+
+/* Set types: warm-up/drop/failure don't compete for PRs or volume.
+   Nothing is required — a missing type is a normal working set, so old
+   history and other clients degrade cleanly. */
+const SET_TYPES=[{k:'warmup',label:'W',full:'Warm-up',exclude:true},{k:'working',label:'N',full:'Working set',exclude:false},{k:'drop',label:'D',full:'Drop set',exclude:false},{k:'failure',label:'F',full:'To failure',exclude:false}];
+function setTypeOf(s){const k=s&&s.setType;return SET_TYPES.some(t=>t.k===k)?k:'working';}
+function nextSetType(k){const i=SET_TYPES.findIndex(t=>t.k===k);return SET_TYPES[(i+1+SET_TYPES.length)%SET_TYPES.length].k;}
+function setTypeExcluded(s){const t=SET_TYPES.find(t=>t.k===setTypeOf(s));return !!(t&&t.exclude);}
+
 function bindSets(){
   document.getElementById('addS').addEventListener('click',()=>{
     if(eMode==='cardio'){
@@ -4747,8 +5006,90 @@ function bindSets(){
     }
     renderSets();
   });
-  document.getElementById('seCl').addEventListener('click',()=>{eEx=null;eSets=[];document.getElementById('se').style.display='none';});
+  document.getElementById('seCl').addEventListener('click',()=>{eEx=null;eSets=[];_sessionPRFired={};closePlateCalc();document.getElementById('se').style.display='none';});
   document.getElementById('svEx').addEventListener('click',saveEx);
+  bindPlateCalc();
+}
+
+/* ── Plate calculator UI ─────────────────────────────────────
+   Pure math lives in plateMath(); this is only the DOM + trigger. */
+function plateStackSvg(sm){
+  if(!sm.solve.plates.length)return '';
+  const plates=sm.solve.plates,w=Math.min(36,Math.max(14,14+ (plates[0]||0)*0.6));
+  const gap=6,bw=Math.max(8,Math.round(6+(plates[plates.length-1]||0)*0.15));
+  const bars=plates.map((p,i)=>`<rect class="plate-svg-plate" x="${22+i*(bw+2)}" y="${Math.max(0,(60-(10+p*1.6))/2)}" width="${bw}" height="${10+p*1.6}" rx="2"/>`).join('');
+  return `<svg class="plate-svg" viewBox="0 0 ${22+plates.length*(bw+2)+6} 60" aria-hidden="true">
+    <rect class="plate-svg-bar" x="0" y="28" width="18" height="4" rx="2"/>
+    ${bars}
+  </svg>`;
+}
+function plateButtonValue(){return currentPlateTarget>=0?(eSets[currentPlateTarget]||{}).weight:null;}
+let currentPlateTarget=-1;
+function openPlateCalc(i,anchorEl){
+  currentPlateTarget=i;
+  const pop=document.getElementById('plateCalc'),body=document.getElementById('plateBody');
+  if(!pop||!body)return;
+  renderPlateCalc(body);
+  pop.style.display='block';
+  pop.setAttribute('data-open-set',String(i));
+  try{
+    const ed=document.getElementById('se');
+    pop.style.top='auto';pop.style.bottom='';pop.style.left='';pop.style.right='';
+    if(anchorEl&&ed){
+      pop.style.position='fixed';
+      const r=anchorEl.getBoundingClientRect();
+      pop.style.top=Math.min(window.innerHeight-260,r.bottom+6)+'px';
+      pop.style.left=Math.max(8,Math.min(window.innerWidth-280,r.left-140))+'px';
+    }
+  }catch(_){}
+}
+function renderPlateCalc(body){
+  const val=plateButtonValue();
+  if(!val||+val<=PLATE_BAR_KG){
+    body.innerHTML=`<div class="plate-calc-empty">${val?`Total ${val}kg is at or under the 20kg bar — pure bar.`:'Enter a weight above the bar first.'}</div>`;
+    return;
+  }
+  const sm=plateMath(+val);
+  const star=PLATE_STACK.map(p=>{
+    const n=sm.solve.plates.filter(x=>x===p).length;
+    return n?`<span class="plate-chip"><b>${p}</b> ×${n}</span>`:'';
+  }).join('');
+  body.innerHTML=`
+    <div class="plate-calc-total">${esc(String(val))}kg <span class="plate-calc-side">(${esc(String(sm.load))}kg per side)</span></div>
+    <div class="plate-calc-stack">${star}</div>
+    ${plateStackSvg(sm)}
+    ${sm.solve.remainder>0.001?`<div class="plate-calc-remainder">+${sm.solve.remainder}kg unplatable remainder</div>`:''}
+  `;
+}
+function closePlateCalc(){const p=document.getElementById('plateCalc');if(p){p.style.display='none';p.removeAttribute('data-open-set');}}
+function bindPlateCalc(){
+  const pop=document.getElementById('plateCalc'),cl=document.getElementById('plateClose');
+  if(cl)cl.addEventListener('click',closePlateCalc);
+  const g=document.getElementById('seG');
+  if(g){
+    /* Long-press / right-click on a weight input opens the calculator. */
+    let pressTimer=null;
+    g.addEventListener('touchstart',e=>{
+      const inp=e.target.closest('.set-input[data-f="weight"]');if(!inp)return;
+      pressTimer=setTimeout(()=>{openPlateCalc(+inp.dataset.i,inp);buzz(8);},420);
+    },{passive:true});
+    g.addEventListener('touchend',()=>clearTimeout(pressTimer),{passive:true});
+    g.addEventListener('touchmove',()=>clearTimeout(pressTimer),{passive:true});
+    g.addEventListener('contextmenu',e=>{
+      const inp=e.target.closest('.set-input[data-f="weight"]');if(!inp)return;
+      e.preventDefault();openPlateCalc(+inp.dataset.i,inp);
+    });
+    g.addEventListener('input',e=>{
+      const inp=e.target.closest('.set-input[data-f="weight"]');
+      if(pop&&pop.style.display==='block'&&inp&&+inp.dataset.i===currentPlateTarget){
+        renderPlateCalc(document.getElementById('plateBody'));
+      }
+    });
+  }
+  /* Tap anywhere else closes it — matches the exercise dropdown idiom. */
+  document.addEventListener('click',e=>{
+    if(pop&&pop.style.display==='block'&&!e.target.closest('#plateCalc')&&!e.target.closest('.set-input[data-f="weight"]'))closePlateCalc();
+  });
 }
 
 // Notes are auto-growing textareas: the box expands with the text so
@@ -4760,22 +5101,27 @@ function renderSets(){
   const isL = eMode === 'level';
   if (eMode === 'cardio') { renderCardioSets(g); return; }
   g.innerHTML=`
-    <div style="display:grid;grid-template-columns:30px 1.3fr 1fr 28px;gap:8px;margin-bottom:6px;align-items:center">
-      <div class="set-label" style="text-align:center;color:var(--accent);font-size:0.75rem">Done</div>
+    <div class="set-col-header">
+      <div class="set-label" style="color:var(--accent);font-size:0.75rem">Done</div>
       <div class="set-label" style="text-align:left;padding-left:10px">${isL ? 'Level' : 'Weight'}</div>
       <div class="set-label">Reps</div>
+      <div></div>
       <div></div>
     </div>`;
 
   eSets.forEach((s,i)=>{
     const r=document.createElement('div');r.className=`set-row-container ${s.completed?'completed':''}`;
     const stepVal = isL ? 1 : 2.5;
-    const placeholder = isL ? 'Level' : 'kg';
-    const tags = isL 
+    const gTpl=lastSetTemplate(eEx,i);
+    const placeholder = isL ? (gTpl&&gTpl.weight!==''?String(gTpl.weight):'Level') : (gTpl&&gTpl.weight!==''?String(gTpl.weight):'kg');
+    const repsPh = gTpl&&gTpl.reps!==''&&gTpl.reps!=null ? String(gTpl.reps) : 'reps';
+    const tags = isL
       ? ["Warm-up", "Easy", "Normal", "To failure"]
       : ["Warm-up", "Drop set", "To failure", "Felt heavy"];
     const tagsHtml = tags.map(t => `<button type="button" class="note-tag" data-i="${i}" data-val="${t}">${t}</button>`).join('');
-    
+    const tK=setTypeOf(s),tObj=SET_TYPES.find(t=>t.k===tK)||SET_TYPES[1];
+    const hint=(gTpl&&!s.completed)?`<button type="button" class="set-ghost-chip" data-i="${i}"><span class="set-ghost-label">Last:</span> ${esc(isL?`Level ${gTpl.weight}`:`${gTpl.weight||'?'}kg`)} × ${esc(String(gTpl.reps||'?'))}</button>`:'';
+
     r.innerHTML=`
       <div class="set-grid-main">
         <button class="btn-set-check ${s.completed?'completed':''}" data-i="${i}" aria-label="Toggle set completion">
@@ -4786,7 +5132,8 @@ function renderSets(){
           <input type="number" class="set-input" data-i="${i}" data-f="weight" value="${s.weight||''}" placeholder="${placeholder}" step="${isL ? 1 : 0.5}" inputmode="decimal" autocomplete="off" ${s.completed?'disabled':''}>
           <button class="stepper-btn" data-i="${i}" data-d="${stepVal}">+</button>
         </div>
-        <input type="number" class="set-input" data-i="${i}" data-f="reps" value="${s.reps||''}" placeholder="reps" inputmode="numeric" autocomplete="off" ${s.completed?'disabled':''}>
+        <input type="number" class="set-input" data-i="${i}" data-f="reps" value="${s.reps||''}" placeholder="${repsPh}" inputmode="numeric" autocomplete="off" ${s.completed?'disabled':''}>
+        <button class="set-type-btn ${tObj.exclude?'set-type-excluded':''}" data-i="${i}" data-t="${tK}" title="${esc(tObj.full)}${tObj.exclude?' (not counted)':''}" aria-label="Set type: ${esc(tObj.full)}. Tap to cycle.">${tObj.label}</button>
         <button class="set-del" data-i="${i}" aria-label="Delete set">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -4795,6 +5142,7 @@ function renderSets(){
       </div>
       <div class="set-notes-wrap">
         <textarea class="set-input set-notes-input" data-i="${i}" data-f="notes" rows="1" placeholder="Add note for set ${i+1}..." ${s.completed?'disabled':''}>${esc(s.notes||'')}</textarea>
+        <div class="set-hint-row">${hint}</div>
         <div class="note-tags-row">
           ${tagsHtml}
         </div>
@@ -4802,6 +5150,23 @@ function renderSets(){
     g.appendChild(r);
   });
   g.querySelectorAll('.set-notes-input').forEach(autoGrowNote);
+
+  /* Ghost fill: tapping the "Last: 20kg × 8" chip copies it into the row
+     without completing it — completing is the checkbox's job. */
+  g.querySelectorAll('.set-ghost-chip').forEach(b=>b.addEventListener('click',()=>{
+    const idx=+b.dataset.i,tpl=lastSetTemplate(eEx,idx);if(!tpl)return;
+    eSets[idx].weight=tpl.weight;eSets[idx].reps=tpl.reps;
+    if(tpl.setType)eSets[idx].setType=tpl.setType;
+    renderSets();
+  }));
+
+  /* Set type cycle W→N→D→F. Warm-up marks the row as "not counted" so
+     saveEx and the PR engine can strip it from competition. */
+  g.querySelectorAll('.set-type-btn').forEach(b=>b.addEventListener('click',()=>{
+    const idx=+b.dataset.i;
+    eSets[idx].setType=nextSetType(setTypeOf(eSets[idx]));
+    renderSets();
+  }));
 
   g.querySelectorAll('.stepper-btn').forEach(b=>b.addEventListener('click',e=>{
     const idx=+e.currentTarget.dataset.i,d=parseFloat(e.currentTarget.dataset.d);
@@ -4851,15 +5216,73 @@ function renderSets(){
   g.querySelectorAll('.btn-set-check').forEach(btn => {
     btn.addEventListener('click', e => {
       const idx = +e.currentTarget.dataset.i;
-      eSets[idx].completed = !eSets[idx].completed;
-      if (eSets[idx].completed) {
+      const s=eSets[idx];
+      if(!s.completed){
+        /* One tap on an untouched row means "doing what I did last time":
+           pull the weight/reps ghost in as values first, THEN complete. */
+        const emptyW=(s.weight===''||s.weight==null),emptyR=(s.reps===''||s.reps==null);
+        if(emptyW||emptyR){
+          const tpl=lastSetTemplate(eEx,idx);
+          if(tpl){
+            if(emptyW&&tpl.weight!=='')s.weight=tpl.weight;
+            if(emptyR&&tpl.reps!=='')s.reps=tpl.reps;
+            if(tpl.setType&&!s.setType)s.setType=tpl.setType;
+          }
+        }
+        s.completed=true;
         const restDuration = (timerTotal > 0) ? timerTotal : 90;
         if (typeof window.triggerRestTimer === 'function') {
           window.triggerRestTimer(restDuration);
         }
+        livePRCheck(idx);
+      } else {
+        s.completed=false;
       }
       renderSets();
+      if(s.completed){
+        const rows=g.querySelectorAll('.set-row-container');
+        if(rows[idx+1])setTimeout(()=>rows[idx+1].scrollIntoView({behavior:'smooth',block:'center'}),120);
+      }
     });
+  });
+}
+
+/* Live PR mid-session: builds the same basis as the finish-flow detector
+   (registry + W + this session's in-flight rows for the same exercise,
+   minus the current one). Warm-up sets never qualify. Fires only for the
+   axis clear of everything that came before — and only once per axis per
+   open editor, so tapping the same row's checkbox on/off doesn't spam. */
+let _sessionPRFired={};
+function livePRCheck(completedIdx){
+  if(!eEx)return;
+  const key=canonicalName(eEx);if(!key)return;
+  const basis={weight:0,e1rm:0,volume:0};
+  const reg=prRegistryLoad(key);
+  if(reg){basis.weight=Math.max(0,+reg.weight)||0;basis.e1rm=Math.max(0,+reg.e1rm)||0;basis.volume=Math.max(0,+reg.volume)||0;}
+  (W||[]).forEach(wo=>{if(!wo)return;(wo.exercises||[]).forEach(ex=>{if(canonicalName(ex.name)===key)prBestOf(key,ex.sets,basis);});});
+  /* What has already been committed this session under this name counts —
+     catches chasing your own new record inside one workout. */
+  (SE||[]).forEach(ex=>{if(ex&&canonicalName(ex.name)===key)prBestOf(key,ex.sets,basis);});
+  eSets.forEach((s,i)=>{if(i!==completedIdx&&s.completed){prBestOf(key,[s],basis);}});
+  const s=eSets[completedIdx];
+  if(!s||setTypeExcluded(s))return;
+  const wv=getSetWeightVal(s),r=parseInt(s.reps)||0;
+  if(!(wv>0&&r>0))return;
+  const fresh={weight:wv,e1rm:wv*(1+r/30),volume:wv*r};
+  ['weight','e1rm','volume'].forEach(axis=>{
+    if(fresh[axis]>basis[axis]+1e-9){
+      const fireKey=key+'::'+axis;
+      if(_sessionPRFired[fireKey])return;
+      _sessionPRFired[fireKey]=true;
+      const mark=axis==='volume'?`${fmtStatNum(fresh[axis])} kg total`:`${fresh[axis].toFixed(axis==='weight'?1:0)}kg`;
+      toast(`🏆 New ${PR_KINDS[axis]} — ${key} ${mark}`,'success');
+      try{
+        (window.celebrate||function(){})(document.getElementById('se')||document.body);
+        const chk=document.querySelector(`.btn-set-check[data-i="${completedIdx}"]`);
+        if(chk){chk.classList.remove('pr-pop');void chk.offsetWidth;chk.classList.add('pr-pop');}
+      }catch(_){}
+      buzz([20,50,20,50,40]);
+    }
   });
 }
 
@@ -4954,7 +5377,7 @@ function renderCardioSets(g){
 function saveEx(){
   if(!eEx)return;
   const isCardio=eMode==='cardio';
-  const v=eSets.filter(s=>isCardio?(s.mins||s.km||s.kcal||s.speed||s.incline||s.hr||s.notes):(s.weight||s.reps||s.notes));
+  const v=eSets.filter(s=>isCardio?(s.mins||s.km||s.kcal||s.speed||s.incline||s.hr||s.notes):((s.weight||s.reps||s.notes)&&!setTypeExcluded(s)));
   if(!v.length){toast(isCardio?'Enter at least one interval':'Enter at least one set','error');return;}
   SE.push({
     name:eEx,
@@ -4973,10 +5396,12 @@ function saveEx(){
       weight:s.weight||null,
       reps:s.reps||null,
       notes:s.notes||'',
-      isLevel: eMode === 'level'
+      isLevel: eMode === 'level',
+      ...(s.setType&&s.setType!=='working'?{setType:s.setType}:{})
     }))
   });
   persistSE();
+  _sessionPRFired={};
   
   let isDefault=false;
   for(const exs of Object.values(EXERCISE_LIBRARY)){
@@ -5216,6 +5641,7 @@ function bindActs(){
     showM('Discard Session?','All entered data for today will be permanently lost.',()=>{
       SE=[];eEx=null;eSets=[];persistSE();document.getElementById('se').style.display='none';
       document.getElementById('acts').style.display='none';renderLogged();toast('Session discarded');
+      svClose();
     });
   });
 }
@@ -5256,6 +5682,7 @@ async function finish(){
     // renderFriendsCard covers the profile + Social leaderboard/activity
     // grids so every monitor reflects the new session immediately.
     renderHeatmapCalendar();renderVolWidget();renderFriendsCard();
+    try{svClose();}catch(_){}
   }finally{
     finishing=false;if(finBtn)finBtn.disabled=false;
   }
@@ -5285,7 +5712,7 @@ function mergeExercises(existing,batch){
 const PR_KINDS={weight:'Heaviest lift',e1rm:'Est. 1-rep max',volume:'Best set volume'};
 function prBestOf(name,sets,best){
   (sets||[]).forEach(s=>{
-    if(!s||isCardioSet(s))return;
+    if(!s||isCardioSet(s)||setTypeExcluded(s))return;
     const wv=getSetWeightVal(s),r=parseInt(s.reps)||0;
     if(wv>0&&wv>best.weight)best.weight=wv;
     if(wv>0&&r>0){
@@ -5697,6 +6124,7 @@ function findG(name){
 
 function getSetWeightVal(s) {
   if (isCardioSet(s)) return 0; // cardio never contributes to lifted volume
+  if (typeof setTypeExcluded==='function'&&setTypeExcluded(s)) return 0; // warm-ups don't compete
   if (s.weight !== null && s.weight !== undefined && s.weight !== '') return parseFloat(s.weight);
   if (s.notes) { const m = s.notes.match(/level\s*(\d+)/i); if (m) return parseFloat(m[1]); }
   return 0;
@@ -7053,6 +7481,20 @@ function bindTimer() {
   });
 
   document.addEventListener('click',e=>{const btn=e.target.closest('.btn-timer-chip');if(btn){start(parseInt(btn.dataset.sec));}});
+  /* −15s / +30s adjust the countdown mid-rest or re-arm before the next
+     set. Keeps `timerTotal` honest so the ring shows the right fraction. */
+  const adjustTimer=d=>{
+    if(timerRunning&&timerEndTime){
+      const remaining=Math.max(0,Math.ceil((timerEndTime-Date.now())/1000));
+      if(remaining+d<=0){stopTimer(true);return;}
+      timerEndTime+=d*1000;timerSecs+=d;timerTotal=Math.max(1,timerTotal+d);updateDisplay();
+    }else{
+      timerSecs=Math.max(15,timerSecs+d);timerTotal=Math.max(15,timerTotal+d);updateDisplay();
+    }
+  };
+  const adjM=document.getElementById('gtMinus15'),adjP=document.getElementById('gtPlus30');
+  if(adjM)adjM.addEventListener('click',()=>adjustTimer(-15));
+  if(adjP)adjP.addEventListener('click',()=>adjustTimer(30));
   toggle.addEventListener('click',()=>{if(timerRunning)stopTimer();else if(timerSecs>0)resume();else start(60);});
   reset.addEventListener('click',()=>{if(timerInterval)clearInterval(timerInterval);timerInterval=null;timerEndTime=0;timerSecs=timerTotal;timerRunning=false;timerSound.disarm();updateDisplay();desc.textContent="Reset";playIcon.style.display='block';pauseIcon.style.display='none';});
   close.addEventListener('click',()=>{if(timerInterval)clearInterval(timerInterval);timerInterval=null;timerRunning=false;timerEndTime=0;timerSecs=0;timerTotal=0;timerSound.disarm();bar.classList.remove('visible');bar.classList.add('hidden');document.querySelectorAll('.btn-timer-chip').forEach(btn=>btn.classList.remove('active'));});
@@ -7134,7 +7576,12 @@ function getMusclesForExercise(exName, dayType = '') {
 }
 
 function getAnatomySvg(view, muscleLevels = {}) {
-  const getLevelClass = (m) => `m-level-${muscleLevels[m] || 0}`;
+  /* Level-vs-freshness lane switch. Default: emit m-level-N classes keyed
+     off muscleLevels[group]. If an __freshness map is attached, emit the
+     state classes (m-fresh / m-recovering / m-fatigued) instead — same
+     driver, different semantic lane. */
+  const freshness=muscleLevels.__freshness;
+  const getClass=(m)=>freshness?`m-${freshness[m]||'fresh'}`:'m-level-'+(muscleLevels[m]||0);
   const defsHtml = `
     <defs>
       <linearGradient id="gradL0" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -7171,48 +7618,48 @@ function getAnatomySvg(view, muscleLevels = {}) {
     return `<svg class="anatomy-svg" viewBox="0 0 100 200">${defsHtml}
         <ellipse class="anatomy-base" cx="50" cy="18" rx="7" ry="9" filter="url(#innerBevel)"/>
         <path class="anatomy-base" d="${bodySilhouette}" filter="url(#innerBevel)"/>
-        <path class="muscle-path ${getLevelClass('chest')}" d="M48 37 L38 37 C35 37, 34 40, 34 44 C34 47, 39 48, 48 45 Z" />
-        <path class="muscle-path ${getLevelClass('chest')}" d="M52 37 L62 37 C65 37, 66 40, 66 44 C66 47, 61 48, 52 45 Z" />
-        <path class="muscle-path ${getLevelClass('abs')}" d="M49 48 L42 48 C41 52, 41 53, 42 53 L49 53 Z" />
-        <path class="muscle-path ${getLevelClass('abs')}" d="M51 48 L58 48 C59 52, 59 53, 58 53 L51 53 Z" />
-        <path class="muscle-path ${getLevelClass('abs')}" d="M49 55 L41 55 C41 59, 41 60, 42 60 L49 60 Z" />
-        <path class="muscle-path ${getLevelClass('abs')}" d="M51 55 L59 55 C59 59, 59 60, 58 60 L51 60 Z" />
-        <path class="muscle-path ${getLevelClass('abs')}" d="M49 62 L41 62 C41 66, 42 67, 43 67 L49 67 Z" />
-        <path class="muscle-path ${getLevelClass('abs')}" d="M51 62 L59 62 C59 66, 58 67, 57 67 L51 67 Z" />
-        <path class="muscle-path ${getLevelClass('abs')}" d="M43 69 L57 69 L55 80 L45 80 Z" />
-        <path class="muscle-path ${getLevelClass('delts')}" d="M37 35 C32 35, 29 37, 28 43 C28 47, 30 50, 33 50 C36 47, 37 42, 37 35 Z" />
-        <path class="muscle-path ${getLevelClass('delts')}" d="M63 35 C68 35, 71 37, 72 43 C72 47, 70 50, 67 50 C64 47, 63 42, 63 35 Z" />
-        <path class="muscle-path ${getLevelClass('biceps')}" d="M31 48 C29 51, 27 56, 27 62 C28 64, 30 64, 32 62 C33 56, 33 51, 31 48 Z" />
-        <path class="muscle-path ${getLevelClass('biceps')}" d="M69 48 C71 51, 73 56, 73 62 C72 64, 70 64, 68 62 C67 56, 67 51, 69 48 Z" />
-        <path class="muscle-path ${getLevelClass('forearms')}" d="M26 67 C24 72, 22 80, 22 88 C24 89, 26 89, 27 86 C28 80, 29 72, 29 67 Z" />
-        <path class="muscle-path ${getLevelClass('forearms')}" d="M74 67 C76 72, 78 80, 78 88 C76 89, 74 89, 73 86 C72 80, 71 72, 71 67 Z" />
-        <path class="muscle-path ${getLevelClass('quads')}" d="M37 86 C35 96, 35 112, 37 122 C39 123, 40 123, 41 122 C41 112, 40 96, 38 86 Z" />
-        <path class="muscle-path ${getLevelClass('quads')}" d="M40 88 C40 98, 41 110, 42 122 C44 122, 45 120, 45 115 C45 105, 43 96, 41 88 Z" />
-        <path class="muscle-path ${getLevelClass('quads')}" d="M63 86 C65 96, 65 112, 63 122 C61 123, 60 123, 59 122 C59 112, 60 96, 62 86 Z" />
-        <path class="muscle-path ${getLevelClass('quads')}" d="M60 88 C60 98, 59 110, 58 122 C56 122, 55 120, 55 115 C55 105, 57 96, 59 88 Z" />
-        <path class="muscle-path ${getLevelClass('calves')}" d="M38 132 C37 142, 38 156, 39 170 C40 170, 42 170, 42 168 C42 156, 41 142, 40 132 Z" />
-        <path class="muscle-path ${getLevelClass('calves')}" d="M62 132 C63 142, 62 156, 61 170 C60 170, 58 170, 58 168 C58 156, 59 142, 60 132 Z" />
+        <path class="muscle-path ${getClass('chest')}" data-muscle="chest" d="M48 37 L38 37 C35 37, 34 40, 34 44 C34 47, 39 48, 48 45 Z" />
+        <path class="muscle-path ${getClass('chest')}" data-muscle="chest" d="M52 37 L62 37 C65 37, 66 40, 66 44 C66 47, 61 48, 52 45 Z" />
+        <path class="muscle-path ${getClass('abs')}" data-muscle="abs" d="M49 48 L42 48 C41 52, 41 53, 42 53 L49 53 Z" />
+        <path class="muscle-path ${getClass('abs')}" data-muscle="abs" d="M51 48 L58 48 C59 52, 59 53, 58 53 L51 53 Z" />
+        <path class="muscle-path ${getClass('abs')}" data-muscle="abs" d="M49 55 L41 55 C41 59, 41 60, 42 60 L49 60 Z" />
+        <path class="muscle-path ${getClass('abs')}" data-muscle="abs" d="M51 55 L59 55 C59 59, 59 60, 58 60 L51 60 Z" />
+        <path class="muscle-path ${getClass('abs')}" data-muscle="abs" d="M49 62 L41 62 C41 66, 42 67, 43 67 L49 67 Z" />
+        <path class="muscle-path ${getClass('abs')}" data-muscle="abs" d="M51 62 L59 62 C59 66, 58 67, 57 67 L51 67 Z" />
+        <path class="muscle-path ${getClass('abs')}" data-muscle="abs" d="M43 69 L57 69 L55 80 L45 80 Z" />
+        <path class="muscle-path ${getClass('delts')}" data-muscle="delts" d="M37 35 C32 35, 29 37, 28 43 C28 47, 30 50, 33 50 C36 47, 37 42, 37 35 Z" />
+        <path class="muscle-path ${getClass('delts')}" data-muscle="delts" d="M63 35 C68 35, 71 37, 72 43 C72 47, 70 50, 67 50 C64 47, 63 42, 63 35 Z" />
+        <path class="muscle-path ${getClass('biceps')}" data-muscle="biceps" d="M31 48 C29 51, 27 56, 27 62 C28 64, 30 64, 32 62 C33 56, 33 51, 31 48 Z" />
+        <path class="muscle-path ${getClass('biceps')}" data-muscle="biceps" d="M69 48 C71 51, 73 56, 73 62 C72 64, 70 64, 68 62 C67 56, 67 51, 69 48 Z" />
+        <path class="muscle-path ${getClass('forearms')}" data-muscle="forearms" d="M26 67 C24 72, 22 80, 22 88 C24 89, 26 89, 27 86 C28 80, 29 72, 29 67 Z" />
+        <path class="muscle-path ${getClass('forearms')}" data-muscle="forearms" d="M74 67 C76 72, 78 80, 78 88 C76 89, 74 89, 73 86 C72 80, 71 72, 71 67 Z" />
+        <path class="muscle-path ${getClass('quads')}" data-muscle="quads" d="M37 86 C35 96, 35 112, 37 122 C39 123, 40 123, 41 122 C41 112, 40 96, 38 86 Z" />
+        <path class="muscle-path ${getClass('quads')}" data-muscle="quads" d="M40 88 C40 98, 41 110, 42 122 C44 122, 45 120, 45 115 C45 105, 43 96, 41 88 Z" />
+        <path class="muscle-path ${getClass('quads')}" data-muscle="quads" d="M63 86 C65 96, 65 112, 63 122 C61 123, 60 123, 59 122 C59 112, 60 96, 62 86 Z" />
+        <path class="muscle-path ${getClass('quads')}" data-muscle="quads" d="M60 88 C60 98, 59 110, 58 122 C56 122, 55 120, 55 115 C55 105, 57 96, 59 88 Z" />
+        <path class="muscle-path ${getClass('calves')}" data-muscle="calves" d="M38 132 C37 142, 38 156, 39 170 C40 170, 42 170, 42 168 C42 156, 41 142, 40 132 Z" />
+        <path class="muscle-path ${getClass('calves')}" data-muscle="calves" d="M62 132 C63 142, 62 156, 61 170 C60 170, 58 170, 58 168 C58 156, 59 142, 60 132 Z" />
       </svg>`;
   } else {
     return `<svg class="anatomy-svg" viewBox="0 0 100 200">${defsHtml}
         <ellipse class="anatomy-base" cx="50" cy="18" rx="7" ry="9" filter="url(#innerBevel)"/>
         <path class="anatomy-base" d="${bodySilhouette}" filter="url(#innerBevel)"/>
-        <path class="muscle-path ${getLevelClass('back')}" d="M50 27 C47 27, 44 31, 43 35 C45 35, 47 37, 50 48 C53 37, 55 35, 57 35 C56 31, 53 27, 50 27 Z" />
-        <path class="muscle-path ${getLevelClass('back')}" d="M48 37 C42 38, 36 41, 35 48 C35 56, 37 68, 41 72 C44 65, 47 52, 48 37 Z" />
-        <path class="muscle-path ${getLevelClass('back')}" d="M52 37 C58 38, 64 41, 65 48 C65 56, 63 68, 59 72 C56 65, 53 52, 52 37 Z" />
-        <path class="muscle-path ${getLevelClass('back')}" d="M50 49 L43 72 L45 82 L55 82 L57 72 Z" />
-        <path class="muscle-path ${getLevelClass('delts')}" d="M37 35 C32 35, 29 37, 28 43 C28 47, 30 50, 33 50 C36 47, 37 42, 37 35 Z" />
-        <path class="muscle-path ${getLevelClass('delts')}" d="M63 35 C68 35, 71 37, 72 43 C72 47, 70 50, 67 50 C64 47, 63 42, 63 35 Z" />
-        <path class="muscle-path ${getLevelClass('triceps')}" d="M31 48 C29 51, 27 57, 27 63 C28 65, 30 65, 32 63 C33 57, 33 51, 31 48 Z" />
-        <path class="muscle-path ${getLevelClass('triceps')}" d="M69 48 C71 51, 73 57, 73 63 C72 65, 70 65, 68 63 C67 57, 67 51, 69 48 Z" />
-        <path class="muscle-path ${getLevelClass('forearms')}" d="M26 67 C24 72, 22 80, 22 88 C24 89, 26 89, 27 86 C28 80, 29 72, 29 67 Z" />
-        <path class="muscle-path ${getLevelClass('forearms')}" d="M74 67 C76 72, 78 80, 78 88 C76 89, 74 89, 73 86 C72 80, 71 72, 71 67 Z" />
-        <path class="muscle-path ${getLevelClass('hamstrings')}" d="M36 78 C35 83, 38 87, 48 87 C49 83, 49 79, 48 75 C42 75, 37 76, 36 78 Z" />
-        <path class="muscle-path ${getLevelClass('hamstrings')}" d="M64 78 C65 83, 62 87, 52 87 C51 83, 51 79, 52 75 C58 75, 63 76, 64 78 Z" />
-        <path class="muscle-path ${getLevelClass('hamstrings')}" d="M37 89 C36 100, 36 114, 38 124 C40 125, 42 125, 43 124 C44 114, 44 100, 43 89 Z" />
-        <path class="muscle-path ${getLevelClass('hamstrings')}" d="M63 89 C64 100, 64 114, 62 124 C60 125, 58 125, 57 124 C56 114, 56 100, 57 89 Z" />
-        <path class="muscle-path ${getLevelClass('calves')}" d="M37 132 C35 142, 36 156, 38 170 C39 172, 41 172, 42 170 C42 156, 41 142, 39 132 Z" />
-        <path class="muscle-path ${getLevelClass('calves')}" d="M63 132 C65 142, 64 156, 62 170 C61 172, 59 172, 58 170 C58 156, 59 142, 61 132 Z" />
+        <path class="muscle-path ${getClass('back')}" data-muscle="back" d="M50 27 C47 27, 44 31, 43 35 C45 35, 47 37, 50 48 C53 37, 55 35, 57 35 C56 31, 53 27, 50 27 Z" />
+        <path class="muscle-path ${getClass('back')}" data-muscle="back" d="M48 37 C42 38, 36 41, 35 48 C35 56, 37 68, 41 72 C44 65, 47 52, 48 37 Z" />
+        <path class="muscle-path ${getClass('back')}" data-muscle="back" d="M52 37 C58 38, 64 41, 65 48 C65 56, 63 68, 59 72 C56 65, 53 52, 52 37 Z" />
+        <path class="muscle-path ${getClass('back')}" data-muscle="back" d="M50 49 L43 72 L45 82 L55 82 L57 72 Z" />
+        <path class="muscle-path ${getClass('delts')}" data-muscle="delts" d="M37 35 C32 35, 29 37, 28 43 C28 47, 30 50, 33 50 C36 47, 37 42, 37 35 Z" />
+        <path class="muscle-path ${getClass('delts')}" data-muscle="delts" d="M63 35 C68 35, 71 37, 72 43 C72 47, 70 50, 67 50 C64 47, 63 42, 63 35 Z" />
+        <path class="muscle-path ${getClass('triceps')}" data-muscle="triceps" d="M31 48 C29 51, 27 57, 27 63 C28 65, 30 65, 32 63 C33 57, 33 51, 31 48 Z" />
+        <path class="muscle-path ${getClass('triceps')}" data-muscle="triceps" d="M69 48 C71 51, 73 57, 73 63 C72 65, 70 65, 68 63 C67 57, 67 51, 69 48 Z" />
+        <path class="muscle-path ${getClass('forearms')}" data-muscle="forearms" d="M26 67 C24 72, 22 80, 22 88 C24 89, 26 89, 27 86 C28 80, 29 72, 29 67 Z" />
+        <path class="muscle-path ${getClass('forearms')}" data-muscle="forearms" d="M74 67 C76 72, 78 80, 78 88 C76 89, 74 89, 73 86 C72 80, 71 72, 71 67 Z" />
+        <path class="muscle-path ${getClass('hamstrings')}" data-muscle="hamstrings" d="M36 78 C35 83, 38 87, 48 87 C49 83, 49 79, 48 75 C42 75, 37 76, 36 78 Z" />
+        <path class="muscle-path ${getClass('hamstrings')}" data-muscle="hamstrings" d="M64 78 C65 83, 62 87, 52 87 C51 83, 51 79, 52 75 C58 75, 63 76, 64 78 Z" />
+        <path class="muscle-path ${getClass('hamstrings')}" data-muscle="hamstrings" d="M37 89 C36 100, 36 114, 38 124 C40 125, 42 125, 43 124 C44 114, 44 100, 43 89 Z" />
+        <path class="muscle-path ${getClass('hamstrings')}" data-muscle="hamstrings" d="M63 89 C64 100, 64 114, 62 124 C60 125, 58 125, 57 124 C56 114, 56 100, 57 89 Z" />
+        <path class="muscle-path ${getClass('calves')}" data-muscle="calves" d="M37 132 C35 142, 36 156, 38 170 C39 172, 41 172, 42 170 C42 156, 41 142, 39 132 Z" />
+        <path class="muscle-path ${getClass('calves')}" data-muscle="calves" d="M63 132 C65 142, 64 156, 62 170 C61 172, 59 172, 58 170 C58 156, 59 142, 61 132 Z" />
       </svg>`;
   }
 }
@@ -7222,6 +7669,49 @@ function renderAnatomyMap(container, muscleLevels) {
     <div class="anatomy-svg-container"><div class="anatomy-view-label">Front</div>${getAnatomySvg('front', muscleLevels)}</div>
     <div class="anatomy-svg-container"><div class="anatomy-view-label">Back</div>${getAnatomySvg('back', muscleLevels)}</div>
   `;
+}
+
+/* ── Muscle freshness map (P2: "what should I train today?") ──
+   Reuses the anatomy SVG; instead of volume, each path carries one of
+   three tint classes. Computed once per refresh pass — cheap walk over
+   W tracking the latest date each muscle fired. */
+function computeMuscleFreshness(){
+  const last={};
+  const today=new Date();today.setHours(23,59,59,999);
+  (W||[]).forEach(w=>{
+    if(!w||w.dayType==='Rest Day')return;
+    (w.exercises||[]).forEach(e=>{
+      if(!e||!e.name)return;
+      /* Skip pure cardio entries — they don't track muscle freshness. The
+         day-type fallback in getMusclesForExercise would still return
+         something for "Cardio", so gate explicitly. */
+      if((e.sets||[]).some(isCardioSet) && !(e.sets||[]).some(s=>!isCardioSet(s)))return;
+      const ms=getMusclesForExercise(e.name,w.dayType||'');
+      (ms||[]).forEach(m=>{
+        if(!last[m]||w.date>last[m])last[m]=w.date;
+      });
+    });
+  });
+  const fresh={}, groups=['chest','back','delts','biceps','triceps','forearms','quads','hamstrings','calves','abs'];
+  groups.forEach(m=>{
+    const d=last[m];
+    if(!d){fresh[m]='fresh';return;}
+    const days=Math.floor((today-new Date(d+'T23:59:59'))/(1000*60*60*24));
+    if(days>=4)fresh[m]='fresh';
+    else if(days>=2)fresh[m]='recovering';
+    else fresh[m]='fatigued';
+  });
+  return fresh;
+}
+function renderMuscleFreshness(){
+  const host=document.getElementById('freshMapHost');
+  if(!host)return;
+  const fresh=computeMuscleFreshness();
+  /* The same anatomy shape, but lanes are state classes, not m-level-N.
+     renderAnatomyMap is unchanged — getAnatomySvg quietly swaps when
+     __freshness is present in the levels object. */
+  const musclesObject=Object.assign({},fresh,{__freshness:fresh});
+  renderAnatomyMap(host,musclesObject);
 }
 
 function renderHeatmapInsights(period) {

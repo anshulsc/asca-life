@@ -37,7 +37,9 @@ if (!fs.existsSync(BUILT)) { console.error('ui: run `node build.js` first.'); pr
    still fails loudly instead of silently no-op'ing. */
 
 const srcHtml = fs.readFileSync(SRC_INDEX, 'utf8');
-const arcSection = srcHtml.slice(srcHtml.indexOf('id="vArc"'), srcHtml.indexOf('<section class="view on" id="vLog"'));
+// vHome is the first section after vArc in the markup; #sessionOverlay is a
+// sibling <div>, not another .view, so it can't end this slice.
+const arcSection = srcHtml.slice(srcHtml.indexOf('id="vArc"'), srcHtml.indexOf('<section class="view on" id="vHome"'));
 const ARC_IDS = [...arcSection.matchAll(/id="([^"]+)"/g)].map(m => m[1]);
 if (!ARC_IDS.includes('arcOnboardCard')) {
   console.error('ui: could not locate the #vArc section in src/index.html — markup may have moved.');
@@ -97,9 +99,10 @@ function makeDocument(ids) {
     // that chrome is outside the section actually being tested.
     getElementById: id => registry[id] || (registry[id] = makeElement(id)),
     querySelector: (sel) => {
-      // Only what app.js actually needs for the Arc path.
+      // Only what app.js actually needs for the Arc path: the promo "Try it"
+      // button hops to the Arc tab via .bot-btn[data-v="Arc"].click().
       if (sel === 'meta[name="theme-color"]') return makeElement('meta-theme');
-      if (sel.startsWith('.bot-btn[data-v="Log"]')) { const b = makeElement('logbtn'); b.click = () => {}; return b; }
+      if (sel === '.bot-btn[data-v="Arc"]') { const b = makeElement('arcbtn'); b.click = () => {}; return b; }
       return null;
     },
     querySelectorAll: () => [],

@@ -2,7 +2,7 @@
    ASCA GYM — Liquid Glass Design System v2.0
    Apple-inspired liquid glass, iridescent refractions, depth blur
    ═══════════════════════════════════════════════════════════════ */
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&family=Bebas+Neue&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800;900&family=Playfair+Display:ital,wght@1,500;1,600&family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&family=Bebas+Neue&display=swap');
 
 :root {
   /* ── Colour channels ─────────────────────────────────────────
@@ -16,9 +16,9 @@
   --accent-rgb: 255, 118, 0;
 
   /* Backgrounds — swapped wholesale by the winter block. */
-  --frame-bg: radial-gradient(ellipse at 50% 0%, #0a0812 0%, #010103 100%);
-  --veil-1: rgba(20, 14, 30, 0.78);
-  --veil-2: rgba(2, 1, 4, 0.94);
+  --frame-bg: radial-gradient(ellipse at 50% 0%, #111018 0%, #07070a 100%);
+  --veil-1: rgba(22, 20, 28, 0.78);
+  --veil-2: rgba(8, 8, 10, 0.94);
   --atmos: none;
 
   /* Aurora blobs: rgb channel + peak alpha, so one token drives both stops. */
@@ -33,8 +33,8 @@
   --hm-3: rgba(255, 107, 0, 0.70);
   --hm-4: var(--accent);
 
-  /* Pitch Black OLED Base */
-  --bg: #000000;
+  /* Elevated dark base — off pure black so elevation tiers read. */
+  --bg: #0C0C0E;
   
   /* Apple Liquid Glass — True Translucent System */
   --glass-1: rgba(var(--wht), 0.03);
@@ -80,6 +80,14 @@
   
   --accent: #FF7600;
   --accent-bg: rgba(var(--accent-rgb), 0.15);
+  /* Accented channel for the deep gradient stops/glow shadows that used to
+     hardcode the red-orange 255,61,0 — ONE accent family now: --accent plus
+     the light tints --accent-hi/--accent-press below. (#591D00 ≈ color-mix(
+     in srgb, var(--accent) 35%, black); grayscale under the winter theme,
+     like --accent itself.) */
+  --accent-press-rgb: 89, 29, 0;
+  --accent-hi: color-mix(in srgb, var(--accent) 75%, white);
+  --accent-press: color-mix(in srgb, var(--accent) 80%, black);
   
   /* Radius System — iOS 27 Super-Rounded */
   /* Compressed radius scale: gentle curves, nothing balloon-round */
@@ -114,6 +122,31 @@
                              transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease; }
        .tappable:active { transform: scale(var(--press-scale)); }     */
   --press-scale: 0.96;
+
+  /* The ONE consolidated interactive transition — replaces the ~25 copy-
+     pasted six-property strings this sheet grew. Standard variants: colors
+     get --smooth with no easing on transform; slower (springy) variants
+     get ease on colors, --spring on transform. */
+  --t-ui: background-color var(--dur-fast) var(--smooth),
+          border-color var(--dur-fast) var(--smooth),
+          color var(--dur-fast) var(--smooth),
+          box-shadow var(--dur-fast) var(--smooth),
+          transform var(--dur-fast) var(--smooth),
+          opacity var(--dur-fast) var(--smooth);
+  --t-ui-slow: background-color var(--dur-med) ease,
+               border-color var(--dur-med) ease,
+               color var(--dur-med) ease,
+               box-shadow var(--dur-med) ease,
+               transform var(--dur-med) var(--spring),
+               opacity var(--dur-med) ease;
+  /* Podium-card bounce variant (medal pop) — keep it its own recipe so
+     the bounce stays deliberate, not ambient. */
+  --t-ui-slow-bounce: background-color var(--dur-med) ease,
+               border-color var(--dur-med) ease,
+               color var(--dur-med) ease,
+               box-shadow var(--dur-med) ease,
+               transform var(--dur-med) var(--bounce),
+               opacity var(--dur-med) ease;
 
   /* Spacing — 4px base; the arc/settle spacing story rides these, not
      one-off pixel values spread across the sheet. */
@@ -231,18 +264,19 @@
            radial-gradient(100% 50% at 85% 5%, rgba(var(--wht), 0.035) 0%, transparent 65%),
            radial-gradient(140% 70% at 50% 110%, rgba(var(--wht), 0.02) 0%, transparent 60%);
 
-  /* Aurora blobs — now just grey light, not colour. Present enough that
-     the background isn't flat, quiet enough that it reads as restraint. */
-  --blob-1: 200, 206, 214;  --blob-1-a: 0.14;
-  --blob-2: 150, 155, 163;  --blob-2-a: 0.12;
-  --blob-3: 170, 175, 182;  --blob-3-a: 0.08;
-  --blob-4: 90, 96, 105;    --blob-4-a: 0.14;
+  /* Aurora blobs — quieter in winter: just enough presence that the
+     background isn't flat, but not a nebula. Muted further from prior. */
+  --blob-1: 200, 206, 214;  --blob-1-a: 0.10;
+  --blob-2: 150, 155, 163;  --blob-2-a: 0.09;
+  --blob-3: 170, 175, 182;  --blob-3-a: 0.06;
+  --blob-4: 90, 96, 105;    --blob-4-a: 0.11;
 
-  /* Activity ramp — grey at low intensity, near-white at the top. */
-  --hm-1: rgba(var(--wht), 0.20);
-  --hm-2: rgba(var(--wht), 0.40);
-  --hm-3: rgba(var(--wht), 0.65);
-  --hm-4: rgba(var(--wht), 0.95);
+  /* Activity ramp — burrowed: low intensity stays quiet, high intensity hits
+     proper winter-white instead of grey-on-grey */
+  --hm-1: rgba(var(--wht), 0.16);
+  --hm-2: rgba(var(--wht), 0.34);
+  --hm-3: rgba(var(--wht), 0.58);
+  --hm-4: rgba(var(--wht), 0.92);
 
   /* c-green / c-cyan are left at their classic values on purpose: they
      colour-code workout day-types and muscle groups elsewhere in the app
@@ -439,7 +473,7 @@ body {
   padding: 6px 12px; border-radius: var(--r-full);
   font-size: 0.7rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.05em;
-  cursor: pointer; transition: background-color var(--dur-med) ease, border-color var(--dur-med) ease, color var(--dur-med) ease, box-shadow var(--dur-med) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-med) ease;
+  cursor: pointer; transition: var(--t-ui-slow);
   box-shadow: var(--specular-top);
 }
 
@@ -597,7 +631,7 @@ body {
   grid-template-rows: repeat(7, 10px);
   gap: 3px;
   height: 88px;
-  font-size: 0.62rem;
+  font-size: 0.68rem;
   color: var(--t-4);
   font-weight: 600;
   align-items: center;
@@ -613,9 +647,9 @@ body {
 .heatmap-cal-months {
   position: relative;
   height: 14px;
-  font-size: 0.55rem;
+  font-size: var(--text-xs);
   font-weight: 700;
-  color: var(--t-4);
+  color: var(--t-3);
   margin-bottom: 6px;
 }
 
@@ -639,7 +673,7 @@ body {
   width: 10px; height: 10px;
   border-radius: 2px;
   background: rgba(var(--wht), 0.04);
-  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), color 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: var(--t-ui-slow);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -670,7 +704,7 @@ body {
   border: 1px solid rgba(var(--wht), 0.05);
   font-size: 0.68rem;
   color: var(--t-2);
-  transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s;
+  transition: var(--t-ui);
   min-height: 36px;
   display: flex;
   align-items: center;
@@ -704,8 +738,9 @@ body {
 
 .vol-widget-value {
   font-family: var(--ff-mono);
-  font-size: 1.7rem; font-weight: 800;
+  font-weight: 800;
   color: var(--t-1);
+  font-size: clamp(1.35rem, 1.15rem + 1vw, 1.85rem);
 }
 
 .vol-widget-unit {
@@ -762,8 +797,10 @@ body {
 
 .ring-value {
   font-family: var(--ff-mono);
-  font-size: 1.5rem; font-weight: 800;
+  font-weight: 800;
   color: var(--t-1);
+  /* fluid: compact on phones, full on tablets/desktop */
+  font-size: clamp(1.3rem, 1.1rem + 0.9vw, 1.6rem);
 }
 
 .ring-label {
@@ -816,15 +853,15 @@ body {
 
 .input-field {
   background: rgba(var(--wht), 0.04);
-  backdrop-filter: blur(20px) saturate(160%) brightness(1.15);
-  -webkit-backdrop-filter: blur(20px) saturate(160%) brightness(1.15);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   border: 1px solid rgba(var(--wht), 0.06);
   border-radius: var(--r-m);
   padding: 13px 16px;
   color: var(--t-1);
   font-size: 0.95rem; font-weight: 500;
   outline: none;
-  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease;
+  transition: var(--t-ui-slow);
   -webkit-appearance: none;
   box-shadow: var(--specular-top),
               inset 0 2px 4px rgba(var(--blk), 0.25);
@@ -866,8 +903,8 @@ select.input-field {
   width: 100%; padding-left: 42px;
   border-radius: var(--r-xl);
   background: rgba(var(--wht), 0.05);
-  backdrop-filter: blur(20px) saturate(190%) brightness(1.12);
-  -webkit-backdrop-filter: blur(20px) saturate(190%) brightness(1.12);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   border: 1px solid rgba(var(--wht), 0.08);
   box-shadow: var(--glass-shine),
               var(--glass-glow);
@@ -885,8 +922,8 @@ select.input-field {
   position: absolute; top: calc(100% + 10px);
   left: 0; right: 0;
   background: rgba(var(--blk), 0.72);
-  backdrop-filter: blur(20px) saturate(190%) brightness(1.12);
-  -webkit-backdrop-filter: blur(20px) saturate(190%) brightness(1.12);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   border: 1px solid rgba(var(--wht), 0.10);
   border-radius: var(--r-l);
   padding: 8px;
@@ -918,7 +955,7 @@ select.input-field {
   padding: 11px 12px;
   border-radius: var(--r-m);
   display: flex; align-items: center; gap: 10px;
-  cursor: pointer; transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s;
+  cursor: pointer; transition: var(--t-ui);
   font-weight: 500; font-size: 0.9rem;
 }
 
@@ -943,8 +980,8 @@ select.input-field {
 /* ── Active Set Editor — iOS 27 Glass ──────────────────── */
 .editor {
   background: var(--glass-surface);
-  backdrop-filter: blur(20px) saturate(180%) brightness(1.1);
-  -webkit-backdrop-filter: blur(20px) saturate(180%) brightness(1.1);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   border: 1px solid rgba(var(--wht), 0.075);
   border-radius: var(--r-l);
   margin-top: 18px;
@@ -976,7 +1013,7 @@ select.input-field {
   display: flex; align-items: center; justify-content: center;
   width: 30px; height: 30px;
   border-radius: 50%;
-  transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s;
+  transition: var(--t-ui);
 }
 .btn-close svg { width: 16px; height: 16px; }
 
@@ -999,9 +1036,59 @@ select.input-field {
 
 .set-grid-main {
   display: grid;
-  grid-template-columns: 30px 1.4fr 1.1fr 30px;
+  grid-template-columns: 30px 1.4fr 1.1fr 24px 30px;
   gap: 8px; align-items: center;
 }
+/* Column header mirrors .set-grid-main so "Weight"/"Reps" sit over their
+   inputs now that the grid carries a third interactable column. */
+.set-col-header {
+  display: grid;
+  grid-template-columns: 30px 1.4fr 1.1fr 24px 30px;
+  gap: 8px; margin-bottom: 6px; align-items: center; text-align: center;
+}
+
+/* ── Set-type chip (W/N/D/F) ─────────────────────────────────
+   One tap cycles the set's purpose. Warm-up is visually quarantined so
+   the athlete sees "this one doesn't count" before it hits the math. */
+.set-type-btn {
+  width: 24px; height: 32px; border-radius: var(--r-xs);
+  background: rgba(var(--wht), 0.03);
+  border: 1px solid var(--border-light);
+  color: var(--t-3); font-family: var(--ff-mono);
+  font-size: 0.6rem; font-weight: 700;
+  cursor: pointer; transition: var(--t-ui);
+  display: flex; align-items: center; justify-content: center;
+  padding: 0;
+}
+.set-type-btn:active { transform: scale(0.9); }
+@media (hover: hover) and (pointer: fine) {
+  .set-type-btn:hover { color: var(--t-1); border-color: var(--t-3); }
+}
+.set-type-excluded {
+  background: rgba(var(--wht), 0.015);
+  color: var(--c-orange); border-color: rgba(255, 159, 10, 0.3);
+  border-style: dashed; opacity: 0.85;
+}
+
+/* ── Ghost "Last:" chip ──────────────────────────────────────
+   The one-tap completion prompt. Lives inside .set-notes-wrap so it
+   shares the off-side indent; tucks into its own row above note tags. */
+.set-hint-row { display: flex; margin-top: 3px; min-height: 0; }
+.set-ghost-chip {
+  background: rgba(var(--accent-rgb), 0.06);
+  border: 1px dashed rgba(var(--accent-rgb), 0.25);
+  color: var(--t-3);
+  padding: 2px 8px; border-radius: var(--r-full);
+  font-family: var(--ff-mono); font-size: 0.62rem; font-weight: 600;
+  cursor: pointer; transition: var(--t-ui);
+  white-space: nowrap; outline: none;
+  display: inline-flex; gap: 4px; align-items: center;
+}
+.set-ghost-chip:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) {
+  .set-ghost-chip:hover { background: rgba(var(--accent-rgb), 0.12); color: var(--t-1); border-color: rgba(var(--accent-rgb), 0.4); }
+}
+.set-ghost-label { color: var(--accent); font-weight: 800; font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.06em; }
 
 .set-notes-wrap { padding-left: 38px; padding-right: 38px; margin-top: 4px; }
 
@@ -1036,7 +1123,7 @@ select.input-field {
   font-family: var(--ff-mono);
   font-size: 0.95rem; font-weight: 600;
   text-align: center; outline: none;
-  transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s; -webkit-appearance: none;
+  transition: var(--t-ui); -webkit-appearance: none;
 }
 .set-input:focus { border-color: var(--accent); background: var(--glass-3); box-shadow: 0 0 8px var(--accent-bg); }
 
@@ -1046,7 +1133,7 @@ select.input-field {
   color: var(--t-4); font-size: 1.1rem;
   border-radius: var(--r-xs);
   cursor: pointer; display: flex; align-items: center; justify-content: center;
-  transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s;
+  transition: var(--t-ui);
 }
 .set-del svg { width: 14px; height: 14px; transition: transform 0.2s; }
 
@@ -1072,7 +1159,7 @@ select.input-field {
   width: 34px; height: 100%;
   background: transparent; border: none;
   color: var(--t-3); font-size: 1.1rem; font-weight: 700;
-  cursor: pointer; transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+  cursor: pointer; transition: var(--t-ui);
   display: flex; align-items: center; justify-content: center;
 }
 
@@ -1097,7 +1184,7 @@ select.input-field {
   color: var(--t-2); font-weight: 600; font-size: 0.88rem;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s;
+  transition: var(--t-ui);
 }
 .add-set-btn svg { width: 14px; height: 14px; }
 
@@ -1113,16 +1200,16 @@ select.input-field {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   font-family: var(--ff-sans); font-weight: 700;
   border: none; cursor: pointer;
-  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease;
+  transition: var(--t-ui-slow);
   user-select: none; outline: none;
   position: relative;
 }
 .btn:active { transform: scale(var(--press-scale)); }
 
 .btn-primary {
-  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.35) 0%, rgba(255, 61, 0, 0.2) 100%);
-  backdrop-filter: blur(20px) saturate(180%) brightness(1.1);
-  -webkit-backdrop-filter: blur(20px) saturate(180%) brightness(1.1);
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.35) 0%, rgba(var(--accent-press-rgb), 0.2) 100%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   color: #ffffff;
   padding: 14px 22px;
   border-radius: var(--r-full);
@@ -1131,7 +1218,7 @@ select.input-field {
   box-shadow: 
     inset 0 1px 0 0 rgba(var(--wht), 0.4),
     inset 0 0 0 0.5px rgba(var(--wht), 0.15),
-    0 6px 24px rgba(255, 61, 0, 0.25),
+    0 6px 24px rgba(var(--accent-press-rgb), 0.25),
     0 0 12px rgba(var(--accent-rgb), 0.2);
   position: relative;
   overflow: hidden;
@@ -1147,20 +1234,20 @@ select.input-field {
 @media (hover: hover) and (pointer: fine) {
   .btn-primary:hover {
     transform: translateY(-2px);
-    background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.45) 0%, rgba(255, 61, 0, 0.25) 100%);
+    background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.45) 0%, rgba(var(--accent-press-rgb), 0.25) 100%);
     border-color: rgba(var(--accent-rgb), 0.6);
     box-shadow: 
       inset 0 1px 0 0 rgba(var(--wht), 0.5),
       inset 0 0 0 0.5px rgba(var(--wht), 0.2),
-      0 10px 30px rgba(255, 61, 0, 0.35),
+      0 10px 30px rgba(var(--accent-press-rgb), 0.35),
       0 0 20px rgba(var(--accent-rgb), 0.35);
   }
 }
 
 .btn-secondary {
   background: linear-gradient(135deg, rgba(var(--wht), 0.08) 0%, rgba(var(--wht), 0.02) 100%);
-  backdrop-filter: blur(20px) saturate(180%) brightness(1.1);
-  -webkit-backdrop-filter: blur(20px) saturate(180%) brightness(1.1);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   border: 1px solid rgba(var(--wht), 0.1);
   color: var(--t-1);
   padding: 11px 18px;
@@ -1195,8 +1282,8 @@ select.input-field {
 
 .btn-danger {
   background: linear-gradient(135deg, rgba(255, 69, 58, 0.25) 0%, rgba(255, 69, 58, 0.10) 100%);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   border: 1px solid rgba(255, 69, 58, 0.35);
   color: var(--c-red);
   padding: 11px 18px;
@@ -1239,12 +1326,12 @@ select.input-field {
 
 .logged-card {
   background: var(--glass-surface);
-  backdrop-filter: blur(20px) saturate(180%) brightness(1.1);
-  -webkit-backdrop-filter: blur(20px) saturate(180%) brightness(1.1);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   border: 1px solid rgba(var(--wht), 0.075);
   border-radius: var(--r-l);
   padding: 14px 16px;
-  position: relative; transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s;
+  position: relative; transition: var(--t-ui);
   box-shadow: var(--elev-1);
 }
 
@@ -1274,7 +1361,7 @@ select.input-field {
   padding: 4px 10px;
   color: var(--t-3);
   font-size: 0.65rem; font-weight: 700;
-  cursor: pointer; transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s var(--spring), opacity 0.2s ease; outline: none;
+  cursor: pointer; transition: var(--t-ui); outline: none;
   white-space: nowrap;
 }
 
@@ -1306,7 +1393,7 @@ select.input-field {
   border-radius: var(--r-full);
   font-family: var(--ff-mono); font-size: 0.78rem;
   box-shadow: inset 0 1px 0 rgba(var(--wht),0.05), 0 2px 6px rgba(var(--blk),0.15);
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s var(--spring), opacity 0.2s ease;
+  transition: var(--t-ui);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -1337,7 +1424,7 @@ select.input-field {
 }
 .cardio-extra-field { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 62px; }
 .cardio-extra-field span {
-  font-size: 0.52rem; font-weight: 800; color: var(--t-4);
+  font-size: var(--text-xs); font-weight: 800; color: var(--t-3);
   text-transform: uppercase; letter-spacing: 0.06em;
 }
 .cardio-extra-field .set-input { width: 100%; font-size: 0.78rem; padding: 6px 4px; }
@@ -1366,15 +1453,15 @@ select.input-field {
 
 .filter-chip {
   background: linear-gradient(135deg, rgba(var(--wht), 0.05) 0%, rgba(var(--wht), 0.01) 100%);
-  backdrop-filter: blur(15px) saturate(150%) brightness(1.1);
-  -webkit-backdrop-filter: blur(15px) saturate(150%) brightness(1.1);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   border: 1px solid rgba(var(--wht), 0.07);
   color: var(--t-2);
   padding: 8px 16px;
   border-radius: var(--r-full);
   font-size: 0.8rem; font-weight: 700;
   white-space: nowrap; cursor: pointer;
-  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: var(--t-ui);
   box-shadow: inset 0 1px 0 rgba(var(--wht), 0.15),
               0 3px 8px rgba(var(--blk), 0.15);
 }
@@ -1422,7 +1509,7 @@ select.input-field {
   border: 2px solid var(--bg);
   border-radius: 50%; z-index: 5;
   transform: translateX(-50%);
-  box-shadow: 0 0 8px var(--accent);
+  box-shadow: 0 0 5px rgba(var(--accent-rgb), 0.5);
 }
 
 .tl-card {
@@ -1433,7 +1520,7 @@ select.input-field {
   border: 1px solid var(--border-light);
   border-radius: var(--r-m);
   overflow: hidden;
-  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, transform 0.3s var(--spring), opacity 0.3s ease;
+  transition: var(--t-ui-slow);
   box-shadow: var(--specular-top), 0 4px 16px rgba(var(--blk), 0.25);
 }
 
@@ -1586,8 +1673,11 @@ select.input-field {
 
 .w-val {
   font-family: var(--ff-mono);
-  font-size: 1.5rem; font-weight: 800;
+  font-weight: 800;
   line-height: 1.1; margin-bottom: 3px;
+  /* Fluid type: scales from compact phones up to the desktop shell without
+     media-query stair-steps. 4.2vw at ~390px ≈ 1.6rem; ≥576px ≈ 1.7rem cap. */
+  font-size: clamp(1.25rem, 1.1rem + 0.8vw, 1.7rem);
 }
 .w-lbl {
   font-size: 0.65rem; font-weight: 700;
@@ -1625,7 +1715,8 @@ select.input-field {
 .pr-details { flex: 1; }
 .pr-name { font-family: var(--ff-title); font-size: 0.92rem; font-weight: 700; margin-bottom: 1px; }
 .pr-sub { font-size: 0.72rem; color: var(--t-3); }
-.pr-score { font-family: var(--ff-mono); font-size: 1.15rem; font-weight: 800; color: var(--c-orange); }
+.pr-score { font-family: var(--ff-mono); font-weight: 800; color: var(--c-orange);
+  font-size: clamp(0.95rem, 0.9rem + 0.3vw, 1.15rem); }
 
 /* Analytics Chart */
 .chart-card { padding: var(--space-4); min-height: 290px; }
@@ -1647,7 +1738,8 @@ select.input-field {
 }
 
 .chart-val-container { text-align: right; }
-.chart-val { font-family: var(--ff-mono); font-size: 1.4rem; font-weight: 800; color: var(--accent); }
+.chart-val { font-family: var(--ff-mono); font-weight: 800; color: var(--accent);
+  font-size: clamp(1.1rem, 0.95rem + 0.7vw, 1.4rem); }
 .chart-wrap { width: 100%; height: 170px; position: relative; }
 canvas { width: 100%; height: 100%; }
 
@@ -1741,7 +1833,7 @@ canvas { width: 100%; height: 100%; }
   background: linear-gradient(90deg, var(--accent), #FFB300);
   transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.lb-me .lb-fill { background: linear-gradient(90deg, var(--accent), #FF9F45); }
+.lb-me .lb-fill { background: linear-gradient(90deg, var(--accent), var(--accent-hi)); }
 .lb-val {
   font-family: var(--ff-mono, monospace); font-size: 0.78rem;
   font-weight: 700; text-align: right; white-space: nowrap;
@@ -1982,7 +2074,7 @@ canvas { width: 100%; height: 100%; }
   font-size: 0.76rem; font-weight: 700;
   color: var(--t-3); background: none;
   border: none; border-radius: 10px;
-  cursor: pointer; transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.25s var(--spring), opacity 0.25s ease;
+  cursor: pointer; transition: var(--t-ui-slow);
   text-align: center; position: relative;
   outline: none;
 }
@@ -1997,7 +2089,7 @@ canvas { width: 100%; height: 100%; }
   font-size: 0.64rem; font-weight: 700;
   color: rgba(var(--wht), 0.5);
   background: rgba(var(--wht), 0.08);
-  padding: 1px 6px; border-radius: 999px;
+  padding: 1px 6px; border-radius: var(--r-full);
   margin-left: 6px; display: inline-block;
   vertical-align: middle;
 }
@@ -2020,7 +2112,7 @@ canvas { width: 100%; height: 100%; }
   color: var(--t-3, #888);
   border: 1px solid rgba(var(--wht),0.06);
   cursor: pointer; white-space: nowrap;
-  transition: background-color var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast), box-shadow var(--dur-fast), transform var(--dur-fast) var(--spring), opacity var(--dur-fast);
+  transition: var(--t-ui);
   flex-shrink: 0;
 }
 .lb-metric-tab.on {
@@ -2042,7 +2134,7 @@ canvas { width: 100%; height: 100%; }
   color: var(--t-3, #888);
   border: 1px solid rgba(var(--wht),0.04);
   cursor: pointer; text-align: center;
-  transition: background-color var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast), box-shadow var(--dur-fast), transform var(--dur-fast) var(--spring), opacity var(--dur-fast);
+  transition: var(--t-ui);
 }
 .lb-timeframe-tab.on {
   background: rgba(var(--wht),0.06);
@@ -2115,7 +2207,7 @@ canvas { width: 100%; height: 100%; }
   font-size: 0.72rem; font-weight: 800;
   color: var(--accent);
 }
-.podium-val span { font-size: 0.55rem; color: var(--t-3); font-weight: 600; }
+.podium-val span { font-size: var(--text-xs); color: var(--t-3); font-weight: 600; }
 .podium-pedestal {
   width: 100%; border-radius: 8px 8px 0 0;
   margin-top: 4px;
@@ -2153,7 +2245,7 @@ canvas { width: 100%; height: 100%; }
   padding: 10px 12px; border-radius: var(--r-s);
   background: rgba(var(--wht), 0.01);
   border: 1px solid rgba(var(--wht), 0.02);
-  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.25s var(--spring), opacity 0.25s ease;
+  transition: var(--t-ui-slow);
   animation: lbSlideIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
   cursor: pointer;
   margin-bottom: 6px;
@@ -2192,7 +2284,7 @@ canvas { width: 100%; height: 100%; }
   color: #FFB25A; margin-left: auto; white-space: nowrap;
 }
 .gym-activity-score span {
-  font-family: var(--ff-title); font-size: 0.48rem; font-weight: 800;
+  font-family: var(--ff-title); font-size: var(--text-xs); font-weight: 800;
   color: var(--t-3); margin-left: 3px;
   text-transform: uppercase; letter-spacing: 0.1em;
 }
@@ -2243,7 +2335,7 @@ canvas { width: 100%; height: 100%; }
 .gym-heatmap-legend {
   display: flex; align-items: center; gap: 4px;
   justify-content: flex-end; margin-top: 6px;
-  font-size: 0.56rem; color: var(--t-3);
+  font-size: var(--text-xs); color: var(--t-3);
 }
 .gym-heatmap-legend-dot {
   width: 10px; height: 10px; border-radius: 2px;
@@ -2298,7 +2390,7 @@ canvas { width: 100%; height: 100%; }
   max-width: 72px;
 }
 .h2h-chip b { font-family: var(--ff-mono); font-size: 0.74rem; font-weight: 800; }
-.h2h-chip.a b { color: #FF9F45; }
+.h2h-chip.a b { color: var(--accent-hi); }
 .h2h-chip.b b { color: #64D2FF; }
 .h2h-verdict {
   font-family: var(--ff-title); font-size: 0.58rem; font-weight: 800;
@@ -2434,7 +2526,7 @@ canvas { width: 100%; height: 100%; }
   transform: scale(0.92);
 }
 .user-row .btn-primary {
-  background: linear-gradient(135deg, var(--accent), #FF9F45);
+  background: linear-gradient(135deg, var(--accent), var(--accent-hi));
   border: none;
 }
 .user-row .btn-secondary { border: 1px solid rgba(var(--wht),0.15); }
@@ -2446,48 +2538,71 @@ canvas { width: 100%; height: 100%; }
   left: 12px; right: 12px;
   height: 58px;
   background: linear-gradient(180deg, rgba(var(--wht), 0.08) 0%, rgba(var(--wht), 0.02) 100%);
-  backdrop-filter: blur(20px) saturate(210%) brightness(1.1);
-  -webkit-backdrop-filter: blur(20px) saturate(210%) brightness(1.1);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   border: 1px solid rgba(var(--wht), 0.12);
   border-radius: var(--r-xl);
-  display: flex; justify-content: space-around;
+  display: grid;
+  /* ＋ moved to a right-edge floating FAB; nav is a clean equal-width row. */
+  grid-template-columns: repeat(4, 1fr);
   align-items: center;
+  column-gap: 2px;
   padding: 0 8px;
   z-index: 50;
   box-shadow: inset 0 1px 0 rgba(var(--wht), 0.25),
               inset 0 0 0 0.5px rgba(var(--wht), 0.1),
               0 8px 32px rgba(var(--blk), 0.55);
 }
+/* Arc ON → 5 equal view slots (Home Arc Social Insights Profile);
+   Arc hidden → 4 (Social/Insights/Profile fill the 4 tracks). */
+[data-arc="on"] .bottom-bar,
+[data-theme="winter"] .bottom-bar {
+  grid-template-columns: repeat(5, 1fr) !important;
+}
+/* Tabs fill their tracks inside the grid */
+.bottom-bar > [data-v="Home"] { grid-column: 1; grid-row: 1; }
+.bottom-bar > [data-v="Arc"]  { grid-column: 2; grid-row: 1; }
+.bottom-bar > [data-v="Soc"]  { grid-column: 3; grid-row: 1; }
+.bottom-bar > [data-v="Ana"]  { grid-column: 4; grid-row: 1; }
+.bottom-bar > [data-v="Set"]  { grid-column: 5; grid-row: 1; }
 
 .bot-btn {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 3px; background: none; border: none;
+  gap: 2px;
+  background: none; border: none;
   color: var(--t-3); font-size: 0.58rem;
   font-weight: 700; font-family: var(--ff-sans);
-  cursor: pointer; transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease;
-  width: 58px; height: 46px;
-  min-height: 44px; /* HIG hit floor: the pill shrank to 58px so the
-    button's visual height drops to 46, still ≥ the 44px tap minimum. */
+  cursor: pointer; transition: var(--t-ui-slow);
+  width: 100%;
+  height: 46px;
+  min-height: 44px;
+  padding: 6px 4px;
   border-radius: var(--r-m); outline: none;
   position: relative;
   z-index: 2;
 }
+/* force the same hit area for every tab so a wider track doesn't distort
+   the visual pill; the lens stays pinned to the actual icon+label center. */
 
 .tab-icon {
   width: 20px; height: 20px;
-  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease;
+  transition: var(--t-ui-slow);
   color: var(--t-3);
   position: relative;
   z-index: 2;
 }
 
+/* Active state: text switches to accent. No enlargement; the lens and the
+   icon's accent color are sufficient signal. */
 .bot-btn.on { color: var(--t-1); }
+.bot-btn.on .tab-icon { color: var(--accent); filter: drop-shadow(0 0 6px rgba(var(--accent-rgb), 0.4)); }
+.bot-btn:active .tab-icon { transform: scale(0.88); }
 
 .nav-lens {
   position: absolute;
-  width: 54px;
-  height: 44px;
-  border-radius: 14px;
+  width: 48px;
+  height: 40px;
+  border-radius: 12px;
   background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.16) 0%, rgba(var(--accent-rgb), 0.06) 100%);
   backdrop-filter: blur(12px) brightness(1.2) saturate(140%);
   -webkit-backdrop-filter: blur(12px) brightness(1.2) saturate(140%);
@@ -2506,13 +2621,106 @@ canvas { width: 100%; height: 100%; }
   transform: scale(1.22);
 }
 
+/* ── Session Hero Button — center ＋ in the tab bar ──────────────
+   An action, not a tab: never carries .on, never gets the nav-lens.
+   Breaks out of the pill (larger than the bar, overlapping its top
+   edge) so the one thing you do most reads as the one big control. */
+.bot-btn-hero {
+  position: absolute;
+  right: 14px;
+  bottom: calc(76px + var(--sab)); /* bar 58px + gap 8px */
+  width: 58px; height: 58px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-hi), var(--accent));
+  color: var(--bg);
+  box-shadow: 0 10px 26px rgba(var(--accent-rgb), 0.5),
+              0 2px 8px rgba(var(--blk), 0.5),
+              inset 0 1px 0 rgba(var(--wht), 0.4);
+  transition: var(--t-ui-slow);
+  z-index: 55; /* above the bottom bar */
+}
+.bot-btn-hero:active { transform: scale(var(--press-scale)); }
+.bot-btn-hero svg {
+  width: 24px; height: 24px;
+  color: var(--bg);
+  filter: drop-shadow(0 1px 1px rgba(var(--wht), 0.25));
+}
+
+/* ── Workout Session Overlay — Home's ＋ target ─────────────────
+   position:fixed inset:0 (viewport-fixed; the phone frame carries a
+   transform that would break fixed descendants, so app.js appends
+   the overlay to <body> at boot). Solid --bg, no blur: data surfaces
+   stay flat so the glass navbar visually floats above a clean sheet. */
+.session-overlay {
+  position: fixed; inset: 0;
+  z-index: 80;
+  display: flex; flex-direction: column;
+  background: var(--bg);
+  transform: translateY(100%);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  padding-top: var(--sat);
+}
+.session-overlay.open { transform: translateY(0); }
+.session-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid rgba(var(--wht), 0.08);
+  flex-shrink: 0;
+}
+.session-title {
+  font-family: var(--ff-title);
+  font-size: 1.3rem; font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.session-subtitle {
+  font-size: 0.72rem; font-weight: 600;
+  color: var(--t-3); margin-top: 2px;
+}
+.session-close { flex-shrink: 0; }
+.session-body {
+  flex: 1; overflow-y: auto;
+  padding: 16px 16px calc(24px + var(--sab)) 16px;
+  display: flex; flex-direction: column;
+  gap: var(--space-4);
+}
+.session-body::-webkit-scrollbar { display: none; }
+
+/* ── Home Start-Workout CTA ───────────────────────────────────── */
+.start-workout-cta {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+  border-color: var(--border-strong);
+}
+.start-workout-cta-title { font-weight: 800; font-size: 0.95rem; }
+.start-workout-cta-sub { font-size: 0.72rem; color: var(--t-3); margin-top: 2px; }
+.start-workout-cta .btn { flex-shrink: 0; padding: 12px 18px; }
+.start-workout-cta .btn-icon { font-size: 1.15rem; line-height: 1; font-weight: 600; }
+/* Small screens: shrink the CTA — tighter copy, compact button, single line */
+@media (max-width: 430px) {
+  .start-workout-cta { gap: 8px; }
+  .start-workout-cta-title { font-size: 0.85rem; }
+  .start-workout-cta-sub { font-size: 0.62rem; margin-top: 1px; }
+  .start-workout-cta .btn { padding: 9px 13px; font-size: 0.72rem; white-space: nowrap; }
+  .start-workout-cta .btn-icon { font-size: 1rem; }
+}
+/* Winter: the app is monochrome, so give this one card a quiet ember
+   accent — reads as "do this now" without breaking the season. */
+[data-theme="winter"] .start-workout-cta {
+  border-color: rgba(var(--arc-ember-rgb), 0.4);
+  box-shadow: var(--elev-1), 0 0 0 0.5px rgba(var(--arc-ember-rgb), 0.08),
+              0 0 20px rgba(var(--arc-ember-rgb), 0.06);
+}
+[data-theme="winter"] .start-workout-cta .btn-primary {
+  background: linear-gradient(135deg, var(--wht) 0%, color-mix(in srgb, var(--wht) 60%, var(--blk)) 100%);
+  color: var(--blk);
+}
+
 @keyframes glassTabPop {
   from { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
   to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
 }
 
-.bot-btn.on .tab-icon { transform: scale(1.1); color: var(--accent); filter: drop-shadow(0 0 6px rgba(var(--accent-rgb), 0.4)); }
-.bot-btn:active .tab-icon { transform: scale(0.88); }
+/* kept the lens; removed the .on 1.1 scale so all tabs stay visually uniform */
 
 /* ── Toast Notifications ───────────────────────────────────── */
 .toast-wrap {
@@ -2603,8 +2811,8 @@ canvas { width: 100%; height: 100%; }
 .toggle-segmented {
   display: flex;
   background: linear-gradient(135deg, rgba(var(--wht), 0.04) 0%, rgba(var(--wht), 0.01) 100%);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   border-radius: var(--r-m);
   padding: 3px; width: fit-content;
   border: 1px solid rgba(var(--wht), 0.06);
@@ -2619,7 +2827,7 @@ canvas { width: 100%; height: 100%; }
   color: var(--t-3);
   font-size: 0.72rem; font-weight: 700;
   padding: 5px 12px; border-radius: var(--r-s);
-  cursor: pointer; transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s; outline: none;
+  cursor: pointer; transition: var(--t-ui); outline: none;
 }
 .segment-btn.active {
   background: linear-gradient(135deg, rgba(var(--wht), 0.12) 0%, rgba(var(--wht), 0.04) 100%);
@@ -2651,7 +2859,7 @@ canvas { width: 100%; height: 100%; }
   color: var(--t-3);
   padding: 1px 6px; border-radius: var(--r-full);
   font-size: 0.6rem; cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.15s, opacity 0.15s; font-weight: 600;
+  transition: var(--t-ui); font-weight: 600;
   white-space: nowrap; outline: none;
 }
 
@@ -2766,7 +2974,7 @@ canvas { width: 100%; height: 100%; }
   background: rgba(var(--wht), 0.015);
   border-top: 1px solid var(--border-light);
 }
-.tl-action-btn { font-size: 0.72rem; padding: 4px 8px; color: var(--t-2); display: flex; align-items: center; gap: 4px; border-radius: var(--r-xs); transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s; }
+.tl-action-btn { font-size: 0.72rem; padding: 4px 8px; color: var(--t-2); display: flex; align-items: center; gap: 4px; border-radius: var(--r-xs); transition: var(--t-ui); }
 
 @media (hover: hover) and (pointer: fine) {
   .tl-action-btn:hover {   color: var(--t-1); background: var(--glass-2); 
@@ -2780,14 +2988,17 @@ canvas { width: 100%; height: 100%; }
 }
 .action-icon-svg { width: 13px; height: 13px; }
 
-/* ── Global Rest Timer — iOS 27 Glass ────────────────────── */
+/* ── Global Rest Timer — iOS 27 Glass ──────────────────────
+   Anchored absolutely inside the phone frame above the bottom bar.
+   When a session is open the bar is part of that workflow, so the
+   body.session-open rule below lifts it above the overlay's 80. */
 .global-timer-bar {
   position: absolute;
   bottom: calc(84px + var(--sab));
   left: 16px; right: 16px; height: 60px;
   background: linear-gradient(180deg, rgba(var(--wht), 0.1) 0%, rgba(var(--wht), 0.03) 100%);
-  backdrop-filter: blur(24px) saturate(210%) brightness(1.1);
-  -webkit-backdrop-filter: blur(24px) saturate(210%) brightness(1.1);
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.2)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.2)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   border: 1px solid rgba(var(--wht), 0.15);
   border-radius: var(--r-xl);
   z-index: 45;
@@ -2797,6 +3008,11 @@ canvas { width: 100%; height: 100%; }
 }
 .global-timer-bar.hidden { transform: translateY(calc(100% + 12px)); opacity: 0; pointer-events: none; }
 .global-timer-bar.visible { transform: translateY(0); opacity: 1; pointer-events: auto; }
+/* While the session sheet is up, the rest timer belongs to it — raise it
+   above the overlay's 80. The rule keys off a <body> class (not a sibling)
+   because the overlay is reparented to <body> at runtime while the bar
+   stays inside the frame. */
+body.session-open .global-timer-bar { z-index: 85; }
 
 .timer-content { display: flex; align-items: center; justify-content: space-between; height: 100%; padding: 0 10px; gap: 6px; }
 .timer-left { display: flex; align-items: center; gap: 6px; }
@@ -2823,7 +3039,7 @@ canvas { width: 100%; height: 100%; }
   color: var(--t-2);
   padding: 4px 6px; border-radius: var(--r-s);
   font-size: 0.65rem; font-weight: 700;
-  cursor: pointer; transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease; outline: none;
+  cursor: pointer; transition: var(--t-ui-slow); outline: none;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -2831,6 +3047,53 @@ canvas { width: 100%; height: 100%; }
   }
 }
 .btn-timer-chip.active { background: var(--accent-bg); color: var(--accent); border-color: var(--accent); box-shadow: 0 0 10px var(--accent-bg); }
+
+.timer-adjs { display: flex; gap: 3px; }
+.btn-timer-adj {
+  padding: 4px 6px; border-radius: var(--r-s);
+  background: var(--glass-2);
+  border: 1px solid var(--border-light);
+  color: var(--t-2); font-size: 0.62rem; font-weight: 700;
+  cursor: pointer; transition: var(--t-ui-slow); outline: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn-timer-adj:hover { background: var(--glass-3); color: var(--t-1); }
+}
+.btn-timer-adj:active { transform: scale(0.92); }
+
+/* ── Plate Calculator popup ──────────────────────────────────
+   Pure-math helper that pops next to the weight field on long-press /
+   right-click. No library — results are a static "per side: plates" +
+   an inline SVG bar diagram. */
+.plate-calc {
+  position: fixed; z-index: 95; min-width: 220px; max-width: 280px;
+  background: linear-gradient(180deg, rgba(var(--wht), 0.1) 0%, rgba(var(--wht), 0.04) 100%);
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.4)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.4)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  border: 1px solid rgba(var(--wht), 0.15);
+  border-radius: var(--r-m);
+  padding: 12px 14px;
+  box-shadow: 0 12px 40px rgba(var(--blk), 0.55), inset 0 1px 0 rgba(var(--wht), 0.2);
+  animation: plate-pop 0.22s var(--spring);
+}
+@keyframes plate-pop { from { opacity: 0; transform: scale(0.92) translateY(4px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+.plate-calc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.plate-calc-title { font-family: var(--ff-title); font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--t-2); }
+.plate-calc-title + .btn-close { width: 20px; height: 20px; min-width: 20px; }
+.plate-calc-total { font-family: var(--ff-mono); font-size: 1.1rem; font-weight: 700; color: var(--t-1); margin-bottom: 6px; }
+.plate-calc-side { font-size: 0.68rem; color: var(--t-3); font-weight: 500; margin-left: 4px; }
+.plate-calc-stack { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+.plate-chip {
+  background: rgba(var(--wht), 0.05); border: 1px solid var(--border-light);
+  border-radius: var(--r-s); padding: 3px 8px;
+  font-family: var(--ff-mono); font-size: 0.66rem; font-weight: 600; color: var(--t-2);
+}
+.plate-chip b { color: var(--accent); font-weight: 800; }
+.plate-svg { width: 100%; height: auto; display: block; margin: 4px 0 2px; overflow: visible; }
+.plate-svg-bar { fill: rgba(var(--wht), 0.35); }
+.plate-svg-plate { fill: rgba(var(--wht), 0.65); stroke: rgba(var(--wht), 0.18); stroke-width: 0.4; }
+.plate-calc-remainder { font-size: 0.62rem; color: var(--c-orange); font-weight: 600; margin-top: 4px; }
+.plate-calc-empty { font-size: 0.72rem; color: var(--t-3); line-height: 1.5; }
 
 .timer-controls { display: flex; gap: 4px; }
 
@@ -2841,7 +3104,7 @@ canvas { width: 100%; height: 100%; }
   backdrop-filter: blur(15px);
   -webkit-backdrop-filter: blur(15px);
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer; transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease; outline: none;
+  cursor: pointer; transition: var(--t-ui-slow); outline: none;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -2874,7 +3137,7 @@ canvas { width: 100%; height: 100%; }
   font-family: var(--ff-mono);
   font-size: 0.8rem; font-weight: 700; color: var(--t-2);
   border: 1px solid var(--border-light);
-  cursor: pointer; transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.25s var(--spring), opacity 0.25s ease; outline: none;
+  cursor: pointer; transition: var(--t-ui-slow); outline: none;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -2916,6 +3179,26 @@ canvas { width: 100%; height: 100%; }
 .muscle-path.m-level-2 { fill: url(#gradL2); stroke: rgba(255, 149, 0, 0.65); }
 .muscle-path.m-level-3 { fill: url(#gradL3); stroke: rgba(var(--wht), 0.45); filter: url(#glow3d); }
 
+/* Freshness overlay — same anatomy SVG, parallel semantic colors.
+   The alternative-traffic-light read:
+     fresh     = 4+ days since (or never) hit → solid accent green
+     recovering= 2-3 days → soft amber, slight pulse on touch
+     fatigued  = 0-1 days → deep red sits "under the skin" as heat */
+.muscle-path.m-fresh      { fill: rgba(48, 209, 88, 0.55); stroke: rgba(48, 209, 88, 0.6); }
+.muscle-path.m-recovering { fill: rgba(255, 159, 10, 0.42); stroke: rgba(255, 159, 10, 0.55); }
+.muscle-path.m-fatigued   { fill: rgba(255, 69, 58, 0.55); stroke: rgba(255, 69, 58, 0.65); }
+
+.freshness-card { margin-top: 18px; }
+.freshness-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid var(--border-light); margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+.freshness-legend { display: flex; gap: 10px; }
+.freshness-key { font-size: 0.62rem; font-weight: 700; color: var(--t-3); display: flex; align-items: center; gap: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+.freshness-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.freshness-dot.fresh      { background: #30D158; }
+.freshness-dot.recovering { background: #FF9F0A; }
+.freshness-dot.fatigued   { background: #FF453A; }
+.freshness-body { display: flex; justify-content: center; gap: 20px; padding: 4px 0; }
+.freshness-body .anatomy-svg { width: 70px; height: 130px; }
+
 .history-heatmap-wrap {
   display: flex; gap: 12px;
   background: rgba(var(--wht), 0.01);
@@ -2924,7 +3207,7 @@ canvas { width: 100%; height: 100%; }
   justify-content: center; align-items: center; margin-top: 12px;
 }
 .history-heatmap-wrap .anatomy-svg { width: 54px; height: 96px; }
-.history-heatmap-wrap .anatomy-view-label { font-size: 0.5rem; }
+.history-heatmap-wrap .anatomy-view-label { font-size: var(--text-xs); }
 
 .setup-heatmap-wrap {
   display: flex; gap: 16px; justify-content: center; align-items: center;
@@ -2953,8 +3236,8 @@ canvas { width: 100%; height: 100%; }
   border: 1px solid rgba(var(--wht), 0.11);
   border-radius: 12px;
   box-shadow: inset 0 1px 0 rgba(var(--wht), 0.20), 0 2px 8px rgba(var(--blk), 0.20);
-  backdrop-filter: blur(12px) saturate(180%);
-  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   color: var(--t-2); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: background-color var(--dur-fast) ease,
@@ -3029,7 +3312,7 @@ canvas { width: 100%; height: 100%; }
   border-radius: 8px; color: var(--t-2);
   font-size: 0.78rem; font-weight: 700;
   text-transform: uppercase; cursor: pointer;
-  white-space: nowrap; transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.25s var(--spring), opacity 0.25s ease;
+  white-space: nowrap; transition: var(--t-ui-slow);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -3048,7 +3331,7 @@ canvas { width: 100%; height: 100%; }
   background: rgba(var(--wht), 0.02);
   border: 1px solid rgba(var(--wht), 0.03);
   border-radius: var(--r-m);
-  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.25s var(--spring), opacity 0.25s ease;
+  transition: var(--t-ui-slow);
   animation: slideUpFade 0.35s var(--spring) both;
 }
 
@@ -3108,6 +3391,12 @@ canvas { width: 100%; height: 100%; }
   box-shadow: 0 4px 14px rgba(var(--blk), 0.5);
   white-space: nowrap; z-index: 2;
 }
+.profile-score-pill .as-state-label {
+  font-family: var(--ff-title); font-size: 0.62rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.09em;
+  margin-left: 6px;
+  padding-left: 6px; border-left: 1px solid rgba(var(--wht), 0.12);
+}
 .profile-score-pill span {
   font-family: var(--ff-mono); font-size: 0.88rem; font-weight: 800;
   color: #FFB25A; letter-spacing: -0.02em;
@@ -3116,7 +3405,7 @@ canvas { width: 100%; height: 100%; }
   content: '≈'; font-size: 0.62rem; margin-right: 2px; color: var(--t-3);
 }
 .profile-score-pill em {
-  font-style: normal; font-family: var(--ff-title); font-size: 0.5rem;
+  font-style: normal; font-family: var(--ff-title); font-size: var(--text-xs);
   font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
   color: var(--t-3);
 }
@@ -3145,7 +3434,7 @@ canvas { width: 100%; height: 100%; }
   padding: 12px 4px;
   text-align: center;
   box-shadow: inset 0 1px 0 rgba(var(--wht), 0.03), 0 4px 10px rgba(var(--blk), 0.2);
-  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.25s var(--spring), opacity 0.25s ease;
+  transition: var(--t-ui-slow);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -3162,7 +3451,7 @@ canvas { width: 100%; height: 100%; }
   color: #fff;
 }
 .profile-stat-label {
-  font-size: 0.52rem; font-weight: 800;
+  font-size: var(--text-xs); font-weight: 800;
   color: var(--t-3); text-transform: uppercase;
   letter-spacing: 0.08em; margin-top: 4px;
 }
@@ -3174,7 +3463,7 @@ canvas { width: 100%; height: 100%; }
   color: #fff; background: rgba(var(--wht), 0.05);
   border: 1px solid rgba(var(--wht), 0.08);
   border-radius: 12px;
-  cursor: pointer; transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.25s var(--spring), opacity 0.25s ease;
+  cursor: pointer; transition: var(--t-ui-slow);
   box-shadow: inset 0 1px 0 rgba(var(--wht),0.05);
 }
 
@@ -3209,7 +3498,7 @@ canvas { width: 100%; height: 100%; }
   background: rgba(var(--wht), 0.02);
   border: 1px solid rgba(var(--wht), 0.04);
   margin-bottom: 8px;
-  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.25s var(--spring), opacity 0.25s ease;
+  transition: var(--t-ui-slow);
   cursor: pointer;
   box-shadow: inset 0 1px 0 rgba(var(--wht), 0.02);
 }
@@ -3250,7 +3539,7 @@ canvas { width: 100%; height: 100%; }
   flex: 0 0 auto;
   padding: 0;
   border: 1px solid rgba(var(--wht), 0.14);
-  border-radius: 999px;
+  border-radius: 14px; /* capsule: radius = half height (28px) */
   background: rgba(var(--wht), 0.06);
   cursor: pointer;
   transition: background 0.25s var(--spring), border-color 0.25s var(--spring);
@@ -3296,15 +3585,11 @@ canvas { width: 100%; height: 100%; }
 [data-theme="winter"] .arc-tab-btn,
 [data-arc="on"] .arc-tab-btn { display: flex; }
 
-/* Five tabs (Arc + Log + Nutrition + History + Insights) need a touch
-   less width than four did when Arc is enrolled. Header-bound
-   Social/Account never reach this rule — they live outside the bar. */
+/* Six tabs (Home + Arc + Social + ＋ + Insights + Profile) — Arc enrolled:
+   squeeze labels a touch on narrow phones. Grid tracks own widths now;
+   these only tighten the label font at the smallest sizes. */
 @media (max-width: 440px) {
-  [data-arc="on"] .bottom-bar .bot-btn { width: 56px; }
-  [data-arc="on"] .bottom-bar .bot-btn span { font-size: 0.58rem; }
-}
-@media (max-width: 360px) {
-  [data-arc="on"] .bottom-bar .bot-btn { width: 52px; }
+  [data-arc="on"] .bottom-bar .bot-btn:not(.bot-btn-hero) span { font-size: 0.55rem; }
 }
 
 /* ── Onboarding card ── */
@@ -3510,7 +3795,7 @@ canvas { width: 100%; height: 100%; }
   border: 1.5px solid var(--border-light);
   display: flex; align-items: center; justify-content: center;
   color: transparent;
-  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.25s var(--bounce), opacity 0.25s ease;
+  transition: var(--t-ui-slow-bounce);
 }
 .arc-obj-row.done .arc-obj-check { background: var(--accent); border-color: var(--accent); color: #fff; }
 .arc-obj-check svg { width: 13px; height: 13px; }
@@ -3561,7 +3846,7 @@ canvas { width: 100%; height: 100%; }
   color: var(--t-1);
   font-size: 0.74rem; font-weight: 700;
   font-family: var(--ff-mono);
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s var(--bounce), opacity 0.2s ease;
+  transition: var(--t-ui-slow-bounce);
 }
 .arc-quick-btn:active { transform: scale(0.92); background: var(--accent-bg); border-color: var(--border-strong); color: var(--accent); }
 .arc-quick-btn.arc-quick-neg { color: var(--t-3); }
@@ -3692,7 +3977,7 @@ canvas { width: 100%; height: 100%; }
   color: var(--t-2);
   font-size: 0.66rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.03em;
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s var(--bounce), opacity 0.2s ease;
+  transition: var(--t-ui-slow-bounce);
 }
 .arc-lockin-btn:active { transform: scale(0.94); }
 
@@ -3793,7 +4078,7 @@ canvas { width: 100%; height: 100%; }
 .monk-stats-grid { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border-top: 1px solid rgba(var(--wht), 0.08); border-bottom: 1px solid rgba(var(--wht), 0.08); padding: 16px 0; }
 .monk-stat { text-align: center; }
 .monk-stat-val { font-family: var(--ff-mono); font-weight: 700; font-size: 1.15rem; color: var(--t-1); }
-.monk-stat-label { font-size: 0.58rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--t-4); margin-top: 3px; }
+.monk-stat-label { font-size: var(--text-xs); letter-spacing: 0.06em; text-transform: uppercase; color: var(--t-3); margin-top: 3px; }
 
 .monk-mission-label { align-self: flex-start; font-family: var(--ff-title); font-weight: 700; font-size: 0.66rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--t-4); }
 .monk-obj-list { width: 100%; display: flex; flex-direction: column; gap: 0; margin-top: -14px; }
@@ -3865,12 +4150,14 @@ canvas { width: 100%; height: 100%; }
    aggregates, sleep score). Never check-in notes, body weight or
    set-level workout detail: those live only in arc/.                  */
 .arc-lb-tabs {
-  margin-bottom: 12px;
-  display: flex; flex-wrap: nowrap;
+  display: flex; flex-wrap: nowrap; gap: 6px;
+  padding: 4px;
+  margin: 0 -2px 12px;
   overflow-x: auto; scrollbar-width: none;
+  scroll-padding: 4px;
 }
 .arc-lb-tabs::-webkit-scrollbar { display: none; }
-.arc-lb-tabs .seg-tab { flex: 0 0 auto; }
+.arc-lb-tabs .seg-tab { flex: 0 0 auto; padding: 7px 13px; }
 .arc-lb-rows { display: flex; flex-direction: column; gap: 2px; }
 .arc-lb-row {
   display: flex; align-items: center; gap: 10px;
@@ -3962,7 +4249,7 @@ canvas { width: 100%; height: 100%; }
 .arc-today-chip.met i { color: #020407; }
 .arc-today-chip i {
   font-style: normal; font-family: var(--ff-mono);
-  font-size: 0.44rem; font-weight: 700; color: var(--t-3);
+  font-size: var(--text-xs); font-weight: 700; color: var(--t-3);
   /* The letter sits inside the ring's hole — the chip's mask covers it,
      so it counter-renders on top with the mask explicitly lifted. */
   -webkit-mask: none; mask: none;
@@ -4310,7 +4597,7 @@ canvas { width: 100%; height: 100%; }
 .u-mb-6 { margin-bottom: var(--space-6); }
 .u-mt-2 { margin-top: var(--space-2); }
 .u-mt-4 { margin-top: var(--space-4); }
-/* Body-weight hero input in the Log BW modal. */
+/* Body-weight hero input in the BW modal. */
 .bw-hero-input { text-align: center; font-size: 1.4rem; font-weight: 800; }
 /* Centered text on the lock-screen credentials. */
 .lock-input { text-align: center; }
@@ -4417,13 +4704,6 @@ canvas { width: 100%; height: 100%; }
 .view.on > *:nth-child(-n+8) { animation: arcReveal 0.45s var(--spring) both; animation-delay: calc(var(--i, 0) * 55ms); }
 @keyframes arcReveal { from { opacity: 0; transform: translateY(12px); filter: blur(6px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
 
-/* Pointer-reactive spotlight — soft cursor-follow highlight inside cards,
-   driven by --mx/--my written from JS on pointermove. */
-@media (hover: hover) and (pointer: fine) {
-.card, .glass-card { --mx: 50; --my: 50; }
-.card::before, .glass-card::before { background: radial-gradient(220px circle at calc(var(--mx) * 1%) calc(var(--my) * 1%), rgba(var(--wht), 0.11), transparent 62%); }
-}
-
 /* Confetti — six-to-eight accent bits fan out from an element; each one
    carries its own JS-stamped --dx/--dy so a single keyframe fans them. */
 .celebrate-bit { position: fixed; left: 0; top: 0; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); pointer-events: none; z-index: 99999; animation: celebratePop 0.6s var(--bounce) both; }
@@ -4468,7 +4748,7 @@ canvas { width: 100%; height: 100%; }
   color: #FFB25A;
   background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.22), rgba(255, 178, 90, 0.10));
   border: 1px solid rgba(var(--accent-rgb), 0.5);
-  border-radius: var(--r-full, 999px);
+  border-radius: var(--r-full);
   padding: 5px 11px;
   box-shadow: 0 0 12px rgba(var(--accent-rgb), 0.18);
   white-space: nowrap;
@@ -4511,6 +4791,48 @@ canvas { width: 100%; height: 100%; }
   0%, 100% { opacity: 0.35; }
   50%      { opacity: 1; }
 }
+
+/* ── Home score row — slim ASCA + state pill ────────────────
+   Reads as a compact dashboard header above the start-workout CTA.
+   Tinted by state via data-tone rules below; colors set inline by JS. */
+.home-score-row {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center;
+  padding: 16px 20px; margin-bottom: 12px;
+  background: linear-gradient(180deg, rgba(var(--wht), 0.05), rgba(var(--wht), 0.015));
+  border: 1px solid var(--border-light);
+  border-radius: var(--r-m);
+  position: relative; overflow: hidden;
+}
+.home-score-num {
+  font-family: var(--ff-mono); font-weight: 800;
+  font-size: clamp(1.8rem, 8vw, 2.6rem);
+  color: var(--t-1); letter-spacing: -0.04em; line-height: 1;
+  align-self: center;
+}
+.home-score-meta {
+  display: flex; flex-direction: column; gap: 6px; min-width: 0;
+}
+.home-score-label { font-family: var(--ff-title); font-size: 0.58rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: var(--t-3); }
+.home-score-state {
+  display: inline-flex; align-items: center; align-self: flex-start;
+  font-family: var(--ff-title); font-weight: 800; font-size: 0.66rem;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  padding: 4px 10px; border-radius: var(--r-full);
+  border: 1px solid rgba(var(--wht), 0.12);
+  transition: all 0.3s var(--spring);
+}
+.home-score-ring {
+  width: 52px; height: 52px; flex-shrink: 0; border-radius: 50%;
+  position: relative; justify-self: end;
+}
+.home-score-ring::before {
+  content: ''; position: absolute; inset: 5px; border-radius: 50%;
+  background: var(--bg);
+}
+/* State tone applied via data-tone on .home-score-row */
+.home-score-row[data-tone='hot']   { border-color: rgba(48, 209, 88, 0.2); }
+.home-score-row[data-tone='cold']  { border-color: rgba(255, 69, 58, 0.22); }
+.home-score-row[data-tone='steady']{ border-color: rgba(255, 159, 10, 0.22); }
 
 @media (prefers-reduced-motion: reduce) {
   .pr-confetti-p { animation-duration: 0.001ms !important; }
@@ -4666,7 +4988,7 @@ canvas { width: 100%; height: 100%; }
 }
 .ch-invite-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .ch-invite-chip {
-  padding: 7px 14px; border-radius: 999px;
+  padding: 7px 14px; border-radius: var(--r-full);
   background: rgba(var(--wht), 0.06);
   border: 1px solid rgba(var(--wht), 0.09);
   color: var(--t-2); font-size: var(--text-s); font-weight: 500;
@@ -4677,7 +4999,7 @@ canvas { width: 100%; height: 100%; }
 }
 .ch-invite-empty { font-size: var(--text-s); color: var(--t-3); }
 .ch-create-err {
-  font-size: var(--text-s); color: #ff6060; margin-bottom: var(--space-3);
+  font-size: var(--text-s); color: var(--c-red); margin-bottom: var(--space-3);
 }
 
 /* Detail — one challenge's live member list. Rows rank themselves by
@@ -4715,7 +5037,7 @@ canvas { width: 100%; height: 100%; }
 .ch-member-you { font-size: var(--text-xs); color: var(--accent); font-weight: 700; }
 .ch-member-done {
   font-size: var(--text-xs); color: var(--t-2); font-weight: 600;
-  background: rgba(var(--wht), 0.06); border-radius: 999px; padding: 2px 8px;
+  background: rgba(var(--wht), 0.06); border-radius: var(--r-full); padding: 2px 8px;
 }
 .ch-member-sub { font-size: var(--text-xs); color: var(--t-3); margin-top: 1px; }
 .ch-member-track {
@@ -4992,7 +5314,7 @@ canvas { width: 100%; height: 100%; }
 /* One chip recipe, two consumers: sheet pickers (.nut-pick) and the plan
    tab's activity/goal grids (.nut-act-btn). */
 .nut-pick, .nut-act-btn {
-  border: 1px solid var(--glass-2); border-radius: 999px;
+  border: 1px solid var(--glass-2); border-radius: var(--r-full);
   background: var(--glass-1, rgba(var(--wht), 0.04));
   font-weight: 700; cursor: pointer;
   transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, transform var(--dur-fast) var(--spring);
@@ -5033,8 +5355,8 @@ canvas { width: 100%; height: 100%; }
   width: 100vw; height: 100vh;
   z-index: 9999;
   background: radial-gradient(ellipse at 50% 0%, var(--veil-1) 0%, var(--veil-2) 80%);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5231,7 +5553,7 @@ canvas { width: 100%; height: 100%; }
   justify-content: space-between;
   height: 54px;
   margin-top: 14px;
-  font-size: 0.55rem;
+  font-size: var(--text-xs);
   color: var(--t-4);
   font-weight: 700;
   text-align: right;
@@ -5254,7 +5576,7 @@ canvas { width: 100%; height: 100%; }
   display: block;
   height: 14px;
   position: relative;
-  font-size: 0.55rem;
+  font-size: var(--text-xs);
   color: var(--t-3);
   font-weight: 800;
 }
@@ -5314,7 +5636,7 @@ canvas { width: 100%; height: 100%; }
   font-size: 0.9rem !important;
   font-weight: 500 !important;
   outline: none !important;
-  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.25s var(--spring), opacity 0.25s ease !important;
+  transition: var(--t-ui-slow) !important;
   box-shadow: inset 0 2px 4px rgba(var(--blk), 0.25),
               inset 0 0.5px 0.5px rgba(var(--wht), 0.05) !important;
   text-align: center !important;
@@ -5342,7 +5664,7 @@ canvas { width: 100%; height: 100%; }
   font-size: 0.9rem !important;
   font-weight: 700 !important;
   cursor: pointer !important;
-  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.25s var(--spring), opacity 0.25s ease !important;
+  transition: var(--t-ui-slow) !important;
   box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.2),
               inset 0 1px 0 rgba(var(--wht), 0.2) !important;
   display: flex !important;
@@ -5352,7 +5674,7 @@ canvas { width: 100%; height: 100%; }
 
 @media (hover: hover) and (pointer: fine) {
   .lock-btn:hover {
-    background: #ff8822 !important;
+    background: var(--accent-hi) !important;
     box-shadow: 0 6px 16px rgba(var(--accent-rgb), 0.35),
                 inset 0 1px 0 rgba(var(--wht), 0.2) !important;
     transform: translateY(-1px) !important;
@@ -5373,7 +5695,7 @@ canvas { width: 100%; height: 100%; }
   display: flex; align-items: center; gap: 14px;
   padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid rgba(var(--wht), 0.05);
-  cursor: pointer; transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease;
+  cursor: pointer; transition: var(--t-ui-slow);
   position: relative;
 }
 .settings-list-item:last-child {
@@ -5423,7 +5745,7 @@ canvas { width: 100%; height: 100%; }
   border: 1px solid rgba(var(--wht), 0.1);
   border-radius: var(--r-xs);
   padding: 6px 12px; font-size: 0.72rem; font-weight: 700;
-  color: #fff; cursor: pointer; transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s;
+  color: #fff; cursor: pointer; transition: var(--t-ui);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -5490,10 +5812,10 @@ canvas { width: 100%; height: 100%; }
   background: rgba(var(--blk), 0.55) !important;
 }
 #bFbSave {
-  background: linear-gradient(135deg, var(--accent) 0%, #FF8822 100%) !important;
-  box-shadow: 0 4px 16px rgba(255, 107, 0, 0.3) !important;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hi) 100%) !important;
+  box-shadow: 0 4px 16px rgba(var(--accent-rgb), 0.3) !important;
   border: 1px solid rgba(var(--wht), 0.1) !important;
-  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.25s var(--spring), opacity 0.25s ease !important;
+  transition: var(--t-ui-slow) !important;
   margin-top: 12px;
 }
 
@@ -5556,7 +5878,7 @@ canvas { width: 100%; height: 100%; }
   padding: 4px 10px; border-radius: 8px;
   font-size: 0.68rem; font-weight: 700;
   color: var(--t-2); text-decoration: none;
-  margin-top: 8px; transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) var(--spring), opacity var(--dur-fast) ease;
+  margin-top: 8px; transition: var(--t-ui-slow);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -5590,7 +5912,7 @@ canvas { width: 100%; height: 100%; }
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-size: 1.25rem; color: #fff;
-  opacity: 0.95; transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s var(--spring), opacity 0.2s ease;
+  opacity: 0.95; transition: var(--t-ui);
   box-shadow: inset 0 0 10px rgba(var(--blk),0.5);
 }
 
@@ -5626,7 +5948,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .view-title { font-size: 1.62rem; }
   .view-subtitle { font-size: 0.76rem; }
   .bottom-bar { left: 8px; right: 8px; padding: 0 4px; }
-  .bot-btn { width: 54px; font-size: 0.55rem; }
+  .bot-btn { font-size: 0.55rem; } /* width stays 100%; grid tracks own sizing */
   .h2h-radar-wrap svg { max-width: 100%; height: auto; }
   .lb-podium, .friend-compare, .vol-insight-list, .pr-grid { min-width: 0; }
   .modal { width: 94%; }
@@ -5639,8 +5961,8 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .phone-frame { height: auto; min-height: 100dvh; }
   .app-header { padding-top: calc(10px + var(--sat)); padding-bottom: 10px; }
   .bottom-bar { height: 54px; bottom: calc(6px + var(--sab)); }
-  /* 54px bar + 6px float + 8px indicator + breathing room */
-  .views-container { padding-bottom: calc(96px + var(--sab)); }
+  /* bar + float + hero-＋ overhang + breathing room */
+  .views-container { padding-bottom: calc(132px + var(--sab)); }
 }
 
 /* ── Tablet 768–1023 — centered wide column, no device chrome ─── */
@@ -5703,6 +6025,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
     inset: auto;
     left: auto; right: auto; bottom: auto; top: auto;
     width: auto; height: auto;
+    display: flex;
     flex-direction: column;
     justify-content: flex-start;
     align-items: stretch;
@@ -5716,6 +6039,17 @@ html, body { max-width: 100%; overflow-x: hidden; }
     overflow-y: auto;
     scrollbar-width: none;
   }
+  /* undo mobile pill grid + hero-in-hole when stacking vertically */
+  .bottom-bar:has(.arc-tab-btn:not([hidden])),
+  [data-arc="on"] .bottom-bar,
+  [data-theme="winter"] .bottom-bar {
+    grid-template-columns: none !important;
+  }
+  .bot-btn-hero {
+    position: static; transform: none; right: auto; bottom: auto;
+    width: 100%; height: 46px; border-radius: 10px; margin: 4px 0;
+  }
+  .bot-btn-hero:active { transform: scale(var(--press-scale)); }
   .bottom-bar::-webkit-scrollbar { display: none; }
   .bottom-bar::before {
     content: "Asca Gym";
@@ -5736,6 +6070,8 @@ html, body { max-width: 100%; overflow-x: hidden; }
     padding: 13px 16px;
     border-radius: 10px;
     font-size: 0.9rem;
+    grid-column: auto; /* sidebar is a column flex — tracks unpinned */
+  }
     color: var(--t-2);
     transition: background var(--dur-fast) var(--spring), color var(--dur-fast) var(--spring);
   }
@@ -5787,7 +6123,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 /* ── Exercise Ranks (Wood → Diamond mastery tiers) ── */
 .label-hint {
   font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em;
-  color: var(--t-3); padding: 2px 8px; border-radius: 999px;
+  color: var(--t-3); padding: 2px 8px; border-radius: var(--r-full);
   background: rgba(var(--wht),0.05); border: 1px solid var(--border-light);
   text-transform: none;
 }
@@ -5818,10 +6154,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
   text-transform: uppercase; letter-spacing: 0.06em; flex-shrink: 0;
 }
 .rank-bar {
-  height: 6px; border-radius: 999px;
+  height: 6px; border-radius: 3px; /* capsule: radius = half height */
   background: rgba(var(--wht),0.06); overflow: hidden; margin-bottom: 5px;
 }
-.rank-fill { height: 100%; border-radius: 999px; transition: width 0.5s ease; }
+.rank-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
 .rank-sub { font-size: 0.68rem; color: var(--t-3); font-family: var(--ff-mono); }
 
 /* ── Progress Pics (Cloud Storage timeline) ── */
@@ -5831,7 +6167,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .ppx-add-btn {
   display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
   background: linear-gradient(135deg, var(--c-orange), #ff8a3d);
-  color: #fff; border: none; border-radius: 999px;
+  color: #fff; border: none; border-radius: var(--r-full);
   padding: 9px 16px; font-family: var(--ff-title); font-weight: 800;
   font-size: 0.78rem; cursor: pointer;
 }
@@ -5865,7 +6201,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .ppx-view-img { width: 100%; max-height: 68vh; object-fit: contain; display: block; }
 .ppx-view-cap { font-family: var(--ff-title); font-size: 1rem; font-weight: 800; margin-bottom: 2px; }
 .ppx-view-sub { font-size: 0.78rem; color: var(--t-3); margin-bottom: 14px; }
-.ppx-view-del { color: #ff5a5a; }
+.ppx-view-del { color: var(--c-red); }
 
 /* ── Premium Finish ──────────────────────────────────────────
    Consolidated 2026-09 pass. Lives at the tail so it wins against equal-
@@ -5875,19 +6211,19 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
 /* View content stages in with a light stagger — the view itself already
    animates (viewSlideIn); this makes its cards land as a cascade, not a
-   slab. Scoped to #vLog (the daily-use screen) — Social/Insights refill
+   slab. Scoped to #vHome (the dashboard screen) — Social/Insights refill
    their cards asynchronously, and a stagger would re-fire on every
    refresh there; the single view-level animation already covers them.
    nth-child on direct children, pure CSS. Reduced-motion users get the
    existing blanket override below. */
 @media (prefers-reduced-motion: no-preference) {
-  #vLog.on > * { animation: viewSlideIn 0.42s var(--spring) backwards; }
-  #vLog.on > *:nth-child(1) { animation-delay: 0.00s; }
-  #vLog.on > *:nth-child(2) { animation-delay: 0.04s; }
-  #vLog.on > *:nth-child(3) { animation-delay: 0.08s; }
-  #vLog.on > *:nth-child(4) { animation-delay: 0.12s; }
-  #vLog.on > *:nth-child(5) { animation-delay: 0.16s; }
-  #vLog.on > *:nth-child(n+6) { animation-delay: 0.20s; }
+  #vHome.on > * { animation: viewSlideIn 0.42s var(--spring) backwards; }
+  #vHome.on > *:nth-child(1) { animation-delay: 0.00s; }
+  #vHome.on > *:nth-child(2) { animation-delay: 0.04s; }
+  #vHome.on > *:nth-child(3) { animation-delay: 0.08s; }
+  #vHome.on > *:nth-child(4) { animation-delay: 0.12s; }
+  #vHome.on > *:nth-child(5) { animation-delay: 0.16s; }
+  #vHome.on > *:nth-child(n+6) { animation-delay: 0.20s; }
 }
 
 /* Numerals: tabular everywhere a value can change under the eye — stat
@@ -5927,6 +6263,58 @@ html, body { max-width: 100%; overflow-x: hidden; }
 @keyframes arcSkel {
   0%   { background-position: 120% 0; }
   100% { background-position: -120% 0; }
+}
+
+/* Generic skeleton shapes — clone of the Arc recipe so every async surface
+   (feed, leaderboard, heatmaps) gets the same treatment while data flows in.
+   Add `.skel` to any block element; height variants via classes below. */
+.skel {
+  background: linear-gradient(90deg,
+    rgba(var(--wht), 0.04) 0%, rgba(var(--wht), 0.09) 40%,
+    rgba(var(--wht), 0.04) 80%);
+  background-size: 220% 100%;
+  animation: arcSkel 1.3s ease-in-out infinite;
+  border-radius: var(--r-s);
+}
+.skel-txt { height: 12px; }
+.skel-card { height: 120px; }
+.skel-podium { height: 88px; }
+.skel + .skel { margin-top: 8px; }
+.skel-feed-row { height: 92px; }
+.skel:nth-child(2) { animation-delay: 0.12s; }
+.skel:nth-child(3) { animation-delay: 0.24s; }
+.skel:nth-child(4) { animation-delay: 0.36s; }
+.skel:nth-child(5) { animation-delay: 0.48s; width: 92%; }
+
+/* ── Pull-to-refresh indicator ─────────────────────────────
+   Thin top-edge accent ring that slides down with the finger pull.
+   `past` = crossed threshold; `running` = swap in the shimmer while the
+   refresh is in flight so the user knows the pull wasn't a no-op. */
+.ptr-ring {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 3px; z-index: 100;
+  background: rgba(var(--accent-rgb), 0.22);
+  transform: translateY(-100%);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+.ptr-ring.visible { opacity: 1; }
+.ptr-ring-fill {
+  display: block; height: 100%; width: 34%;
+  background: var(--accent);
+  margin: 0 auto; border-radius: 0 0 4px 4px;
+  box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.5);
+  transform-origin: center;
+  transition: width 0.18s ease;
+}
+.ptr-ring.past .ptr-ring-fill { width: 88%; }
+.ptr-ring.running .ptr-ring-fill {
+  animation: ptrDash 1s ease-in-out infinite;
+}
+@keyframes ptrDash {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
 }
 
 /* Focus: a visible ring for keyboard users without changing the touch
